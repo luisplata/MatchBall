@@ -44,5 +44,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c275489c118749d48e80d8db8f6e4a36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serverUrl: http://localhost:8080
+  serverUrl: https://playerdata.peryloth.com
   uri: /api
