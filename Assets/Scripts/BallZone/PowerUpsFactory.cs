@@ -14,7 +14,7 @@ public class PowerUpsFactory
     {
 #if UNITY_EDITOR
         var powerUpsData = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData().GetPowerUpsDummy();
-        id = "joker";
+        //id = "joker";
 #else
         var powerUpsData = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData().GetPowerUps();
 #endif
