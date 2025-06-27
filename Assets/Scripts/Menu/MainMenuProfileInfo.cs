@@ -1,13 +1,30 @@
-﻿using TMPro;
+﻿using System;
+using Cysharp.Threading.Tasks;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class MainMenuProfileInfo : MonoBehaviour, IWaitToLoadInfo
+public class MainMenuProfileInfo : MonoBehaviour, IWaitToLoadInfo, IProfileInfo
 {
     [SerializeField] private Image profileImage;
     [SerializeField] private TextMeshProUGUI profileCups, profileCurrency;
 
-    private async void Start()
+    private void Start()
+    {
+        UpdateInfo().Forget();
+    }
+
+    private void OnEnable()
+    {
+        ServiceLocator.Instance.RegisterService<IProfileInfo>(this);
+    }
+
+    private void OnDisable()
+    {
+        ServiceLocator.Instance.UnregisterService<IProfileInfo>();
+    }
+
+    public async UniTaskVoid UpdateInfo()
     {
         var playerSession = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
         //profileImage.sprite = playerSession.playerImage;
@@ -17,6 +34,11 @@ public class MainMenuProfileInfo : MonoBehaviour, IWaitToLoadInfo
     }
 
     public bool IsReady { get; private set; }
+}
+
+public interface IProfileInfo
+{
+    UniTaskVoid UpdateInfo();
 }
 
 public interface IWaitToLoadInfo

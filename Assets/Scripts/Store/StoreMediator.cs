@@ -24,12 +24,13 @@ public class StoreMediator : MonoBehaviour, IStoreMediator, IWaitToLoadInfo
             item.Configure(this, storeItemData);
             _storeItems.Add(item);
         }
+
         IsReady = true;
     }
 
     public void BuyItem(StoreItemData storeItemData)
     {
-        ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Try to buy {storeItemData.itemName}", 5);
+        ServiceLocator.Instance.GetService<IStoreService>().BuyItem(storeItemData).Forget();
     }
 
     public bool IsReady { get; private set; }

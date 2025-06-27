@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 777188086846196597}
   - component: {fileID: 6294791822199354621}
+  - component: {fileID: 8385092808961587960}
   m_Layer: 0
   m_Name: StoreService
   m_TagString: Untagged
@@ -45,3 +46,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   itemImage: {fileID: 21300000, guid: 02f12087ace3bfd40acba8b48a3921d1, type: 3}
+  imagesFactory: {fileID: 8385092808961587960}
+--- !u!114 &8385092808961587960
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2683655119080902068}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 100b06dc335f46c187229e257be9f13e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sprite: {fileID: 21300000, guid: 0ecc96716dd904e41a6aabc210e0624a, type: 3}
+  sprite2: {fileID: 21300000, guid: fbaddf3210b708247816562c13e8d8b4, type: 3}
+  sprite3: {fileID: 21300000, guid: 8c04cf6a0074f1642a41b32264ad9d45, type: 3}
+  sprite4: {fileID: 21300000, guid: bc6b9068705e85347aa44c3e8981073d, type: 3}
