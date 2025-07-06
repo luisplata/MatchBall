@@ -22,7 +22,7 @@ public class Reward : MonoBehaviour
         //Debug.Log(reward.reward);
         var rewardData = JsonUtility.FromJson<RewardDataJson>(reward.reward);
         var data = await ServiceLocator.Instance.GetService<IRewardFactoryService>().GetRewardConfigData(rewardData);
-        rewardIcon.sprite =  data.image;
+        rewardIcon.sprite = data.image;
         rewardText.text = data.value;
         //Debug.Log(a.type);
         //Debug.Log(a.count);
@@ -40,11 +40,10 @@ public class Reward : MonoBehaviour
         rewardButton.onClick.RemoveAllListeners();
         try
         {
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage("Claiming reward...", 3).Forget();
             await ServiceLocator.Instance.GetService<IHttpRequestsCustom>().PlayerRewardApi
                 .ClaimReward(_rewardData.level);
-            await ServiceLocator.Instance.GetService<IClaimRewardService>().ClaimReward(_rewardData);
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage("Reward claimed", 3).Forget();
+            var regard = await ServiceLocator.Instance.GetService<IClaimRewardService>().ClaimReward(_rewardData);
+            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Reward {regard.type} claimed", 3).Forget();
         }
         catch (Exception e)
         {

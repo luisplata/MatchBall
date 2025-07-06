@@ -2,14 +2,14 @@
 
 public class ClaimRewardService : IClaimRewardService
 {
-    public async UniTask ClaimReward(RewardData rewardData)
+    public async UniTask<RewardDataJson> ClaimReward(RewardData rewardData)
     {
         var player = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
-        await player.AddReward(rewardData);
+        return await player.AddReward(rewardData);
     }
 }
 
 public interface IClaimRewardService
 {
-    UniTask ClaimReward(RewardData rewardData);
+    UniTask<RewardDataJson> ClaimReward(RewardData rewardData);
 }

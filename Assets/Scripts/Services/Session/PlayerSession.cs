@@ -434,21 +434,27 @@ public class PlayerSessionDataCustom
         }
     }
 
-    public async UniTask AddReward(RewardData rewardData)
+    public async UniTask<RewardDataJson> AddReward(RewardData rewardData)
     {
         var rewardDataC = JsonUtility.FromJson<RewardDataJson>(rewardData.reward);
 
         Debug.Log(rewardDataC.type);
         Debug.Log(rewardDataC.count);
 
-        if (rewardDataC.type == "gold")
+        switch (rewardDataC.type)
         {
-            await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddCoins(int.Parse(rewardDataC.count));
+            case "gold":
+                await ServiceLocator.Instance.GetService<IPlayerSessionService>()
+                    .AddCoins(int.Parse(rewardDataC.count));
+                break;
+            case "powerup":
+                AddPowerUpToPlayer(rewardDataC.count);
+                break;
+            default:
+                throw new Exception($"Reward type {rewardDataC.type} not supported yet");
         }
-        else if (rewardDataC.type == "powerup")
-        {
-            AddPowerUpToPlayer(rewardDataC.count);
-        }
+
+        return rewardDataC;
     }
 
     public void AddPowerUpToPlayer(string rewardDataC)
