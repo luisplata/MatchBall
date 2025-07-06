@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using TMPro;
@@ -12,14 +11,19 @@ public class Reward : MonoBehaviour
     [SerializeField] private Button rewardButton;
     [SerializeField] private Slider progressBar;
     [SerializeField] private GameObject claimed, claimedIcon;
+    [SerializeField] private Image rewardIcon;
+    [SerializeField] private TextMeshProUGUI rewardText;
     private RewardData _rewardData;
 
-    public void Configure(RewardData reward)
+    public async UniTask Configure(RewardData reward)
     {
         _rewardData = reward;
         level.text = reward.level.ToString();
         //Debug.Log(reward.reward);
-        var a = JsonUtility.FromJson<RewardDataJson>(reward.reward);
+        var rewardData = JsonUtility.FromJson<RewardDataJson>(reward.reward);
+        var data = await ServiceLocator.Instance.GetService<IRewardFactoryService>().GetRewardConfigData(rewardData);
+        rewardIcon.sprite =  data.image;
+        rewardText.text = data.value;
         //Debug.Log(a.type);
         //Debug.Log(a.count);
         claimed.SetActive(false);
@@ -89,4 +93,11 @@ public class RewardDataJson
 {
     public string type;
     public string count;
+}
+
+[Serializable]
+public class RewardConfigData
+{
+    public Sprite image;
+    public string value;
 }

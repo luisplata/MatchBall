@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 public class ListOfRewards : MonoBehaviour
@@ -13,7 +14,7 @@ public class ListOfRewards : MonoBehaviour
 
     private PlayerBattlePass _playerBattlePass;
 
-    public void Configure(List<RewardData> rewards, PlayerBattlePass bp)
+    public async UniTask Configure(List<RewardData> rewards, PlayerBattlePass bp)
     {
         _playerBattlePass = bp;
         //delete all rewards
@@ -27,7 +28,7 @@ public class ListOfRewards : MonoBehaviour
         foreach (var reward in rewards)
         {
             var r = Instantiate(rewardPrefab, rewardsContainer);
-            r.Configure(reward);
+            await r.Configure(reward);
             _rewards.Add(r);
         }
     }

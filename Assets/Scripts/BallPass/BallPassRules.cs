@@ -13,29 +13,43 @@ public class BallPassRules : MonoBehaviour
 
     async void Start()
     {
-        returnButton.onClick.AddListener(ReturnToMenu);
-
-        var bp = await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
-            .PlayerRewardApi.GetPlayerBattlePass();
-
         try
         {
-            listOfRewards.Configure(await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
-                .PlayerRewardApi.GetRewards(), bp);
-            await playerListOfRewards.Configure();
+            returnButton.onClick.AddListener(ReturnToMenu);
+
+            var bp = await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
+                .PlayerRewardApi.GetPlayerBattlePass();
+
+            try
+            {
+                await listOfRewards.Configure(await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
+                    .PlayerRewardApi.GetRewards(), bp);
+                await playerListOfRewards.Configure();
+            }
+            catch (Exception e)
+            {
+                ServiceLocator.Instance.GetService<IMessageService>()
+                    .ErrorMessage($"Error getting rewards, load dummys: {e.Message}", 5);
+                await CreateDummyRewards();
+            }
+
+            ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
+            {
+                //Debug.Log("Hide splash screen");
+                listOfRewards.StartAnimation();
+            });
         }
         catch (Exception e)
         {
             ServiceLocator.Instance.GetService<IMessageService>()
-                .ErrorMessage($"Error getting rewards, load dummys: {e.Message}", 5);
+                .ErrorMessage($"Error getting player battle pass: {e.Message}", 5);
             await CreateDummyRewards();
+            ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
+            {
+                //Debug.Log("Hide splash screen");
+                listOfRewards.StartAnimation();
+            });
         }
-
-        ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
-        {
-            //Debug.Log("Hide splash screen");
-            listOfRewards.StartAnimation();
-        });
     }
 
     private async UniTask CreateDummyRewards()
@@ -83,7 +97,7 @@ public class BallPassRules : MonoBehaviour
                 updated_at = DateTime.Now
             }
         };
-        listOfRewards.Configure(rewards, new PlayerBattlePass());
+        listOfRewards.Configure(rewards, new PlayerBattlePass()).Forget();
     }
 
     private void ReturnToMenu()

@@ -16,7 +16,25 @@ MonoBehaviour:
   m_Data:
     m_SerializedData: []
   m_GUID: 03444f42b53a54246971f4efd5945d7f
-  m_SerializeEntries: []
+  m_SerializeEntries:
+  - m_GUID: 0ecc96716dd904e41a6aabc210e0624a
+    m_Address: powerip_ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - default
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c04cf6a0074f1642a41b32264ad9d45
+    m_Address: powerup_lead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - default
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc6b9068705e85347aa44c3e8981073d
+    m_Address: powerup_joker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - default
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 13574d3156187844a9dc0af6bf4b3f63, type: 2}
   m_SchemaSet:

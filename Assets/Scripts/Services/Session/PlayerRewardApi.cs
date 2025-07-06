@@ -35,7 +35,7 @@ public class PlayerRewardApi : ApiBase
     {
         var id = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData().playerId;
         var requestUri = ServerUrl + Uri + $"/battle-pass/{id}";
-        //Debug.Log("Request URI PlayerRewardApi: " + requestUri);
+        Debug.Log("Request URI PlayerRewardApi: " + requestUri);
         var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
         var response = await Client.SendAsync(request);
@@ -77,7 +77,10 @@ public class PlayerRewardApi : ApiBase
     public async UniTask AddExperience(bool win)
     {
         //El endpoint es: `battle-pass/experience`
-        var experienceToWin = win? ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToWin() : ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToLose();
+        var experienceToWin =
+            win
+                ? ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToWin()
+                : ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToLose();
         var id = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData().playerId;
         var requestUri = ServerUrl + Uri + $"/battle-pass/experience";
         var json = JsonUtility.ToJson(new ExperienceRequest { experience = experienceToWin, playerId = id });
