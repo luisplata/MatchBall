@@ -42,6 +42,7 @@ public class PlayerRewardApi : ApiBase
         if (response.IsSuccessStatusCode)
         {
             var responseData = await response.Content.ReadAsStringAsync();
+            Debug.Log($"Response {responseData}");
             return JsonUtility.FromJson<PlayerBattlePass>(responseData);
         }
         else
