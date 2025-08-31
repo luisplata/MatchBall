@@ -14,7 +14,7 @@ public class BallanceControllerArt : MonoBehaviour
         lineOfBallance.SetPosition(0, anchorLeft.position);
         lineOfBallance.SetPosition(1, anchorRight.position);
         //Quiero que las bases coincidan con el centro de los paths
-        leftBase.position = balance.GetLeftPath().GetCenterLeftPath().position;
-        rightBase.position = balance.GetRightPath().GetCenterLeftPath().position;
+        // leftBase.position = balance.GetLeftPath().GetCenterLeftPath().position;
+        // rightBase.position = balance.GetRightPath().GetCenterLeftPath().position;
     }
 }
