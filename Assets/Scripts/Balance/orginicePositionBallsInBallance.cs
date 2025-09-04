@@ -7,10 +7,12 @@ public class orginicePositionBallsInBallance : MonoBehaviour
     [SerializeField] private float distanceBetweenBalls = 0.7f;
     [SerializeField] private Transform startPosition;
     [SerializeField] private bool dearribaabajo = true;
+    private Vector3 _startPosition;
 
     [ContextMenu("OrginicePositions")]
     public void OrginicePositions()
     {
+        _startPosition = startPosition.position;
         if (dearribaabajo)
             ballPositions.Reverse();
         foreach (var ballPosition in ballPositions)
@@ -20,5 +22,6 @@ public class orginicePositionBallsInBallance : MonoBehaviour
             startPosition.position = new Vector3(startPosition.position.x,
                 startPosition.position.y - distanceBetweenBalls, startPosition.position.z);
         }
+        startPosition.position = _startPosition;
     }
 }
