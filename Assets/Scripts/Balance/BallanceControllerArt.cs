@@ -8,11 +8,34 @@ public class BallanceControllerArt : MonoBehaviour
     [SerializeField] private Transform anchorLeft, anchorRight;
 
     // Update is called once per frame
-    void Update()
+    public void UpdatePositions()
     {
         //Quiero que los dos puntos del linerender coinsidan con los anchorLeft y anchorRight
-        lineOfBallance.SetPosition(0, anchorLeft.position);
-        lineOfBallance.SetPosition(1, anchorRight.position);
+        //left path
+        if (balance.GetLeftPath().GetLastIndexBall() < 0)
+        {
+            anchorLeft.position = balance.GetLeftPath().GetBasePosition().position;
+        }
+        else
+        {
+            anchorLeft.position = balance.GetLeftPath().GetLastBall().BasePosition.gameObject
+                .transform.position;
+        }
+
+        //right path
+        if (balance.GetRightPath().GetLastIndexBall() < 0)
+        {
+            anchorRight.position = balance.GetRightPath().GetBasePosition().position;
+        }
+        else
+        {
+            anchorRight.position = balance.GetRightPath().GetLastBall().BasePosition.gameObject
+                .transform.position;
+        }
+
+        //set positions of line renderer
+        lineOfBallance.SetPosition(0, leftBase.position);
+        lineOfBallance.SetPosition(1, rightBase.position);
         //Quiero que las bases coincidan con el centro de los paths
         // leftBase.position = balance.GetLeftPath().GetCenterLeftPath().position;
         // rightBase.position = balance.GetRightPath().GetCenterLeftPath().position;

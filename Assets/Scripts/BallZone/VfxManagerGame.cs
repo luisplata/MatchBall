@@ -8,6 +8,8 @@ internal class VfxManagerGame : MonoBehaviour
     private ParticleSystem particleSystem;
     private GameObject _vfx;
 
+    public GameObject PointToBase => vfxPointToInstantiate;
+
     public async UniTask StartVfx()
     {
         _vfx = Instantiate(vfxCollision, vfxPointToInstantiate.transform.position, Quaternion.identity,

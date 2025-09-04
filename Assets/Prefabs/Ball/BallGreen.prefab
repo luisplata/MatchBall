@@ -166,6 +166,7 @@ MonoBehaviour:
   art: {fileID: 7260243889035199299}
   vfxManagerGame: {fileID: 8439954629451832040}
   vfxManagerGameDestroy: {fileID: 4825444740398002918}
+  basePosition: {fileID: 3322069985457751539}
   _GUIID: 
   indexQueueOfBalls: 0
   indexQueueOfPositions: 0
