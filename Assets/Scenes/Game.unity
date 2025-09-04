@@ -1755,6 +1755,7 @@ GameObject:
   - component: {fileID: 127566562}
   - component: {fileID: 127566563}
   - component: {fileID: 127566564}
+  - component: {fileID: 127566565}
   m_Layer: 0
   m_Name: LeftPath
   m_TagString: Untagged
@@ -1950,6 +1951,22 @@ MonoBehaviour:
   pointToTransition: {fileID: 1995466001}
   levelOfPath: 14
   _counterBalance: 0
+--- !u!114 &127566565
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 127566561}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9331c6da9dfa27449e764a6fb028718, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ballPositions: []
+  distanceBetweenBalls: 0.7
+  startPosition: {fileID: 0}
+  dearribaabajo: 1
 --- !u!1 &131022916
 GameObject:
   m_ObjectHideFlags: 0
@@ -7776,6 +7793,7 @@ GameObject:
   - component: {fileID: 636860140}
   - component: {fileID: 636860141}
   - component: {fileID: 636860142}
+  - component: {fileID: 636860143}
   m_Layer: 0
   m_Name: LeftPath
   m_TagString: Untagged
@@ -7971,6 +7989,58 @@ MonoBehaviour:
   pointToTransition: {fileID: 1482726520}
   levelOfPath: 14
   _counterBalance: 0
+--- !u!114 &636860143
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 636860139}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9331c6da9dfa27449e764a6fb028718, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ballPositions:
+  - {fileID: 908373823}
+  - {fileID: 2129820216}
+  - {fileID: 140031635}
+  - {fileID: 138264402}
+  - {fileID: 502967453}
+  - {fileID: 2047973809}
+  - {fileID: 1103639979}
+  - {fileID: 256066082}
+  - {fileID: 817555144}
+  - {fileID: 336981733}
+  - {fileID: 937374530}
+  - {fileID: 773995657}
+  - {fileID: 394686894}
+  - {fileID: 1912226414}
+  - {fileID: 114550497}
+  - {fileID: 1984555669}
+  - {fileID: 1168406472}
+  - {fileID: 801837759}
+  - {fileID: 912838725}
+  - {fileID: 227007266}
+  - {fileID: 1005207019}
+  - {fileID: 1476933193}
+  - {fileID: 1063290521}
+  - {fileID: 1284459150}
+  - {fileID: 654872866}
+  - {fileID: 466585620}
+  - {fileID: 1645359567}
+  - {fileID: 1903379454}
+  - {fileID: 678592830}
+  - {fileID: 1068024216}
+  - {fileID: 600180369}
+  - {fileID: 1239553873}
+  - {fileID: 1306215129}
+  - {fileID: 1509466448}
+  - {fileID: 385844778}
+  - {fileID: 464773570}
+  distanceBetweenBalls: 0.7
+  startPosition: {fileID: 1482726521}
+  dearribaabajo: 1
 --- !u!4 &651360745 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2856779766027938870, guid: 36f49c6533c41394ea8342bc2afdb72c, type: 3}
