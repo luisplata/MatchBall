@@ -13,8 +13,11 @@ public class Balance : MonoBehaviour, IBalance
     [SerializeField] private Path leftPath;
     [SerializeField] private Path rightPath;
     [SerializeField] private CheckerOfBallsToGetPoints checkerOfBallsToGetPoints;
+    [SerializeField] private BallanceControllerArt ballanceControllerArt;
     private IMediatorBalance _player;
     private int _countOfColumns = 36;
+
+    public BallanceControllerArt BallanceControllerArt => ballanceControllerArt;
 
     public void Configure(IMediatorBalance player)
     {
@@ -25,6 +28,7 @@ public class Balance : MonoBehaviour, IBalance
         // define the paths
         leftPath.OnPathClicked += () => OnBalanceClicked?.Invoke(PathType.Left);
         rightPath.OnPathClicked += () => OnBalanceClicked?.Invoke(PathType.Right);
+        BallanceControllerArt.UpdatePositions();
     }
 #if UNITY_EDITOR || UNITY_STANDALONE
     private void Update()
@@ -43,11 +47,12 @@ public class Balance : MonoBehaviour, IBalance
 
     public async UniTask TryBall(Ball ball, PathType sidePathType)
     {
-        if(!leftPath.HaveSpace() || !rightPath.HaveSpace())
+        if (!leftPath.HaveSpace() || !rightPath.HaveSpace())
         {
             _player.GameOver();
             return;
         }
+
         if (sidePathType == PathType.Left)
         {
             await leftPath.TryBall(ball);
@@ -212,9 +217,12 @@ public class Balance : MonoBehaviour, IBalance
                     leftPath.SetCounterBalance(0);
                     rightPath.SetCounterBalance(0);
                 }
+
                 break;
             }
         }
+
+        BallanceControllerArt.UpdatePositions();
     }
 
     public void EnableControls()
@@ -287,6 +295,7 @@ public interface IBalance
     UniTask BalanceBothPaths();
     void EnableControls();
     IMediatorBalance GetMediatorBalance();
+    BallanceControllerArt BallanceControllerArt { get; }
 }
 
 public enum PathType
