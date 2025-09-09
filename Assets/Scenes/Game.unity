@@ -10555,7 +10555,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 0
+  m_SortingOrder: -1
   m_TargetDisplay: 0
 --- !u!224 &873050380
 RectTransform:
@@ -13716,6 +13716,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5284123314114901953, guid: 37d25ea4918ba9945abc7ae27e7eb91d, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6463951386534501998, guid: 37d25ea4918ba9945abc7ae27e7eb91d, type: 3}
       propertyPath: m_Name
       value: transition
@@ -13832,7 +13836,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!212 &1219948769
 SpriteRenderer:
   m_ObjectHideFlags: 0
@@ -17348,7 +17352,7 @@ Canvas:
   m_GameObject: {fileID: 1564453749}
   m_Enabled: 1
   serializedVersion: 3
-  m_RenderMode: 1
+  m_RenderMode: 0
   m_Camera: {fileID: 519420031}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
