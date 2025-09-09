@@ -17,6 +17,7 @@ public abstract class Ball : MonoBehaviour, IBall
     [SerializeField] private VfxManagerGame vfxManagerGameDestroy;
 
     public string Id => id;
+    public GameObject BasePosition => vfxManagerGame.PointToBase;
     public SpriteRenderer Art => art.GetComponent<SpriteRenderer>();
     public string Type => type;
     protected IBallZone _ballZone;
@@ -64,6 +65,7 @@ public abstract class Ball : MonoBehaviour, IBall
     {
         //move the ball with dotween
         gameObject.transform.position = startPosition;
+        
         await gameObject.transform.DOMove(targetPosition, speed).AsyncWaitForCompletion();
         _startPosition = targetPosition;
         callback?.Invoke();

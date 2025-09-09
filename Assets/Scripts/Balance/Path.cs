@@ -96,7 +96,20 @@ public class Path : MonoBehaviour, IPointerClickHandler
             }
         }
 
-        await UniTask.WhenAll(listToTask);
+        await DoSomethingWhileWaiting(listToTask, _balance.BallanceControllerArt.UpdatePositions);
+    }
+
+    async UniTask DoSomethingWhileWaiting(IEnumerable<UniTask> tasks, Action callback = null)
+    {
+        var combined = UniTask.WhenAll(tasks);
+
+        while (!combined.Status.IsCompleted())
+        {
+            callback?.Invoke();
+            await UniTask.Yield();
+        }
+
+        await combined;
     }
 
 
@@ -336,5 +349,34 @@ public class Path : MonoBehaviour, IPointerClickHandler
     public bool HaveSpace()
     {
         return ballQueue.Length / 2 < 36;
+    }
+
+    public Transform GetBasePosition()
+    {
+        return pathPoints[levelOfPath].transform;
+    }
+
+    public Ball GetLastBall()
+    {
+        var lastIndex = GetFirstBallIndex();
+        if (lastIndex < 0) return null;
+        return ballQueue[lastIndex];
+    }
+
+    private int GetFirstBallIndex()
+    {
+        for (int i = 0; i < ballQueue.Length; i++)
+        {
+            if (ballQueue[i] != null)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    public void RepositionBasePath()
+    {
     }
 }
