@@ -160,7 +160,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      sombra flechita 2_0: -326598150877062123
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
