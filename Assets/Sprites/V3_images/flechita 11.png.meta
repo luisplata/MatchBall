@@ -160,7 +160,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      flechita 11_0: 5391325728897227506
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
