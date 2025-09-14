@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -13,11 +14,9 @@ public class Balance : MonoBehaviour, IBalance
     [SerializeField] private Path leftPath;
     [SerializeField] private Path rightPath;
     [SerializeField] private CheckerOfBallsToGetPoints checkerOfBallsToGetPoints;
-    [SerializeField] private BallanceControllerArt ballanceControllerArt;
+    private List<BallanceControllerArt> ballancesControllerArt = new();
     private IMediatorBalance _player;
     private int _countOfColumns = 36;
-
-    public BallanceControllerArt BallanceControllerArt => ballanceControllerArt;
 
     public void Configure(IMediatorBalance player)
     {
@@ -28,7 +27,10 @@ public class Balance : MonoBehaviour, IBalance
         // define the paths
         leftPath.OnPathClicked += () => OnBalanceClicked?.Invoke(PathType.Left);
         rightPath.OnPathClicked += () => OnBalanceClicked?.Invoke(PathType.Right);
-        BallanceControllerArt.UpdatePositions();
+        foreach (var ballanceControllerArt in ballancesControllerArt)
+        {
+            ballanceControllerArt.UpdatePositions();
+        }
     }
 #if UNITY_EDITOR || UNITY_STANDALONE
     private void Update()
@@ -222,7 +224,10 @@ public class Balance : MonoBehaviour, IBalance
             }
         }
 
-        BallanceControllerArt.UpdatePositions();
+        foreach (var ballanceControllerArt in ballancesControllerArt)
+        {
+            ballanceControllerArt.UpdatePositions();
+        }
     }
 
     public void EnableControls()
@@ -234,6 +239,14 @@ public class Balance : MonoBehaviour, IBalance
     public IMediatorBalance GetMediatorBalance()
     {
         return _player;
+    }
+
+    public void BallancesControllerArtUpdatePositions()
+    {
+        foreach (var ballanceControllerArt in ballancesControllerArt)
+        {
+            ballanceControllerArt.UpdatePositions();
+        }
     }
 
     public Path GetLeftPath()
@@ -272,6 +285,11 @@ public class Balance : MonoBehaviour, IBalance
         leftPath.DisableControls();
         rightPath.DisableControls();
     }
+
+    public void AddBallanceArt(BallanceControllerArt ballanceControllerArt)
+    {
+        ballancesControllerArt.Add(ballanceControllerArt);
+    }
 }
 
 public interface IBalance
@@ -295,7 +313,7 @@ public interface IBalance
     UniTask BalanceBothPaths();
     void EnableControls();
     IMediatorBalance GetMediatorBalance();
-    BallanceControllerArt BallanceControllerArt { get; }
+    void BallancesControllerArtUpdatePositions();
 }
 
 public enum PathType
