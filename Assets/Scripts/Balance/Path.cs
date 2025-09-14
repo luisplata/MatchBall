@@ -96,7 +96,7 @@ public class Path : MonoBehaviour, IPointerClickHandler
             }
         }
 
-        await DoSomethingWhileWaiting(listToTask, _balance.BallanceControllerArt.UpdatePositions);
+        await DoSomethingWhileWaiting(listToTask, _balance.BallancesControllerArtUpdatePositions);
     }
 
     async UniTask DoSomethingWhileWaiting(IEnumerable<UniTask> tasks, Action callback = null)
@@ -353,7 +353,7 @@ public class Path : MonoBehaviour, IPointerClickHandler
 
     public Transform GetBasePosition()
     {
-        return pathPoints[levelOfPath].transform;
+        return pathPoints[levelOfPath + _counterBalance - 1].transform;
     }
 
     public Ball GetLastBall()
