@@ -2,7 +2,7 @@
 using Commander.Commands;
 using UnityEngine;
 
-public class PowerUpShell : PowerUp
+public class PowerUpAShell : PowerUpA
 {
     [SerializeField] private SpriteRenderer imageToShell;
     [SerializeField] private float scaleToShell;

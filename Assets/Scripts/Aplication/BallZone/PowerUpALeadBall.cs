@@ -1,7 +1,7 @@
 ﻿using Commander;
 using Commander.Commands;
 
-public class PowerUpLeadBall : PowerUp
+public class PowerUpALeadBall : PowerUpA
 {
     protected override void OnActionWithClick()
     {

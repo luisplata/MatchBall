@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public abstract class PowerUp : Ball, IPowerUp
+public abstract class PowerUpA : Ball, IPowerUp
 {
     public override void Configure(IBallZone ballZone, Vector3 startPosition, Vector3 targetPosition, float speed)
     {

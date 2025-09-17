@@ -5,7 +5,7 @@ public class StoreMediator : MonoBehaviour, IStoreMediator, IWaitToLoadInfo
 {
     [SerializeField] private StoreItem storeItem;
     [SerializeField] private Transform storeItemsParent;
-    private List<StoreItemData> _storeItemsData;
+    private List<StoreItemDataFromCloud> _storeItemsData;
     private List<StoreItem> _storeItems = new();
 
     private async void Start()
@@ -28,7 +28,7 @@ public class StoreMediator : MonoBehaviour, IStoreMediator, IWaitToLoadInfo
         IsReady = true;
     }
 
-    public void BuyItem(StoreItemData storeItemData)
+    public void BuyItem(StoreItemDataFromCloud storeItemData)
     {
         ServiceLocator.Instance.GetService<IStoreService>().BuyItem(storeItemData).Forget();
     }
@@ -38,5 +38,5 @@ public class StoreMediator : MonoBehaviour, IStoreMediator, IWaitToLoadInfo
 
 public interface IStoreMediator
 {
-    void BuyItem(StoreItemData storeItemData);
+    void BuyItem(StoreItemDataFromCloud storeItemData);
 }

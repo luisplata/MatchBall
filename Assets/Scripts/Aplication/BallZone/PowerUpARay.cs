@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public class PowerUpRay : PowerUp
+public class PowerUpARay : PowerUpA
 {
     [SerializeField] private GameObject vfxToDestroyBalls;
     protected override void OnActionWithClick()

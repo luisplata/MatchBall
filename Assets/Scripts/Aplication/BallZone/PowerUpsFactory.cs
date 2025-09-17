@@ -10,7 +10,7 @@ public class PowerUpsFactory
         this.powerUpsConfiguration = powerUpsConfiguration;
     }
 
-    public PowerUp Create(string id)
+    public PowerUpA Create(string id)
     {
 #if UNITY_EDITOR
         var powerUpsData = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData().GetPowerUpsDummy();

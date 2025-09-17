@@ -1,7 +1,7 @@
 ﻿using Commander;
 using Commander.Commands;
 
-public class PowerUpJoker : PowerUp
+public class PowerUpAJoker : PowerUpA
 {
     protected override void OnActionWithClick()
     {

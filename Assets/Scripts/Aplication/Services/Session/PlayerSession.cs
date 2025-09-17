@@ -146,9 +146,9 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         return powerUpData.selected;
     }
 
-    public void AddPowerUpToPlayer(string powerUpId)
+    public void AddPowerUpToPlayer(StoreItemDataFromCloud powerUp, int count)
     {
-        _playerSessionData.AddPowerUpToPlayer(powerUpId);
+        _playerSessionData.AddPowerUpToPlayer(powerUp, count);
         ServiceLocator.Instance.GetService<IStorageData>().UpdatePlayerData(_playerSessionData).Forget();
     }
 
@@ -298,6 +298,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         };
     }
 }
+
 public interface IGlobalSessionService
 {
     int GetExperienceToWin();
@@ -354,7 +355,7 @@ public interface IPlayerSessionService
     PlayerSessionDataCustom GetPlayerSessionData();
     UniTask AddCoins(int coins);
     bool PowerUpSelected(string powerUpName, bool isSelected);
-    void AddPowerUpToPlayer(string powerUpId);
+    void AddPowerUpToPlayer(StoreItemDataFromCloud powerUp, int count);
     bool CheckPowerUp(string powerUpId);
 }
 

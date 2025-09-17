@@ -2,7 +2,7 @@
 using Commander.Commands;
 using UnityEngine;
 
-public class PowerUpIceBall : PowerUp
+public class PowerUpAIceBall : PowerUpA
 {
     [SerializeField] private float timeToFreeze;
 

@@ -15,7 +15,7 @@ public class BallZone : MonoBehaviour, IBallZone
     [SerializeField] private PowerUpFactory powerUpFactory;
 
     [SerializeField] private Ball[] _balls = new Ball[4];
-    [SerializeField] private PowerUp[] _powerUps = new PowerUp[3];
+    [SerializeField] private PowerUpA[] _powerUps = new PowerUpA[3];
     [SerializeField] private float _speedToMove;
     [SerializeField] private float _speedToFeedBallZone;
     [SerializeField] private SwitchBalls switchBalls;

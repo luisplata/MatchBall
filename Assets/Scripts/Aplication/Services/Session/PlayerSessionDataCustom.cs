@@ -138,7 +138,7 @@ public class PlayerSessionDataCustom
                     .AddCoins(int.Parse(rewardDataC.count));
                 break;
             case "powerup":
-                AddPowerUpToPlayer(rewardDataC.count);
+                //AddPowerUpToPlayer(rewardDataC.count);
                 break;
             default:
                 throw new Exception($"Reward type {rewardDataC.type} not supported yet");
@@ -147,22 +147,29 @@ public class PlayerSessionDataCustom
         return rewardDataC;
     }
 
-    public void AddPowerUpToPlayer(string rewardDataC)
+    public void AddPowerUpToPlayer(StoreItemDataFromCloud powerUp, int count)
     {
         var player = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
         var powerUpsData = ServiceLocator.Instance.GetService<IGlobalSessionService>().GetListOfPowerUps();
-        var powerUpData = powerUpsData.Find(x => x.id == rewardDataC);
+
+        // Buscar definición del powerup en tu catálogo
+        var powerUpData = powerUpsData.Find(x => x.id == powerUp.RewardItemId);
+        if (powerUpData == null)
+            throw new Exception($"El powerup {powerUp.RewardItemId} no existe en el catálogo global.");
+
         var allPowerUps = player.GetPowerUps();
 
-        if (allPowerUps.Any(x => x.id == rewardDataC))
+        // Agregarlo count veces
+        for (int i = 0; i < count; i++)
         {
-            throw new Exception($"El powerup {rewardDataC} ya esta en posesion del jugador");
+            allPowerUps.Add(powerUpData);
         }
 
-        allPowerUps.Add(powerUpData);
+        // Guardar en JSON
         player.powerups_json = JsonUtility.ToJson(new PowerUpsData { powerups = allPowerUps });
         ServiceLocator.Instance.GetService<IStorageData>().UpdatePlayerData(player).Forget();
     }
+
 
     public bool CheckPowerUp(string powerUpId)
     {

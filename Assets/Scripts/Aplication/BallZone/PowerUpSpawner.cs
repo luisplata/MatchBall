@@ -9,12 +9,12 @@
         
     // Logic
 
-    public PowerUp SpawnPowerUp(string id)
+    public PowerUpA SpawnPowerUp(string id)
     {
         return powerUpsFactory.Create(id);
     }
 
-    public PowerUp SpawnPowerUp()
+    public PowerUpA SpawnPowerUp()
     {
         //get a radom powerup
         return powerUpsFactory.Create("random");

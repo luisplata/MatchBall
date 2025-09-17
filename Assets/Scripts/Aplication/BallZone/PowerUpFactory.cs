@@ -14,7 +14,7 @@ public class PowerUpFactory : MonoBehaviour
                 _powerUpsFactory);
     }
 
-    public PowerUp CreatePowerUp()
+    public PowerUpA CreatePowerUp()
     {
         return _powerUpSpawner.SpawnPowerUp();
     }
