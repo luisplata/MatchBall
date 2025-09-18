@@ -1,5 +1,7 @@
 ﻿using System;
+using App.Ports;
 using Cysharp.Threading.Tasks;
+using Domain.Events;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,11 +19,18 @@ public class MainMenuProfileInfo : MonoBehaviour, IWaitToLoadInfo, IProfileInfo
     private void OnEnable()
     {
         ServiceLocator.Instance.RegisterService<IProfileInfo>(this);
+        ServiceLocator.Instance.GetService<IEventBus>().Subscribe<CurrencyChangedEvent>(OnCurrencyChanged);
+    }
+
+    private void OnCurrencyChanged(CurrencyChangedEvent e)
+    {
+        profileCurrency.text = e.NewAmount.ToString();
     }
 
     private void OnDisable()
     {
         ServiceLocator.Instance.UnregisterService<IProfileInfo>();
+        ServiceLocator.Instance.GetService<IEventBus>().Unsubscribe<CurrencyChangedEvent>(OnCurrencyChanged);
     }
 
     public async UniTaskVoid UpdateInfo()

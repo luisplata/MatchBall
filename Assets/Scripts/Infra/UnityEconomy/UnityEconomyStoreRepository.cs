@@ -9,7 +9,7 @@ using Unity.Services.Economy;
 using UnityEngine;
 using PlayerInventory = Domain.Model.PlayerInventory;
 
-namespace Infrastructure.Adapters
+namespace Infrastructure.UnityEconomy
 {
     // Clase auxiliar para deserializar instanceData.count
     internal class InventoryInstanceData

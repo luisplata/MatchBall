@@ -3,6 +3,7 @@ using System.Linq;
 using App.ExceptionsToGame;
 using App.Ports;
 using Cysharp.Threading.Tasks;
+using Domain.Events;
 using UnityEngine;
 
 namespace App.UseCase
@@ -11,11 +12,14 @@ namespace App.UseCase
     {
         private readonly IStoreRepository _storeRepository;
         private readonly IInventoryRepository _inventoryRepository;
+        private readonly IEventBus _eventBus;
 
-        public BuyItemUseCase(IStoreRepository storeRepository, IInventoryRepository inventoryRepository)
+        public BuyItemUseCase(IStoreRepository storeRepository, IInventoryRepository inventoryRepository,
+            IEventBus eventBus)
         {
             _storeRepository = storeRepository;
             _inventoryRepository = inventoryRepository;
+            _eventBus = eventBus;
         }
 
         public async UniTask Execute(string purchaseId)
@@ -32,6 +36,10 @@ namespace App.UseCase
             await _inventoryRepository.DecrementCurrency(currency.Id, price);
 
             await _inventoryRepository.AddPowerUp(purchase.Reward.identify, purchase.Reward.quantity);
+            playerRepository = await _inventoryRepository.GetPlayerInventory();
+            currency = playerRepository.Currencies.First();
+            coins = currency.Amount;
+            _eventBus.Publish(new CurrencyChangedEvent("coins", coins));
         }
     }
 }
