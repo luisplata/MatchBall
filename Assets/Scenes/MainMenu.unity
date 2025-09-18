@@ -4834,6 +4834,7 @@ GameObject:
   - component: {fileID: 526794098}
   - component: {fileID: 526794100}
   - component: {fileID: 526794102}
+  - component: {fileID: 526794103}
   m_Layer: 5
   m_Name: Store
   m_TagString: Untagged
@@ -4913,6 +4914,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   storeItem: {fileID: 8932873258652865352, guid: 96288531671a5994494c4f994b25b0bc, type: 3}
   storeItemsParent: {fileID: 1426636414}
+  imagesFactory: {fileID: 526794103}
 --- !u!114 &526794102
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4931,6 +4933,22 @@ MonoBehaviour:
   closeButton:
   - {fileID: 108417845}
   - {fileID: 1295401742}
+--- !u!114 &526794103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 526794096}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 100b06dc335f46c187229e257be9f13e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sprite: {fileID: 21300000, guid: 0ecc96716dd904e41a6aabc210e0624a, type: 3}
+  sprite2: {fileID: 21300000, guid: fbaddf3210b708247816562c13e8d8b4, type: 3}
+  sprite3: {fileID: 21300000, guid: 8c04cf6a0074f1642a41b32264ad9d45, type: 3}
+  sprite4: {fileID: 21300000, guid: bc6b9068705e85347aa44c3e8981073d, type: 3}
 --- !u!1 &550532076
 GameObject:
   m_ObjectHideFlags: 0
@@ -16420,7 +16438,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 218447756}
   m_HandleRect: {fileID: 218447755}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
