@@ -8,5 +8,6 @@ namespace Presentation.ViewModels
         public string itemCost;
         public string howMuchPerBuy;
         public string PurchaseId;
+        public string PurchaseName;
     }
 }

@@ -22,11 +22,14 @@ namespace App.UseCase
         {
             var purchases = await _storeRepository.GetAvailablePurchases();
             var purchase = purchases.FirstOrDefault(p => p.PurchaseId == purchaseId);
-            if (purchase == null)
-                throw new BuyException("Purchase not found");
+            if (purchase == null) throw new BuyException("Purchase not found");
             var playerRepository = await _inventoryRepository.GetPlayerInventory();
-            var coins = playerRepository.Currencies.First().Amount;
-            if (coins < purchase.Costs.First().amount) throw new BuyException("Not enough coins!");
+            var currency = playerRepository.Currencies.First();
+            var coins = currency.Amount;
+            var price = purchase.Costs.First().amount;
+            if (coins < price) throw new BuyException("Not enough coins!");
+
+            await _inventoryRepository.DecrementCurrency(currency.Id, price);
 
             await _inventoryRepository.AddPowerUp(purchase.Reward.identify, purchase.Reward.quantity);
         }

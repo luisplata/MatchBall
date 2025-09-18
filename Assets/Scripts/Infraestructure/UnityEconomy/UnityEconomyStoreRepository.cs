@@ -87,48 +87,62 @@ namespace Infrastructure.Adapters
 
             return new PlayerInventory(powerUps, currencies);
         }
+        
+        public async UniTask DecrementCurrency(string currencyId, int amount)
+        {
+            await EconomyService.Instance.PlayerBalances.DecrementBalanceAsync(currencyId, amount);
+        }
+
 
         public async UniTask AddPowerUp(string powerUpId, int quantity)
         {
-            if (quantity <= 0) return;
-
-            // Buscar instancias existentes del mismo inventoryItemId
-            var opts = new GetInventoryOptions
-                { InventoryItemIds = new List<string> { powerUpId }, ItemsPerFetch = 20 };
-            var inv = await EconomyService.Instance.PlayerInventory.GetInventoryAsync(opts);
-
-            var existing = inv.PlayersInventoryItems.FirstOrDefault();
-
-            if (existing != null)
+            try
             {
-                // Si ya existe una instancia con instanceData.count la incrementamos
-                var inst = existing.InstanceData != null
-                    ? existing.InstanceData.GetAs<InventoryInstanceData>()
-                    : null;
-                int current = inst?.count ?? 1; // si no hay instanceData asumimos 1
-                int newCount = current + quantity;
+                if (quantity <= 0) return;
 
-                var instanceDict = new Dictionary<string, object> { { "count", newCount } };
-                var updateOptions = new UpdatePlayersInventoryItemOptions
+                // Buscar instancias existentes del mismo inventoryItemId
+                var opts = new GetInventoryOptions
+                    { InventoryItemIds = new List<string> { powerUpId }, ItemsPerFetch = 20 };
+                var inv = await EconomyService.Instance.PlayerInventory.GetInventoryAsync(opts);
+
+                var existing = inv.PlayersInventoryItems.FirstOrDefault();
+
+                if (existing != null)
                 {
-                    WriteLock = existing.WriteLock // usar writeLock para concurrencia segura
-                };
+                    // Si ya existe una instancia con instanceData.count la incrementamos
+                    var inst = existing.InstanceData != null
+                        ? existing.InstanceData.GetAs<InventoryInstanceData>()
+                        : null;
+                    int current = inst?.count ?? 1; // si no hay instanceData asumimos 1
+                    int newCount = current + quantity;
 
-                await EconomyService.Instance.PlayerInventory.UpdatePlayersInventoryItemAsync(
-                    existing.PlayersInventoryItemId,
-                    instanceDict,
-                    updateOptions
-                );
+                    var instanceDict = new Dictionary<string, object> { { "count", newCount } };
+                    var updateOptions = new UpdatePlayersInventoryItemOptions
+                    {
+                        WriteLock = existing.WriteLock // usar writeLock para concurrencia segura
+                    };
+
+                    await EconomyService.Instance.PlayerInventory.UpdatePlayersInventoryItemAsync(
+                        existing.PlayersInventoryItemId,
+                        instanceDict,
+                        updateOptions
+                    );
+                }
+                else
+                {
+                    // No existe: crear una nueva instancia con instanceData.count = quantity
+                    var addOptions = new AddInventoryItemOptions
+                    {
+                        InstanceData = new Dictionary<string, object> { { "count", quantity } }
+                    };
+
+                    await EconomyService.Instance.PlayerInventory.AddInventoryItemAsync(powerUpId, addOptions);
+                }
             }
-            else
+            catch (Exception e)
             {
-                // No existe: crear una nueva instancia con instanceData.count = quantity
-                var addOptions = new AddInventoryItemOptions
-                {
-                    InstanceData = new Dictionary<string, object> { { "count", quantity } }
-                };
-
-                await EconomyService.Instance.PlayerInventory.AddInventoryItemAsync(powerUpId, addOptions);
+                Debug.LogError(e);
+                throw;
             }
         }
 

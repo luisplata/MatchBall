@@ -29,7 +29,8 @@ namespace Presentation.ViewModels
                 itemImage = sprite,
                 itemCost = cost,
                 howMuchPerBuy = howMuchPerBuy,
-                PurchaseId = option.PurchaseId
+                PurchaseId = option.PurchaseId,
+                PurchaseName = option.DisplayName
             };
         }
 

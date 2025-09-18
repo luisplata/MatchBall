@@ -52,6 +52,8 @@ namespace Presentation.Game
             try
             {
                 await ServiceLocator.Instance.GetService<IBuyItemUseCase>().Execute(storeItemData.PurchaseId);
+                ServiceLocator.Instance.GetService<IMessageService>()
+                    .ShowMessage($"Compraste {storeItemData.howMuchPerBuy} de {storeItemData.PurchaseName}").Forget();
             }
             catch (Exception e)
             {
