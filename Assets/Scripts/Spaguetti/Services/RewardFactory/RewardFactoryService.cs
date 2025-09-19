@@ -15,91 +15,55 @@ public class RewardFactoryService : MonoBehaviour, IRewardFactoryService
         ServiceLocator.Instance.RegisterService<IRewardFactoryService>(this);
     }
 
-    public async UniTask<RewardConfigData> GetRewardConfigData(RewardDataJson reward)
+    public async UniTask<RewardConfigData> GetRewardConfigData(RewardDataJson regard)
     {
-        switch (reward.type)
+        switch (regard.type)
         {
             case "gold":
-                var currency = JsonUtility.FromJson<CurrencyReward>(reward.body);
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
-                    value = $"{currency.amount} Gold"
+                    image = await AssetFactory<Sprite>.LoadByKeyAsync(regard.type),
+                    value = $"{regard.count} Gold"
                 };
 
             case "profilePicture":
-                var picture = JsonUtility.FromJson<ProfilePictureReward>(reward.body);
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
-                    value = $"{picture.id} picture"
+                    image = await AssetFactory<Sprite>.LoadAsync("ballpass", regard.type + "_" + regard.count),
+                    value = "Profile Picture"
                 };
 
             case "profileBackground":
-                var background = JsonUtility.FromJson<ProfileBackgroundReward>(reward.body);
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
-                    value = $"{background.id} background"
+                    image = await AssetFactory<Sprite>.LoadAsync("ballpass", regard.type + "_" + regard.count),
+                    value = "Profile Background"
                 };
 
             case "profileAvatar":
-                var avatar = JsonUtility.FromJson<ProfileAvatarReward>(reward.body);
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
-                    value = $"{avatar.id} avatar"
+                    image = await AssetFactory<Sprite>.LoadAsync("ballpass", regard.type + "_" + regard.count),
+                    value = "Profile Avatar"
                 };
 
             case "powerup":
-                var powerup = JsonUtility.FromJson<PowerUpReward>(reward.body);
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
-                    value = $"Power Up {powerup.powerup} x {powerup.quantity}"
+                    image = await AssetFactory<Sprite>.LoadAsync("ballpass", regard.type + "_" + regard.count),
+                    value = $"{regard.count} Power-up"
                 };
 
             default:
+                Debug.LogError($"Unknown reward type: {regard.type}");
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
-                    value = $"default"
+                    image = await AssetFactory<Sprite>.LoadByKeyAsync("default"),
+                    value = "Unknown Reward"
                 };
         }
     }
 }
-
-[System.Serializable]
-public class CurrencyReward
-{
-    public int amount;
-}
-
-[System.Serializable]
-public class ProfilePictureReward
-{
-    public int id;
-}
-
-[System.Serializable]
-public class ProfileBackgroundReward
-{
-    public int id;
-}
-
-[System.Serializable]
-public class ProfileAvatarReward
-{
-    public int id;
-}
-
-[System.Serializable]
-public class PowerUpReward
-{
-    public string powerup;
-    public int quantity;
-}
-
 
 public interface IRewardFactoryService
 {

@@ -2,7 +2,7 @@
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public class ApiClient : MonoBehaviour, IHttpMediator
+public class ApiClient : MonoBehaviour, IHttpRequestsCustom, IHttpMediator
 {
     [SerializeField] private string serverUrl;
     [SerializeField] private string uri;
@@ -20,7 +20,7 @@ public class ApiClient : MonoBehaviour, IHttpMediator
         }
 
         DontDestroyOnLoad(gameObject);
-        ServiceLocator.Instance.RegisterService(this);
+        ServiceLocator.Instance.RegisterService<IHttpRequestsCustom>(this);
 
         PlayerApi = new PlayerApi(serverUrl, uri, this);
         BattlePassApi = new BattlePassApi(serverUrl, uri, this);

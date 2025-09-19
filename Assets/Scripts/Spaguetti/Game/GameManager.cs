@@ -1,5 +1,4 @@
-﻿using App.UseCase;
-using Commander;
+﻿using Commander;
 using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
@@ -88,13 +87,15 @@ public class GameManager : MonoBehaviour, IGameManager
             {
                 gameOverPanel.SetActive(true);
                 ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Lose");
-                ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
+                ServiceLocator.Instance.GetService<IHttpRequestsCustom>().PlayerRewardApi
+                    .AddExperience(false).Forget();
             }
             else if (player2.IsGameOver())
             {
                 youWinPanel.SetActive(true);
                 ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Win");
-                ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
+                ServiceLocator.Instance.GetService<IHttpRequestsCustom>().PlayerRewardApi
+                    .AddExperience(true).Forget();
             }
         }
     }

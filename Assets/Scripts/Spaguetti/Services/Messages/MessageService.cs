@@ -52,7 +52,6 @@ public class MessageService : MonoBehaviour, IMessageService
 
     public async UniTask ShowMessage(string message, float duration = 2f)
     {
-        Debug.Log(message);
         _messageQueue.Enqueue(new MessageData { message = message, duration = duration, type = TypeMessage.Success });
 
         await MessagesLoop();
@@ -99,7 +98,6 @@ public class MessageService : MonoBehaviour, IMessageService
 
     public async UniTask ErrorMessage(string message, float duration = 2)
     {
-        Debug.LogError(message);
         _messageQueue.Enqueue(new MessageData { message = message, duration = duration, type = TypeMessage.Error });
 
         await MessagesLoop();
@@ -107,7 +105,6 @@ public class MessageService : MonoBehaviour, IMessageService
 
     public async UniTask ErrorMessage(Exception error, float duration = 2)
     {
-        Debug.LogError(error.Message);
         _messageQueue.Enqueue(
             new MessageData { message = error.Message, duration = duration, type = TypeMessage.Error });
 
