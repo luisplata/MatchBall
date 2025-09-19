@@ -1,3 +1,4 @@
+using App.UseCase.GameConfiguration;
 using Commander;
 using Commander.Commands;
 using TMPro;
@@ -27,7 +28,7 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     {
         return _commandQueue.IsBusy();
     }
-    
+
     public void ClearCommands()
     {
         _commandQueue.ClearCommands();
@@ -49,9 +50,10 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
         balance.OnGetPoints += OnGetPoints;
 
         _gameManager = gameManager;
-        
-        
-        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new OpeningGame(_gameManager.GetDirectorOpening()), this);
+
+
+        ServiceLocator.Instance.GetService<ICommandQueue>()
+            .AddCommand(new OpeningGame(_gameManager.GetDirectorOpening()), this);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new PlayMusic(_gameManager.GetMusic()), this);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(this), this);
         //Debug.Log("Player Configure");
@@ -72,7 +74,8 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     private void OnGetPoints()
     {
         _countOfPoints++;
-        if (_countOfPoints < countOfPointToGetPowerUp || !ballZone.CanCreatePowerUp()) return;
+        if (_countOfPoints < ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .how_much_match_to_get_power_up || !ballZone.CanCreatePowerUp()) return;
         _countOfPoints = 0;
         ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("FeedPowerUp");
         ballZone.CreatePowerUp();
@@ -95,7 +98,6 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     public void GameOver()
     {
         _isGameOver = true;
-        
     }
 
     public IPlayer GetPlayer()

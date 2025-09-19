@@ -175,7 +175,7 @@ MonoBehaviour:
   _canBeClicked: 0
   _pathType: 0
   speed: 1
-  id: ray
+  id: POWERUP_RAY
   type: 
   art: {fileID: 8291748752385251469}
   vfxManagerGame: {fileID: 216664263970710000}

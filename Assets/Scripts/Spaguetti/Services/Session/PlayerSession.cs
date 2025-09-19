@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using App.UseCase.GameConfiguration;
+using App.UseCase.PowerUps;
 using Cysharp.Threading.Tasks;
 using Presentation.Game;
 using Unity.Services.Authentication;
@@ -15,17 +17,10 @@ using UnityEngine;
 public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData, IGlobalSessionService
 {
     [SerializeField] private string environmentName;
-    private int winExperience, loseExperience;
     [SerializeField] private PowerUpsConfiguration powerUpsConfiguration;
     private PlayerSessionDataCustom _playerSessionData;
     private bool _readyToSignIn;
     private PowerUpsConfiguration _powerUpsConfigurationInstance;
-
-
-    private int powerUpIcePerBuy;
-    private int powerUpRayPerBuy;
-    private int powerUpLeadPerBuy;
-    private int powerUpJokerPerBuy;
 
     public struct userAttributes
     {
@@ -88,13 +83,8 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
 
     private void ApplyRemoteSettings(ConfigResponse obj)
     {
-        winExperience = RemoteConfigService.Instance.appConfig.GetInt("exp_by_win");
-        loseExperience = RemoteConfigService.Instance.appConfig.GetInt("exp_by_lose");
-        powerUpIcePerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ice_per_buy");
-        powerUpJokerPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_joker_per_buy");
-        powerUpLeadPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_lead_per_buy");
-        powerUpRayPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ray_per_buy");
-        Debug.Log($"powerUpRayPerBuy {powerUpRayPerBuy} powerUpLeadPerBuy {powerUpLeadPerBuy}");
+        ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().LoadConfig();
+        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().LoadPowerUps().Forget();
     }
 
     public async UniTask UpdatePlayerData(PlayerSessionDataCustom player)
@@ -272,12 +262,12 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
 
     public int GetExperienceToWin()
     {
-        return winExperience;
+        return ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().exp_by_win;
     }
 
     public int GetExperienceToLose()
     {
-        return loseExperience;
+        return ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().exp_by_lose;
     }
 
     public List<PowerUpData> GetListOfPowerUps()
@@ -290,10 +280,11 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     {
         return name.ToUpper() switch
         {
-            "LEAD" => powerUpLeadPerBuy,
-            "RAY" => powerUpRayPerBuy,
-            "ICE" => powerUpIcePerBuy,
-            "JOKER" => powerUpJokerPerBuy,
+            "LEAD" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_lead_per_buy,
+            "RAY" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_ray_per_buy,
+            "ICE" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_ice_per_buy,
+            "JOKER" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_joker_per_buy,
             _ => 0
         };
     }
@@ -365,6 +356,7 @@ public class PowerUpData
 {
     public string id;
     public bool selected;
+    public int quantity;
 }
 
 [Serializable]

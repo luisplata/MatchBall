@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using App.UseCase.GameConfiguration;
+using App.UseCase.PowerUps;
 using DG.Tweening;
 using UnityEngine;
 
@@ -31,12 +33,14 @@ public class ShowPowerUpsInLobby : MonoBehaviour
 
         _powerUpSelectors.Clear();
 
-        foreach (var powerUpData in _playerSessionDataCustom.GetPowerUps())
+        var powerUps = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUps();
+
+        foreach (var powerUpData in powerUps)
         {
             var powerUpSelector = Instantiate(powerUpSelectorPrefab, powerUpsContainer.transform);
             Debug.Log(powerUpData.id);
             var powerUp = _powerUpsConfigurationInstance.GetPowerUpPrefabById(powerUpData.id);
-            powerUpSelector.Configuration(powerUp.Art, powerUp.Id, powerUpData.selected);
+            powerUpSelector.Configuration(powerUp.Art, powerUp.Id, powerUpData.selected, powerUpData.quantity);
             _powerUpSelectors.Add(powerUpSelector);
         }
     }

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using App.UseCase.PowerUps;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 [CreateAssetMenu(menuName = "Custom/Power up configuration")]
@@ -24,6 +26,7 @@ public class PowerUpsConfiguration : ScriptableObject
         {
             throw new Exception($"PowerUp with id {id} does not exit");
         }
+
         return powerUp;
     }
 

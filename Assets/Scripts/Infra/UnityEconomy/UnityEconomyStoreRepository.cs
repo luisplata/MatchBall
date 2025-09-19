@@ -55,6 +55,7 @@ namespace Infrastructure.UnityEconomy
 
         public async UniTask<PlayerInventory> GetPlayerInventory()
         {
+            await EconomyService.Instance.Configuration.SyncConfigurationAsync();
             // 1) Traer balances (monedas)
             var balancesResult = await EconomyService.Instance.PlayerBalances.GetBalancesAsync();
             var currencies = new List<Currency>();
