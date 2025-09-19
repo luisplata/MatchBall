@@ -87,12 +87,6 @@ namespace Presentation.Game
         public string itemName;
     }
 
-    [System.Serializable]
-    public class RewardCustomData
-    {
-        public string count;
-        public string type;
-    }
 
     public class StoreItemData
     {

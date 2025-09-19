@@ -10,5 +10,6 @@ namespace App.UseCase.PowerUps
         UniTask LoadPowerUps();
         bool PowerUpSelected(string powerUpName, bool isSelected);
         IReadOnlyList<PowerUpData> GetSelectedPowerUps();
+        IReadOnlyList<PowerUpData> GetPowerUpsFromStore();
     }
 }

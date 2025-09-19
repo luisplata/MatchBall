@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using App.UseCase.PowerUps;
+using App.UseCase.Reward;
 using Cysharp.Threading.Tasks;
+using Domain.Entities;
+using Newtonsoft.Json;
 using Presentation.Game;
 using Unity.Services.CloudSave.Models;
 using Unity.Services.Economy;
@@ -127,19 +131,24 @@ public class PlayerSessionDataCustom
 
     public async UniTask<RewardDataJson> AddReward(RewardData rewardData)
     {
-        var rewardDataC = JsonUtility.FromJson<RewardDataJson>(rewardData.reward);
+        var rewardDataC = JsonConvert.DeserializeObject<RewardDataJson>(rewardData.Reward);
+
 
         Debug.Log(rewardDataC.type);
-        Debug.Log(rewardDataC.count);
 
         switch (rewardDataC.type)
         {
             case "gold":
+                var currency = JsonUtility.FromJson<CurrencyReward>(rewardDataC.body);
                 await ServiceLocator.Instance.GetService<IPlayerSessionService>()
-                    .AddCoins(int.Parse(rewardDataC.count));
+                    .AddCoins(currency.amount);
                 break;
             case "powerup":
                 //AddPowerUpToPlayer(rewardDataC.count);
+                var powerup = JsonUtility.FromJson<PowerUpReward>(rewardDataC.body);
+                var powerUpSelected = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUpsFromStore()
+                    .First(p => p.id == powerup.powerup);
+                await ServiceLocator.Instance.GetService<IClaimPowerUpUseCase>().Claim(powerUpSelected);
                 break;
             default:
                 throw new Exception($"Reward type {rewardDataC.type} not supported yet");
@@ -148,6 +157,7 @@ public class PlayerSessionDataCustom
         return rewardDataC;
     }
 
+    [Obsolete("Use IClaimPowerUpUseCase or IBuyItemUseCase Services to claim or buy powerups")]
     public void AddPowerUpToPlayer(StoreItemDataFromCloud powerUp, int count)
     {
         var player = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
