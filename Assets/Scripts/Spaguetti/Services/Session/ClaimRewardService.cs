@@ -1,4 +1,5 @@
 ﻿using Cysharp.Threading.Tasks;
+using Domain.Entities;
 
 public class ClaimRewardService : IClaimRewardService
 {

@@ -88,10 +88,55 @@ namespace Infrastructure.UnityEconomy
 
             return new PlayerInventory(powerUps, currencies);
         }
-        
+
         public async UniTask DecrementCurrency(string currencyId, int amount)
         {
             await EconomyService.Instance.PlayerBalances.DecrementBalanceAsync(currencyId, amount);
+        }
+
+        public async UniTask<List<PowerUpData>> GetPowerUpsInventoryFromStore()
+        {
+            await EconomyService.Instance.Configuration.SyncConfigurationAsync();
+            var purchases = EconomyService.Instance.Configuration.GetVirtualPurchases();
+
+            var result = new List<PowerUpData>();
+
+            foreach (var p in purchases)
+            {
+                var reward = p.Rewards.FirstOrDefault();
+                var rewardDef = reward?.Item?.GetReferencedConfigurationItem();
+
+                if (rewardDef == null)
+                    continue;
+
+                var rewardCustom = rewardDef.CustomDataDeserializable?.GetAs<RewardCustomData>();
+                if (rewardCustom == null)
+                    continue;
+
+                // solo mapear si es de tipo "powerup"
+                if (rewardCustom.type == "powerup")
+                {
+                    result.Add(new PowerUpData
+                    {
+                        id = rewardDef.Id,
+                        selected = false
+                    });
+                }
+            }
+
+            return result;
+        }
+        
+        [System.Serializable]
+        public class RewardCustomData
+        {
+            public string count;
+            public string type;
+        }
+
+        public async UniTask IncrementCurrency(string currencyId, int amount)
+        {
+            await EconomyService.Instance.PlayerBalances.IncrementBalanceAsync(currencyId, amount);
         }
 
 

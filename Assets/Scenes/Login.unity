@@ -148,6 +148,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3165cb4751c4483fb6c7600b2044702a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  url: http://localhost
+  uri: /api
 --- !u!4 &300931161
 Transform:
   m_ObjectHideFlags: 0
@@ -1619,6 +1621,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: https
       objectReference: {fileID: 0}
+    - target: {fileID: 879345456402788490, guid: 53f729a96abc2f748946e8b6ccc1a786, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4643168470154335892, guid: 53f729a96abc2f748946e8b6ccc1a786, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -1661,7 +1667,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6039112930275016293, guid: 53f729a96abc2f748946e8b6ccc1a786, type: 3}
       propertyPath: serverUrl
-      value: https://back.matchballance.com
+      value: http://localhost
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

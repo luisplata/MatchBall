@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using App.UseCase;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
 using Cysharp.Threading.Tasks;
@@ -70,7 +71,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     {
         if (!_readyToSignIn)
         {
-            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage("PlayerSession is not ready to sign in");
+            await ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage("PlayerSession is not ready to sign in");
             return;
         }
 
@@ -95,7 +96,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         }
 
         _playerSessionData = player;
-        await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
+        await ServiceLocator.Instance.GetService<ILoginUseCase>()
             .UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
     }
 
@@ -222,14 +223,13 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 //Debug.Log($"Nickname '{_playerSessionData.playerName}' has been saved with player ID.");
             }
 
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>().AddPlayer(_playerSessionData.playerId,
+            await ServiceLocator.Instance.GetService<ILoginUseCase>().AddPlayer(_playerSessionData.playerId,
                 _playerSessionData.playerName, "your_player_key");
 
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
-                .LoginPlayer(_playerSessionData.playerId);
+            await ServiceLocator.Instance.GetService<ILoginUseCase>().LoginPlayer(_playerSessionData.playerId);
 
             ServiceLocator.Instance.GetService<IMultiLanguageService>().ChangeLanguage(_playerSessionData.language);
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
+            await ServiceLocator.Instance.GetService<ILoginUseCase>()
                 .UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
         }
         catch (AuthenticationException ex)
@@ -299,18 +299,6 @@ public interface IGlobalSessionService
     int howMuchPowerUpsByBuy(string name);
 }
 
-public interface IHttpRequestsCustom
-{
-    UniTask AddPlayer(string playerId, string nickname, string key);
-    UniTask UpdatePlayerNickname(string playerId, string playerName);
-    UniTask<string> LoginPlayer(string playerId);
-
-    UniTask<PlayerData> GetPlayerById(string playerId);
-    PlayerRewardApi PlayerRewardApi { get; }
-    PlayerApi PlayerApi { get; }
-    BattlePassApi BattlePassApi { get; }
-}
-
 /// <summary>
 /// To Save and Load data from the storage
 /// Use this interface to save and load data from the storage
@@ -363,26 +351,4 @@ public class PowerUpData
 public class PowerUpsData
 {
     public List<PowerUpData> powerups;
-}
-
-[Serializable]
-public class PlayerBattlePass
-{
-    public int id;
-    public string playerId;
-    public int level;
-    public int experience;
-    public DateTime created_at;
-    public DateTime updated_at;
-    public List<PlayerReward> playerRewards;
-}
-
-[Serializable]
-public class PlayerReward
-{
-    public int id;
-    public string playerId;
-    public int rewardId;
-    public DateTime awarded_at;
-    public bool claimed;
 }
