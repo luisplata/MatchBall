@@ -1,5 +1,6 @@
 ﻿using System;
 using Cysharp.Threading.Tasks;
+using Infra.WebAdapter;
 using UnityEngine;
 
 public class ApiClient : MonoBehaviour, IHttpMediator
@@ -45,7 +46,7 @@ public class ApiClient : MonoBehaviour, IHttpMediator
         return await PlayerApi.IsNicknameAvailable(nickname);
     }
 
-    public async UniTask<int?> GetPlayerIdByNickname(string nickname)
+    public async UniTask<string> GetPlayerIdByNickname(string nickname)
     {
         return await PlayerApi.GetPlayerIdByNickname(nickname);
     }
@@ -60,7 +61,7 @@ public class ApiClient : MonoBehaviour, IHttpMediator
         return await PlayerApi.LoginPlayer(playerId);
     }
 
-    public async UniTask<PlayerData> GetPlayerById(string playerId)
+    public async UniTask<PlayerDto> GetPlayerById(string playerId)
     {
         return await PlayerApi.GetPlayerById(playerId);
     }
@@ -75,12 +76,4 @@ public interface IHttpMediator
 public class TokenResponse
 {
     public string token;
-}
-
-[Serializable]
-public class PlayerData
-{
-    public string playerId;
-    public string playerName;
-    public string playerEmail;
 }

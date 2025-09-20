@@ -1,4 +1,5 @@
 using Cysharp.Threading.Tasks;
+using Infra.WebAdapter;
 using UnityEngine;
 
 public class RewardFactoryService : MonoBehaviour, IRewardFactoryService

@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   url: http://localhost
-  uri: /api
+  uri: /api/v1
 --- !u!4 &300931161
 Transform:
   m_ObjectHideFlags: 0

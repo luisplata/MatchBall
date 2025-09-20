@@ -96,8 +96,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         }
 
         _playerSessionData = player;
-        await ServiceLocator.Instance.GetService<ILoginUseCase>()
-            .UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
+        // await ServiceLocator.Instance.GetService<ILoginUseCase>().UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
     }
 
     public void SaveDataGlobal(GlobalData key, string value)
@@ -224,13 +223,12 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             }
 
             await ServiceLocator.Instance.GetService<ILoginUseCase>().AddPlayer(_playerSessionData.playerId,
-                _playerSessionData.playerName, "your_player_key");
+                _playerSessionData.playerName, "dev_player_key_change_in_production");
 
             await ServiceLocator.Instance.GetService<ILoginUseCase>().LoginPlayer(_playerSessionData.playerId);
 
             ServiceLocator.Instance.GetService<IMultiLanguageService>().ChangeLanguage(_playerSessionData.language);
-            await ServiceLocator.Instance.GetService<ILoginUseCase>()
-                .UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
+            // await ServiceLocator.Instance.GetService<ILoginUseCase>().UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
         }
         catch (AuthenticationException ex)
         {

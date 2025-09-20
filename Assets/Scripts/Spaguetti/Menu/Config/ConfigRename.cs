@@ -1,4 +1,6 @@
-﻿using TMPro;
+﻿using App.UseCase;
+using Cysharp.Threading.Tasks;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,7 +18,7 @@ public class ConfigRename : MonoBehaviour
         renameButton.onClick.AddListener(() =>
         {
             _player.playerName = renameText.text;
-            SaveData();
+            SaveData().Forget();
         });
         closeButton.onClick.AddListener(() =>
         {
@@ -32,9 +34,10 @@ public class ConfigRename : MonoBehaviour
         renameText.text = _player.playerName;
     }
 
-    private void SaveData()
+    private async UniTaskVoid SaveData()
     {
-        ServiceLocator.Instance.GetService<IStorageData>().UpdatePlayerData(_player);
+        await ServiceLocator.Instance.GetService<IStorageData>().UpdatePlayerData(_player);
+        await ServiceLocator.Instance.GetService<ILoginUseCase>().UpdatePlayerNickname(_player.playerId, _player.playerName);
     }
 }
 
