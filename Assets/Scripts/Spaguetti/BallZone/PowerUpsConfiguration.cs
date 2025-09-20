@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using App.UseCase.PowerUps;
-using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 [CreateAssetMenu(menuName = "Custom/Power up configuration")]

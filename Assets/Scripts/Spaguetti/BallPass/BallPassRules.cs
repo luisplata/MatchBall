@@ -18,7 +18,6 @@ public class BallPassRules : MonoBehaviour
             returnButton.onClick.AddListener(ReturnToMenu);
 
             var bp = await ServiceLocator.Instance.GetService<IPassBallUseCase>().GetPlayerBattlePass();
-            Debug.Log(bp);
             var pg = await ServiceLocator.Instance.GetService<IPassBallUseCase>().GetPlayerRewards();
 
             try

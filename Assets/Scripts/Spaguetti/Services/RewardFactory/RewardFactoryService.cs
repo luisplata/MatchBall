@@ -55,7 +55,7 @@ public class RewardFactoryService : MonoBehaviour, IRewardFactoryService
                 var powerup = JsonUtility.FromJson<PowerUpReward>(reward.body);
                 return new RewardConfigData
                 {
-                    image = await AssetFactory<Sprite>.LoadByKeyAsync(reward.type),
+                    image = await AssetFactory<Sprite>.LoadByKeyAsync(powerup.powerup),
                     value = $"Power Up {powerup.powerup} x {powerup.quantity}"
                 };
 

@@ -55,7 +55,7 @@ public class RewardDto
 public class RewardDetail
 {
     public string type;
-    public JObject body; // puede ser dinámico, luego lo parseas a lo que necesites
+    public string body; // puede ser dinámico, luego lo parseas a lo que necesites
 }
 
 public class PlayerRewardApi : ApiBase
