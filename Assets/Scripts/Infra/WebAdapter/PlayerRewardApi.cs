@@ -179,6 +179,8 @@ namespace Infra.WebAdapter
         public int rewardId;
         public string awarded_at;
         public int claimed; // 0 o 1
+        public int level;   // <-- agregado
+        public RewardDetail reward; // <-- agregado
     }
 
     [Serializable]

@@ -48,7 +48,7 @@ namespace Presentation.Game
                     case "powerup":
                         int amount = ServiceLocator.Instance
                             .GetService<IGlobalSessionService>()
-                            .howMuchPowerUpsByBuy(storeItemData.RewardCount);
+                            .HowMuchPowerUpsByBuy(storeItemData.RewardCount);
 
                         ServiceLocator.Instance.GetService<IPlayerSessionService>()
                             .AddPowerUpToPlayer(storeItemData, amount);

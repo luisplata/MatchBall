@@ -20,7 +20,7 @@ namespace Presentation.ViewModels
             string howMuchPerBuy = "";
             if (option.Reward.type == "powerup")
             {
-                int cantidad = globalService.howMuchPowerUpsByBuy(option.Reward.rewardName);
+                int cantidad = globalService.HowMuchPowerUpsByBuy(option.Reward.rewardName);
                 howMuchPerBuy = $"X {cantidad}";
             }
 

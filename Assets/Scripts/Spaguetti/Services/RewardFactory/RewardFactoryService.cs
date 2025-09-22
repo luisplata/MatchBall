@@ -57,7 +57,7 @@ public class RewardFactoryService : MonoBehaviour, IRewardFactoryService
                 return new RewardConfigData
                 {
                     image = await AssetFactory<Sprite>.LoadByKeyAsync(powerup.powerup),
-                    value = $"Power Up {powerup.powerup} x {powerup.quantity}"
+                    value = $"Power Up {GetPowerUpName(powerup.powerup)} x {powerup.quantity}"
                 };
 
             default:
@@ -67,6 +67,18 @@ public class RewardFactoryService : MonoBehaviour, IRewardFactoryService
                     value = $"default"
                 };
         }
+    }
+    
+    private string GetPowerUpName(string powerup)
+    {
+        return powerup switch
+        {
+            "POWERUP_RAY" => "Ray",
+            "POWERUP_ICE" => "Ice",
+            "POWERUP_LEAD" => "Lead",
+            "POWERUP_JOKER" => "Joker",
+            _ => "Unknown"
+        };
     }
 }
 

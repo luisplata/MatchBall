@@ -71,7 +71,8 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     {
         if (!_readyToSignIn)
         {
-            await ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage("PlayerSession is not ready to sign in");
+            await ServiceLocator.Instance.GetService<IMessageService>()
+                .ErrorMessage("PlayerSession is not ready to sign in");
             return;
         }
 
@@ -274,15 +275,20 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             .Select(powerUp => new PowerUpData { id = powerUp.Value.Id, selected = false }).ToList();
     }
 
-    public int howMuchPowerUpsByBuy(string name)
+    public int HowMuchPowerUpsByBuy(string name)
     {
-        return name.ToUpper() switch
+        var upper = name.ToUpper();
+
+        return upper switch
         {
-            "LEAD" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_lead_per_buy,
-            "RAY" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_ray_per_buy,
-            "ICE" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_ice_per_buy,
-            "JOKER" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
-                .powerup_joker_per_buy,
+            var s when s.Contains("LEAD") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_lead_per_buy,
+            var s when s.Contains("RAY") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_ray_per_buy,
+            var s when s.Contains("ICE") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_ice_per_buy,
+            var s when s.Contains("JOKER") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>()
+                .GetConfig().powerup_joker_per_buy,
             _ => 0
         };
     }
@@ -294,7 +300,7 @@ public interface IGlobalSessionService
     int GetExperienceToLose();
     List<PowerUpData> GetListOfPowerUps();
 
-    int howMuchPowerUpsByBuy(string name);
+    int HowMuchPowerUpsByBuy(string name);
 }
 
 /// <summary>

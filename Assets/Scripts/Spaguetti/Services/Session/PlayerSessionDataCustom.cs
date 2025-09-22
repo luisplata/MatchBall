@@ -148,6 +148,7 @@ public class PlayerSessionDataCustom
                 var powerup = JsonUtility.FromJson<PowerUpReward>(rewardDataC.body);
                 var powerUpSelected = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUpsFromStore()
                     .First(p => p.id == powerup.powerup);
+                powerUpSelected.quantity = powerup.quantity;
                 await ServiceLocator.Instance.GetService<IClaimPowerUpUseCase>().Claim(powerUpSelected);
                 break;
             default:

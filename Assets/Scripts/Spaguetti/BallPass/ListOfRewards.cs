@@ -45,7 +45,7 @@ public class ListOfRewards : MonoBehaviour
                 await reward.AnimToReceived(1);
 
                 foreach (var playerReward in _playerBattlePass.PlayerRewards.Where(playerReward =>
-                             playerReward.RewardId == reward.RewardData.Id))
+                             playerReward.Level == reward.RewardData.Level))
                 {
                     reward.ConfigureClaimed(playerReward.Claimed);
                 }

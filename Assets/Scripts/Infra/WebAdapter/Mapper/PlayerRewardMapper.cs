@@ -25,7 +25,10 @@ namespace Infra.WebAdapter.Mapper
                     string.IsNullOrEmpty(r.awarded_at)
                         ? DateTime.MinValue
                         : DateTime.Parse(r.awarded_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
-                    r.claimed == 1
+                    r.claimed == 1,
+                    r.level,
+                    r.reward?.type,
+                    r.reward?.body
                 )).ToList()
             );
         }

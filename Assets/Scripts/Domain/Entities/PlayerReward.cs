@@ -7,6 +7,9 @@ namespace Domain.Entities
         string PlayerId,
         int RewardId,
         DateTime AwardedAt,
-        bool Claimed
+        bool Claimed,
+        int Level,
+        string RewardType,
+        string RewardBody
     );
 }

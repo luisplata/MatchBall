@@ -24,33 +24,16 @@ namespace Infrastructure.UnityEconomy
             await EconomyService.Instance.Configuration.SyncConfigurationAsync();
             var purchases = EconomyService.Instance.Configuration.GetVirtualPurchases();
 
-            var result = new List<PurchaseOption>();
-            foreach (var p in purchases)
-            {
-                var cost = p.Costs.FirstOrDefault();
-                var currencyId = cost?.Item?.GetReferencedConfigurationItem()?.Id;
-                var price = cost?.Amount ?? 0;
-
-                var reward = p.Rewards.FirstOrDefault();
-                var rewardDef = reward?.Item?.GetReferencedConfigurationItem();
-
-                var purchaseCustom = p.CustomDataDeserializable.GetAs<PurchaseCustomData>();
-                var rewardCustom = rewardDef?.CustomDataDeserializable?.GetAs<RewardCustomData>();
-
-                var option = new PurchaseOption(
-                    p.Id,
-                    purchaseCustom?.itemName ?? p.Name,
-                    purchaseCustom?.itemImage ?? "",
-                    new List<(string, int)> { (currencyId, price) },
-                    (rewardDef?.Id, rewardCustom?.count, rewardCustom?.type,
-                        ServiceLocator.Instance.GetService<IGlobalSessionService>()
-                            .howMuchPowerUpsByBuy(rewardCustom?.count))
-                );
-
-                result.Add(option);
-            }
-
-            return result;
+            return (from p in purchases
+                let cost = p.Costs.FirstOrDefault()
+                let currencyId = cost?.Item?.GetReferencedConfigurationItem()?.Id
+                let price = cost?.Amount ?? 0
+                let reward = p.Rewards.FirstOrDefault()
+                let rewardDef = reward?.Item?.GetReferencedConfigurationItem()
+                let purchaseCustom = p.CustomDataDeserializable.GetAs<PurchaseCustomData>()
+                let rewardCustom = rewardDef?.CustomDataDeserializable?.GetAs<RewardCustomData>()
+                select new PurchaseOption(p.Id, purchaseCustom?.itemName ?? p.Name, purchaseCustom?.itemImage ?? "", new List<(string, int)> { (currencyId, price) }, (rewardDef?.Id, rewardCustom?.count, rewardCustom?.type, ServiceLocator.Instance.GetService<IGlobalSessionService>()
+                    .HowMuchPowerUpsByBuy(rewardCustom?.count)))).ToList();
         }
 
         public async UniTask<PlayerInventory> GetPlayerInventory()
