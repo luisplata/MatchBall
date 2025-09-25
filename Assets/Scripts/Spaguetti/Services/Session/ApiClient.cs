@@ -35,36 +35,6 @@ public class ApiClient : MonoBehaviour, IHttpMediator
         BattlePassApi.JwtToken = token;
         PlayerRewardApi.JwtToken = token;
     }
-
-    public async UniTask AddPlayer(string playerId, string nickname, string key)
-    {
-        await PlayerApi.AddPlayer(playerId, nickname, key);
-    }
-
-    public async UniTask<bool> IsNicknameAvailable(string nickname)
-    {
-        return await PlayerApi.IsNicknameAvailable(nickname);
-    }
-
-    public async UniTask<string> GetPlayerIdByNickname(string nickname)
-    {
-        return await PlayerApi.GetPlayerIdByNickname(nickname);
-    }
-
-    public async UniTask UpdatePlayerNickname(string playerId, string nickname)
-    {
-        await PlayerApi.UpdatePlayerNickname(playerId, nickname);
-    }
-
-    public async UniTask<string> LoginPlayer(string playerId)
-    {
-        return await PlayerApi.LoginPlayer(playerId);
-    }
-
-    public async UniTask<PlayerDto> GetPlayerById(string playerId)
-    {
-        return await PlayerApi.GetPlayerById(playerId);
-    }
 }
 
 public interface IHttpMediator

@@ -14,6 +14,7 @@ using Unity.Services.Economy;
 using Unity.Services.Friends;
 using Unity.Services.RemoteConfig;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData, IGlobalSessionService
 {
@@ -205,7 +206,9 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             else
             {
                 _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
-                _playerSessionData.playerName = SystemInfo.deviceUniqueIdentifier;
+                int randomSuffix = Random.Range(1000, 9999);
+                string baseName = SystemInfo.deviceUniqueIdentifier;
+                _playerSessionData.playerName = $"{baseName}_{randomSuffix}";
                 _playerSessionData.playerEmail = "Anonymous";
                 _playerSessionData.playerPhotoUrl = "Anonymous";
                 _playerSessionData.isCreated = true;

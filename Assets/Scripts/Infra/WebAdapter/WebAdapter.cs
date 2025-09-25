@@ -68,6 +68,7 @@ namespace Infra.WebAdapter
 
         public async UniTask AddPlayer(string playerId, string nickname, string key)
         {
+            //TODO: Return Player Model
             await _playerApi.AddPlayer(playerId, nickname, key);
         }
 
