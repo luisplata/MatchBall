@@ -396,7 +396,7 @@ MonoBehaviour:
   _canBeClicked: 0
   _pathType: 0
   speed: 1
-  id: ice
+  id: POWERUP_ICE
   type: 
   art: {fileID: 7277844798902315011}
   vfxManagerGame: {fileID: 4619925293511694043}
