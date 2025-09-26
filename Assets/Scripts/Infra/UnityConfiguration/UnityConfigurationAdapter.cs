@@ -16,7 +16,14 @@ namespace Infra.UnityConfiguration
             var powerUpRayPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ray_per_buy");
             var howMuchMatchToGetPowerUp =
                 RemoteConfigService.Instance.appConfig.GetInt("how_much_match_to_get_power_up");
-            // Debug.Log($"powerUpRayPerBuy {powerUpRayPerBuy} powerUpLeadPerBuy {powerUpLeadPerBuy}");
+            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage("Config Loaded: " +
+                                                                              $"winExperience: {winExperience}, " +
+                                                                              $"loseExperience: {loseExperience}, " +
+                                                                              $"powerUpIcePerBuy: {powerUpIcePerBuy}, " +
+                                                                              $"powerUpJokerPerBuy: {powerUpJokerPerBuy}, " +
+                                                                              $"powerUpLeadPerBuy: {powerUpLeadPerBuy}, " +
+                                                                              $"powerUpRayPerBuy: {powerUpRayPerBuy}, " +
+                                                                              $"howMuchMatchToGetPowerUp: {howMuchMatchToGetPowerUp}");
             return new GameConfiguration(loseExperience, winExperience, powerUpIcePerBuy, powerUpJokerPerBuy,
                 powerUpLeadPerBuy, powerUpRayPerBuy, howMuchMatchToGetPowerUp);
         }

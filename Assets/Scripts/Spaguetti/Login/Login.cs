@@ -29,19 +29,20 @@ public class Login : MonoBehaviour
         try
         {
             loginButton.interactable = false;
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage("Logging in...", 5);
+            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage("Logging in...", 5).Forget();
             await ServiceLocator.Instance.GetService<IPlayerSessionService>().Login();
             loginButton.gameObject.SetActive(false);
             var playerName = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData()
                 .playerName;
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Welcome {playerName}", 5);
+            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Welcome {playerName}", 5).Forget();
             await UniTask.Delay(1000);
-            ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(StartGame);
+            await ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(StartGame);
         }
         catch (Exception e)
         {
             Debug.Log(e);
-            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage($"Error logging in try again later: {e.Message}");
+            ServiceLocator.Instance.GetService<IMessageService>()
+                .ErrorMessage($"Error logging in try again later: {e.Message}").Forget();
         }
 
         loginButton.interactable = true;
