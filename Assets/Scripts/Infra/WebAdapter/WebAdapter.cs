@@ -115,7 +115,7 @@ namespace Infra.WebAdapter
             UnityEngine.Debug.LogError($"[{nameof(WebAdapter)}] Error in {context}: {ex.Message}");
             ServiceLocator.Instance
                 .GetService<IMessageService>()
-                .ErrorMessage($"Error in {context}: {ex.Message}", 3);
+                .ErrorMessage($"Error in {context}: {ex.Message}", 3).Forget();
         }
     }
 }
