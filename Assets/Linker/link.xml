@@ -1,0 +1,10 @@
+<linker>
+  <!-- Evita que Unity borre nada de Economy -->
+  <assembly fullname="Unity.Services.Economy" preserve="all"/>
+
+  <!-- Asegura que se conserven tus clases custom -->
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="Presentation.Game.PurchaseCustomData" preserve="all"/>
+    <type fullname="Infrastructure.UnityEconomy.RewardCustomData" preserve="all"/>
+  </assembly>
+</linker>
