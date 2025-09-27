@@ -48,7 +48,7 @@ namespace Presentation.Game
                     case "powerup":
                         int amount = ServiceLocator.Instance
                             .GetService<IGlobalSessionService>()
-                            .howMuchPowerUpsByBuy(storeItemData.RewardCount);
+                            .HowMuchPowerUpsByBuy(storeItemData.RewardCount);
 
                         ServiceLocator.Instance.GetService<IPlayerSessionService>()
                             .AddPowerUpToPlayer(storeItemData, amount);
@@ -87,12 +87,6 @@ namespace Presentation.Game
         public string itemName;
     }
 
-    [System.Serializable]
-    public class RewardCustomData
-    {
-        public string count;
-        public string type;
-    }
 
     public class StoreItemData
     {

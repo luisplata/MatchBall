@@ -32,7 +32,7 @@ namespace Commander.Commands
                 _ballZone.GetBallPositionGameObject(0).transform.position);
         }
 
-        private async Task MoveAllBallsInQueueOnePositionUp()
+        private async UniTask MoveAllBallsInQueueOnePositionUp()
         {
             for (int i = _ballZone.GetCountOfBalls(); i >= 0; i--)
             {

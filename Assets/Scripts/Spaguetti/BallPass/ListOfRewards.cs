@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
+using Domain.Entities;
+using Presentation.Game;
 using UnityEngine;
 
 public class ListOfRewards : MonoBehaviour
@@ -12,9 +14,9 @@ public class ListOfRewards : MonoBehaviour
 
     public List<Reward> RewardList => _rewards;
 
-    private PlayerBattlePass _playerBattlePass;
+    private PlayerPassBall _playerBattlePass;
 
-    public async UniTask Configure(List<RewardData> rewards, PlayerBattlePass bp)
+    public async UniTask Configure(List<RewardData> rewards, PlayerPassBall bp)
     {
         _playerBattlePass = bp;
         //delete all rewards
@@ -38,38 +40,21 @@ public class ListOfRewards : MonoBehaviour
     {
         foreach (var reward in _rewards)
         {
-            if (reward.RewardData.level < _playerBattlePass.level)
+            if (reward.RewardData.Level < _playerBattlePass.Level)
             {
                 await reward.AnimToReceived(1);
 
-                foreach (var playerReward in _playerBattlePass.playerRewards.Where(playerReward =>
-                             playerReward.rewardId == reward.RewardData.id))
+                foreach (var playerReward in _playerBattlePass.PlayerRewards.Where(playerReward =>
+                             playerReward.Level == reward.RewardData.Level))
                 {
-                    reward.ConfigureClaimed(playerReward.claimed);
+                    reward.ConfigureClaimed(playerReward.Claimed);
                 }
             }
 
-            if (reward.RewardData.level == _playerBattlePass.level)
+            if (reward.RewardData.Level == _playerBattlePass.Level)
             {
-                await reward.AnimToHalfReceived(_playerBattlePass.experience, 1);
+                await reward.AnimToHalfReceived(_playerBattlePass.Experience, 1);
             }
         }
     }
-}
-
-[Serializable]
-public class RewardData
-{
-    public int id;
-    public int level;
-    public string reward;
-    public int experience;
-    public DateTime created_at;
-    public DateTime updated_at;
-}
-
-[Serializable]
-public class RewardDataList
-{
-    public List<RewardData> rewards;
 }

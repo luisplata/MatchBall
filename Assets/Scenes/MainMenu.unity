@@ -7973,8 +7973,8 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2027398342}
-  - {fileID: 1360901109}
   - {fileID: 1626826904}
+  - {fileID: 1360901109}
   - {fileID: 1778677380}
   m_Father: {fileID: 722012508}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -8370,17 +8370,17 @@ MonoBehaviour:
   m_MoveRepeatDelay: 0.5
   m_MoveRepeatRate: 0.1
   m_XRTrackingOrigin: {fileID: 0}
-  m_ActionsAsset: {fileID: -944628639613478452, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_PointAction: {fileID: -1654692200621890270, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_MoveAction: {fileID: -8784545083839296357, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_SubmitAction: {fileID: 392368643174621059, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_CancelAction: {fileID: 7727032971491509709, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_LeftClickAction: {fileID: 3001919216989983466, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_MiddleClickAction: {fileID: -2185481485913320682, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_RightClickAction: {fileID: -4090225696740746782, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_ScrollWheelAction: {fileID: 6240969308177333660, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_TrackedDevicePositionAction: {fileID: 6564999863303420839, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
-  m_TrackedDeviceOrientationAction: {fileID: 7970375526676320489, guid: ca9f5fa95ffab41fb9a615ab714db018, type: 3}
+  m_ActionsAsset: {fileID: -944628639613478452, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_PointAction: {fileID: 4000957193126302241, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_MoveAction: {fileID: -5557548491770761652, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_SubmitAction: {fileID: -6982765691548870423, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_CancelAction: {fileID: -6948334201770692808, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_LeftClickAction: {fileID: 6373662959934590750, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_MiddleClickAction: {fileID: 9072826728723006572, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_RightClickAction: {fileID: -8829170163232704671, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_ScrollWheelAction: {fileID: -6649010774898597423, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_TrackedDevicePositionAction: {fileID: -3332123410066082325, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
+  m_TrackedDeviceOrientationAction: {fileID: 6747918696004956859, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
   m_DeselectOnBackgroundClick: 1
   m_PointerBehavior: 0
   m_CursorLockBehavior: 0
@@ -9599,7 +9599,6 @@ MonoBehaviour:
   audio: {fileID: 103128444}
   language: {fileID: 206345215}
   rename: {fileID: 1075823804}
-  friend: {fileID: 0}
 --- !u!1 &1134690911
 GameObject:
   m_ObjectHideFlags: 0
@@ -10138,7 +10137,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 27.670013}
+  m_AnchoredPosition: {x: 0, y: 27.670044}
   m_SizeDelta: {x: 0, y: -257.05}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1222571571
@@ -12578,7 +12577,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -170.50003}
+  m_AnchoredPosition: {x: 0, y: -170.5}
   m_SizeDelta: {x: 0, y: -341}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1534468485
@@ -14226,9 +14225,8 @@ MonoBehaviour:
   ballPass: {fileID: 1295401742}
   settingsButton: {fileID: 202596978}
   helpPanel: {fileID: 1448102724}
-  waitToLoadObjects:
-  - {fileID: 1212599874}
-  - {fileID: 526794100}
+  profileInfo: {fileID: 1212599874}
+  storeMediator: {fileID: 526794100}
 --- !u!1 &1706987626
 GameObject:
   m_ObjectHideFlags: 0
@@ -17334,8 +17332,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1528010129}
   m_HandleRect: {fileID: 1528010128}
   m_Direction: 0
-  m_Value: 0
-  m_Size: 1
+  m_Value: 1
+  m_Size: 0.99999994
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:

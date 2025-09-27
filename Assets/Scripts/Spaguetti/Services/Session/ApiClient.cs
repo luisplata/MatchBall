@@ -1,8 +1,9 @@
 ﻿using System;
 using Cysharp.Threading.Tasks;
+using Infra.WebAdapter;
 using UnityEngine;
 
-public class ApiClient : MonoBehaviour, IHttpRequestsCustom, IHttpMediator
+public class ApiClient : MonoBehaviour, IHttpMediator
 {
     [SerializeField] private string serverUrl;
     [SerializeField] private string uri;
@@ -20,7 +21,7 @@ public class ApiClient : MonoBehaviour, IHttpRequestsCustom, IHttpMediator
         }
 
         DontDestroyOnLoad(gameObject);
-        ServiceLocator.Instance.RegisterService<IHttpRequestsCustom>(this);
+        ServiceLocator.Instance.RegisterService(this);
 
         PlayerApi = new PlayerApi(serverUrl, uri, this);
         BattlePassApi = new BattlePassApi(serverUrl, uri, this);
@@ -34,36 +35,6 @@ public class ApiClient : MonoBehaviour, IHttpRequestsCustom, IHttpMediator
         BattlePassApi.JwtToken = token;
         PlayerRewardApi.JwtToken = token;
     }
-
-    public async UniTask AddPlayer(string playerId, string nickname, string key)
-    {
-        await PlayerApi.AddPlayer(playerId, nickname, key);
-    }
-
-    public async UniTask<bool> IsNicknameAvailable(string nickname)
-    {
-        return await PlayerApi.IsNicknameAvailable(nickname);
-    }
-
-    public async UniTask<int?> GetPlayerIdByNickname(string nickname)
-    {
-        return await PlayerApi.GetPlayerIdByNickname(nickname);
-    }
-
-    public async UniTask UpdatePlayerNickname(string playerId, string nickname)
-    {
-        await PlayerApi.UpdatePlayerNickname(playerId, nickname);
-    }
-
-    public async UniTask<string> LoginPlayer(string playerId)
-    {
-        return await PlayerApi.LoginPlayer(playerId);
-    }
-
-    public async UniTask<PlayerData> GetPlayerById(string playerId)
-    {
-        return await PlayerApi.GetPlayerById(playerId);
-    }
 }
 
 public interface IHttpMediator
@@ -75,12 +46,4 @@ public interface IHttpMediator
 public class TokenResponse
 {
     public string token;
-}
-
-[Serializable]
-public class PlayerData
-{
-    public string playerId;
-    public string playerName;
-    public string playerEmail;
 }

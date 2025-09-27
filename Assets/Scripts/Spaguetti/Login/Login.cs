@@ -26,26 +26,61 @@ public class Login : MonoBehaviour
 
     private async void LoginGoogle()
     {
-        try
+        const int maxRetries = 3;
+        int attempt = 0;
+
+        loginButton.interactable = false;
+
+        ServiceLocator.Instance.GetService<IMessageService>()
+            .ShowMessage("Logging in...", 5)
+            .Forget();
+
+        while (attempt < maxRetries)
         {
-            loginButton.interactable = false;
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage("Logging in...", 5);
-            await ServiceLocator.Instance.GetService<IPlayerSessionService>().Login();
-            loginButton.gameObject.SetActive(false);
-            var playerName = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData()
-                .playerName;
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Welcome {playerName}", 5);
-            await UniTask.Delay(1000);
-            ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(StartGame);
-        }
-        catch (Exception e)
-        {
-            Debug.Log(e);
-            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage($"Error logging in try again later: {e.Message}");
+            try
+            {
+                attempt++;
+
+                await ServiceLocator.Instance.GetService<IPlayerSessionService>().Login();
+
+                // ✅ Login OK
+                loginButton.gameObject.SetActive(false);
+                var playerName = ServiceLocator.Instance
+                    .GetService<IPlayerSessionService>()
+                    .GetPlayerSessionData().playerName;
+
+                ServiceLocator.Instance.GetService<IMessageService>()
+                    .ShowMessage($"Welcome {playerName}", 5).Forget();
+
+                await UniTask.Delay(1000);
+                await ServiceLocator.Instance.GetService<ITransitionService>()
+                    .ShowSplashScreen(StartGame);
+
+                return; // Salimos si tuvo éxito
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Login] Attempt {attempt} failed: {e}");
+
+                if (attempt >= maxRetries)
+                {
+                    // ❌ Se agotaron los intentos
+                    ServiceLocator.Instance.GetService<IMessageService>()
+                        .ErrorMessage("Error logging in, please try again later.")
+                        .Forget();
+                }
+                else
+                {
+                    // ⏳ Espera antes del retry (exponencial)
+                    int delayMs = attempt * 2000; // 2s, 4s, 6s...
+                    await UniTask.Delay(delayMs);
+                }
+            }
         }
 
         loginButton.interactable = true;
     }
+
 
     public async void Logout()
     {

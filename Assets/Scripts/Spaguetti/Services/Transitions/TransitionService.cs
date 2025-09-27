@@ -40,6 +40,7 @@ public class TransitionService : MonoBehaviour, ITransitionService
         sequence.Append(canvasGroupSplashScreen.DOFade(1, 1.5f));
         sequence.OnComplete(() => { onTask?.Invoke(); });
         await sequence.AsyncWaitForCompletion();
+        
     }
 
     public async UniTask HideSplashScreen(Action onComplete = null)

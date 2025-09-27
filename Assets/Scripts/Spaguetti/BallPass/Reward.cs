@@ -1,6 +1,9 @@
 ﻿using System;
+using App.UseCase;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
+using Domain.Entities;
+using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,9 +21,9 @@ public class Reward : MonoBehaviour
     public async UniTask Configure(RewardData reward)
     {
         _rewardData = reward;
-        level.text = reward.level.ToString();
-        //Debug.Log(reward.reward);
-        var rewardData = JsonUtility.FromJson<RewardDataJson>(reward.reward);
+        level.text = reward.Level.ToString();
+        Debug.Log(reward.Reward);
+        var rewardData = JsonUtility.FromJson<RewardDataJson>(reward.Reward);
         var data = await ServiceLocator.Instance.GetService<IRewardFactoryService>().GetRewardConfigData(rewardData);
         rewardIcon.sprite = data.image;
         rewardText.text = data.value;
@@ -40,14 +43,14 @@ public class Reward : MonoBehaviour
         rewardButton.onClick.RemoveAllListeners();
         try
         {
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>().PlayerRewardApi
-                .ClaimReward(_rewardData.level);
+            await ServiceLocator.Instance.GetService<ILoginUseCase>().ClaimReward(_rewardData.Level);
             var regard = await ServiceLocator.Instance.GetService<IClaimRewardService>().ClaimReward(_rewardData);
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Reward {regard.type} claimed", 3).Forget();
+            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Reward {regard.type} claimed", 3)
+                .Forget();
         }
         catch (Exception e)
         {
-            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage(e.Message, 3);
+            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage(e.Message, 3).Forget();
             rewardButton.onClick.AddListener(CallRewarded);
         }
 
@@ -91,7 +94,7 @@ public class Reward : MonoBehaviour
 public class RewardDataJson
 {
     public string type;
-    public string count;
+    public string body;
 }
 
 [Serializable]

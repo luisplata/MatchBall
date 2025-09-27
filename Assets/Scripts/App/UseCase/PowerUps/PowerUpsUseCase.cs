@@ -11,6 +11,7 @@ namespace App.UseCase.PowerUps
         private readonly IInventoryRepository _inventoryRepository;
         private readonly HashSet<string> _powerUpsSelected = new();
         private List<PowerUpData> _powerUpsData = new();
+        private List<PowerUpData> _powerUpsDataStore = new();
         private readonly IEventBus _eventBus;
 
         public PowerUpsUseCase(IInventoryRepository inventoryRepository,
@@ -43,7 +44,7 @@ namespace App.UseCase.PowerUps
                     quantity = p.Quantity
                 })
                 .ToList();
-
+            _powerUpsDataStore = await GetPowerUpsFromStoreLoad();
             SyncPowerUps();
         }
 
@@ -71,6 +72,16 @@ namespace App.UseCase.PowerUps
         /// </summary>
         public IReadOnlyList<PowerUpData> GetSelectedPowerUps() =>
             _powerUpsData.Where(p => p.selected).ToList();
+
+        public IReadOnlyList<PowerUpData> GetPowerUpsFromStore()
+        {
+            return _powerUpsDataStore;
+        }
+
+        private async UniTask<List<PowerUpData>> GetPowerUpsFromStoreLoad()
+        {
+            return await _inventoryRepository.GetPowerUpsInventoryFromStore();
+        }
 
         /// <summary>
         /// Consume un PowerUp y recarga el inventario.

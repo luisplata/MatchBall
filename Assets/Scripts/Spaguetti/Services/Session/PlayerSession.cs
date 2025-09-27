@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using App.UseCase;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
 using Cysharp.Threading.Tasks;
@@ -13,6 +14,7 @@ using Unity.Services.Economy;
 using Unity.Services.Friends;
 using Unity.Services.RemoteConfig;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData, IGlobalSessionService
 {
@@ -70,7 +72,8 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     {
         if (!_readyToSignIn)
         {
-            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage("PlayerSession is not ready to sign in");
+            await ServiceLocator.Instance.GetService<IMessageService>()
+                .ErrorMessage("PlayerSession is not ready to sign in");
             return;
         }
 
@@ -95,8 +98,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         }
 
         _playerSessionData = player;
-        await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
-            .UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
+        // await ServiceLocator.Instance.GetService<ILoginUseCase>().UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
     }
 
     public void SaveDataGlobal(GlobalData key, string value)
@@ -172,87 +174,112 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         }
     }
 
-    async UniTask SignInAnonymouslyAsync()
+    async UniTask<bool> SignInAnonymouslyAsync(int maxRetries = 3)
     {
-        try
+        int attempt = 0;
+
+        while (attempt < maxRetries)
         {
-            if (!AuthenticationService.Instance.IsSignedIn)
+            try
             {
-            }
+                attempt++;
+                Debug.Log($"[Auth] Anonymous sign-in attempt {attempt}/{maxRetries}");
 
-            //Debug.Log($"AuthenticationService.Instance.IsSignedIn {AuthenticationService.Instance.IsSignedIn}");
-            await AuthenticationService.Instance.SignInAnonymouslyAsync();
-            //Debug.Log($"AuthenticationService.Instance.IsSignedIn {AuthenticationService.Instance.IsSignedIn}");
-            // Initialize friends service
-            await FriendsService.Instance.InitializeAsync();
-            // Start using the Friends SDK functionalities.
-            var friends = FriendsService.Instance.Friends;
-            foreach (var friend in friends)
-            {
-                //Debug.Log($"Friend: {friend}");
-            }
-
-            if (await HasSavedSessionData())
-            {
-                //Debug.Log("Sign in anonymously skipped!");
-                var a = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
-
-                _playerSessionData.LoadData(a);
-
-                //Debug.Log($"Player ID: {_playerSessionData.playerName}");
-            }
-            else
-            {
-                _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
-                _playerSessionData.playerName = SystemInfo.deviceUniqueIdentifier;
-                _playerSessionData.playerEmail = "Anonymous";
-                _playerSessionData.playerPhotoUrl = "Anonymous";
-                _playerSessionData.isCreated = true;
-                _playerSessionData.cups = 0;
-                _playerSessionData.language = "es";
-                _playerSessionData.isMute = false;
-                _playerSessionData.volume = 1;
-                //Debug.Log("Sign in anonymously succeeded!");
-                // Guardar el nickname con el playerId actual
-                var data = new Dictionary<string, object>
+                if (!AuthenticationService.Instance.IsSignedIn)
                 {
-                    { _playerSessionData.playerName, AuthenticationService.Instance.PlayerId }
-                };
-                //await CloudSaveService.Instance.Data.Custom.
-                //Debug.Log($"Nickname '{_playerSessionData.playerName}' has been saved with player ID.");
+                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                }
+
+                // ✅ Initialize friends service
+                await FriendsService.Instance.InitializeAsync();
+                var friends = FriendsService.Instance.Friends;
+                foreach (var friend in friends)
+                {
+                    Debug.Log($"[Friends] {friend}");
+                }
+
+                // ✅ Load saved session or create new one
+                if (await HasSavedSessionData())
+                {
+                    var data = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
+                    _playerSessionData.LoadData(data);
+                    Debug.Log($"[Auth] Loaded existing session for {_playerSessionData.playerName}");
+                }
+                else
+                {
+                    _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
+
+                    // Nickname único por dispositivo
+                    int randomSuffix = Random.Range(1000, 9999);
+                    string baseName = SystemInfo.deviceUniqueIdentifier;
+                    _playerSessionData.playerName = $"{baseName}_{randomSuffix}";
+
+                    _playerSessionData.playerEmail = "Anonymous";
+                    _playerSessionData.playerPhotoUrl = "Anonymous";
+                    _playerSessionData.isCreated = true;
+                    _playerSessionData.cups = 0;
+                    _playerSessionData.language = "es";
+                    _playerSessionData.isMute = false;
+                    _playerSessionData.volume = 1;
+
+                    Debug.Log($"[Auth] New anonymous session created: {_playerSessionData.playerName}");
+                }
+
+                // ✅ Sync with backend
+                var loginUseCase = ServiceLocator.Instance.GetService<ILoginUseCase>();
+                await loginUseCase.AddPlayer(_playerSessionData.playerId,
+                    _playerSessionData.playerName,
+                    "dev_player_key_change_in_production");
+                await loginUseCase.LoginPlayer(_playerSessionData.playerId);
+
+                // ✅ Language setup
+                ServiceLocator.Instance.GetService<IMultiLanguageService>()
+                    .ChangeLanguage(_playerSessionData.language);
+
+                Debug.Log("[Auth] Anonymous sign-in completed successfully.");
+                return true;
+            }
+            catch (AuthenticationException ex)
+            {
+                Debug.LogError($"[Auth] AuthenticationException: {ex}");
+                if (attempt >= maxRetries)
+                {
+                    ServiceLocator.Instance.GetService<IMessageService>()
+                        .ErrorMessage("Error iniciando sesión, intenta de nuevo más tarde.").Forget();
+                    return false;
+                }
+            }
+            catch (RequestFailedException ex)
+            {
+                Debug.LogError($"[Auth] RequestFailedException: {ex.Message}");
+                if (attempt >= maxRetries)
+                {
+                    ServiceLocator.Instance.GetService<IMessageService>()
+                        .ErrorMessage("Problema de conexión, por favor revisa tu internet.").Forget();
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Auth] Exception: {ex}");
+                AuthenticationService.Instance.SignOut();
+
+                if (attempt >= maxRetries)
+                {
+                    ServiceLocator.Instance.GetService<IMessageService>()
+                        .ErrorMessage("Error inesperado, intenta más tarde.").Forget();
+                    return false;
+                }
             }
 
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>().AddPlayer(_playerSessionData.playerId,
-                _playerSessionData.playerName, "your_player_key");
+            // ⏳ Exponential backoff
+            int delayMs = attempt * 2000; // 2s, 4s, 6s...
+            await UniTask.Delay(delayMs);
+        }
 
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
-                .LoginPlayer(_playerSessionData.playerId);
-
-            ServiceLocator.Instance.GetService<IMultiLanguageService>().ChangeLanguage(_playerSessionData.language);
-            await ServiceLocator.Instance.GetService<IHttpRequestsCustom>()
-                .UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
-        }
-        catch (AuthenticationException ex)
-        {
-            // Compare error code to AuthenticationErrorCodes
-            // Notify the player with the proper error message
-            Debug.Log(ex);
-            throw new Exception("Ocurrio un error iniciando sesion intenta de nuevo AuthenticationException");
-        }
-        catch (RequestFailedException ex)
-        {
-            // Compare error code to CommonErrorCodes
-            // Notify the player with the proper error message
-            Debug.LogError($"Error RequestFailedException: {ex.Message}");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"Error Exception: {ex.Message}");
-            AuthenticationService.Instance.SignOut();
-            throw;
-        }
+        return false;
     }
+
 
     public async UniTask SaveData(string key, object value)
     {
@@ -276,15 +303,20 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             .Select(powerUp => new PowerUpData { id = powerUp.Value.Id, selected = false }).ToList();
     }
 
-    public int howMuchPowerUpsByBuy(string name)
+    public int HowMuchPowerUpsByBuy(string name)
     {
-        return name.ToUpper() switch
+        var upper = name.ToUpper();
+
+        return upper switch
         {
-            "LEAD" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_lead_per_buy,
-            "RAY" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_ray_per_buy,
-            "ICE" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig().powerup_ice_per_buy,
-            "JOKER" => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
-                .powerup_joker_per_buy,
+            var s when s.Contains("LEAD") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_lead_per_buy,
+            var s when s.Contains("RAY") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_ray_per_buy,
+            var s when s.Contains("ICE") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .powerup_ice_per_buy,
+            var s when s.Contains("JOKER") => ServiceLocator.Instance.GetService<IGameConfigurationUseCase>()
+                .GetConfig().powerup_joker_per_buy,
             _ => 0
         };
     }
@@ -296,19 +328,7 @@ public interface IGlobalSessionService
     int GetExperienceToLose();
     List<PowerUpData> GetListOfPowerUps();
 
-    int howMuchPowerUpsByBuy(string name);
-}
-
-public interface IHttpRequestsCustom
-{
-    UniTask AddPlayer(string playerId, string nickname, string key);
-    UniTask UpdatePlayerNickname(string playerId, string playerName);
-    UniTask<string> LoginPlayer(string playerId);
-
-    UniTask<PlayerData> GetPlayerById(string playerId);
-    PlayerRewardApi PlayerRewardApi { get; }
-    PlayerApi PlayerApi { get; }
-    BattlePassApi BattlePassApi { get; }
+    int HowMuchPowerUpsByBuy(string name);
 }
 
 /// <summary>
@@ -363,26 +383,4 @@ public class PowerUpData
 public class PowerUpsData
 {
     public List<PowerUpData> powerups;
-}
-
-[Serializable]
-public class PlayerBattlePass
-{
-    public int id;
-    public string playerId;
-    public int level;
-    public int experience;
-    public DateTime created_at;
-    public DateTime updated_at;
-    public List<PlayerReward> playerRewards;
-}
-
-[Serializable]
-public class PlayerReward
-{
-    public int id;
-    public string playerId;
-    public int rewardId;
-    public DateTime awarded_at;
-    public bool claimed;
 }
