@@ -12,8 +12,8 @@ public class ConfigMediator : MonoBehaviour, IConfigMediator, IConfigAudioMediat
     [Header("Config Rename")] [SerializeField]
     private ConfigRename rename;
     
-    [Header("Fiends")] [SerializeField]
-    private ConfigFriend friend;
+    // [Header("Fiends")] [SerializeField]
+    // private ConfigFriend friend;
 
     private void Start()
     {

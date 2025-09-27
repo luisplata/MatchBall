@@ -9599,7 +9599,6 @@ MonoBehaviour:
   audio: {fileID: 103128444}
   language: {fileID: 206345215}
   rename: {fileID: 1075823804}
-  friend: {fileID: 0}
 --- !u!1 &1134690911
 GameObject:
   m_ObjectHideFlags: 0
@@ -14226,9 +14225,8 @@ MonoBehaviour:
   ballPass: {fileID: 1295401742}
   settingsButton: {fileID: 202596978}
   helpPanel: {fileID: 1448102724}
-  waitToLoadObjects:
-  - {fileID: 1212599874}
-  - {fileID: 526794100}
+  profileInfo: {fileID: 1212599874}
+  storeMediator: {fileID: 526794100}
 --- !u!1 &1706987626
 GameObject:
   m_ObjectHideFlags: 0

@@ -21,20 +21,73 @@ namespace Infrastructure.UnityEconomy
     {
         public async UniTask<List<PurchaseOption>> GetAvailablePurchases()
         {
-            await EconomyService.Instance.Configuration.SyncConfigurationAsync();
-            var purchases = EconomyService.Instance.Configuration.GetVirtualPurchases();
+            try
+            {
+                await EconomyService.Instance.Configuration.SyncConfigurationAsync();
+                var purchases = EconomyService.Instance.Configuration.GetVirtualPurchases();
 
-            return (from p in purchases
-                let cost = p.Costs.FirstOrDefault()
-                let currencyId = cost?.Item?.GetReferencedConfigurationItem()?.Id
-                let price = cost?.Amount ?? 0
-                let reward = p.Rewards.FirstOrDefault()
-                let rewardDef = reward?.Item?.GetReferencedConfigurationItem()
-                let purchaseCustom = p.CustomDataDeserializable.GetAs<PurchaseCustomData>()
-                let rewardCustom = rewardDef?.CustomDataDeserializable?.GetAs<RewardCustomData>()
-                select new PurchaseOption(p.Id, purchaseCustom?.itemName ?? p.Name, purchaseCustom?.itemImage ?? "", new List<(string, int)> { (currencyId, price) }, (rewardDef?.Id, rewardCustom?.count, rewardCustom?.type, ServiceLocator.Instance.GetService<IGlobalSessionService>()
-                    .HowMuchPowerUpsByBuy(rewardCustom?.count)))).ToList();
+                var list = new List<PurchaseOption>();
+
+                foreach (var p in purchases)
+                {
+                    try
+                    {
+                        var cost = p.Costs.FirstOrDefault();
+                        var currencyId = cost?.Item?.GetReferencedConfigurationItem()?.Id ?? "";
+                        var price = cost?.Amount ?? 0;
+
+                        var reward = p.Rewards.FirstOrDefault();
+                        var rewardDef = reward?.Item?.GetReferencedConfigurationItem();
+
+                        // 👇 blindamos deserialización
+                        PurchaseCustomData purchaseCustom = null;
+                        RewardCustomData rewardCustom = null;
+
+                        try
+                        {
+                            purchaseCustom = p.CustomDataDeserializable?.GetAs<PurchaseCustomData>();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"[Economy] Error deserializando PurchaseCustomData para {p.Id}: {ex}");
+                        }
+
+                        try
+                        {
+                            rewardCustom = rewardDef?.CustomDataDeserializable?.GetAs<RewardCustomData>();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"[Economy] Error deserializando RewardCustomData para {p.Id}: {ex}");
+                        }
+
+                        list.Add(new PurchaseOption(
+                            p.Id,
+                            purchaseCustom?.itemName ?? p.Name,
+                            purchaseCustom?.itemImage ?? "",
+                            new List<(string, int)> { (currencyId, price) },
+                            (rewardDef?.Id, rewardCustom?.count, rewardCustom?.type,
+                                ServiceLocator.Instance.GetService<IGlobalSessionService>()
+                                    .HowMuchPowerUpsByBuy(rewardCustom?.count ?? ""))
+                        ));
+                    }
+                    catch (Exception innerEx)
+                    {
+                        Debug.LogError($"[Economy] Error procesando purchase {p.Id}: {innerEx}");
+                    }
+                }
+
+                return list;
+            }
+            catch (Exception e)
+            {
+                // Error global, no crashea el juego
+                Debug.LogError($"[Economy] Error al obtener compras: {e}");
+                ServiceLocator.Instance.GetService<IMessageService>()?.ErrorMessage(e, 10).Forget();
+                return new List<PurchaseOption>();
+            }
         }
+
 
         public async UniTask<PlayerInventory> GetPlayerInventory()
         {
@@ -109,7 +162,7 @@ namespace Infrastructure.UnityEconomy
 
             return result;
         }
-        
+
         [System.Serializable]
         public class RewardCustomData
         {

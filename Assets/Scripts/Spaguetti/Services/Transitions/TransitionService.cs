@@ -33,28 +33,28 @@ public class TransitionService : MonoBehaviour, ITransitionService
 
     public async UniTask ShowSplashScreen(Action onTask = null)
     {
-        // EnableComponents(true);
-        // _isShowing = true;
-        // var sequence = DOTween.Sequence();
-        // canvasGroupSplashScreen.alpha = 0;
-        // sequence.Append(canvasGroupSplashScreen.DOFade(1, 1.5f));
-        // sequence.OnComplete(() => {  });
-        // await sequence.AsyncWaitForCompletion();
-        onTask?.Invoke();
+        EnableComponents(true);
+        _isShowing = true;
+        var sequence = DOTween.Sequence();
+        canvasGroupSplashScreen.alpha = 0;
+        sequence.Append(canvasGroupSplashScreen.DOFade(1, 1.5f));
+        sequence.OnComplete(() => { onTask?.Invoke(); });
+        await sequence.AsyncWaitForCompletion();
+        
     }
 
     public async UniTask HideSplashScreen(Action onComplete = null)
     {
-        // var sequence = DOTween.Sequence();
-        // canvasGroupSplashScreen.alpha = 1;
-        // sequence.Append(canvasGroupSplashScreen.DOFade(0, 1.5f));
-        // sequence.AppendCallback(() =>
-        // {
-        //     EnableComponents(false);
-        // });
-        // await sequence.AsyncWaitForCompletion();
-        // _isShowing = false;
-        onComplete?.Invoke();
+        var sequence = DOTween.Sequence();
+        canvasGroupSplashScreen.alpha = 1;
+        sequence.Append(canvasGroupSplashScreen.DOFade(0, 1.5f));
+        sequence.AppendCallback(() =>
+        {
+            onComplete?.Invoke();
+            EnableComponents(false);
+        });
+        await sequence.AsyncWaitForCompletion();
+        _isShowing = false;
     }
 
     public async UniTask ShowSplashScreen(Action onTask = null, Action onComplete = null)
