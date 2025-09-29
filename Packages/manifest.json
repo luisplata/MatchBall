@@ -28,6 +28,7 @@
     "com.unity.services.deployment": "1.6.2",
     "com.unity.services.economy": "3.5.3",
     "com.unity.services.friends": "1.1.1",
+    "com.unity.services.levelplay": "9.0.0",
     "com.unity.test-framework": "1.4.6",
     "com.unity.timeline": "1.8.9",
     "com.unity.toolchain.win-x86_64-linux-x86_64": "2.0.10",

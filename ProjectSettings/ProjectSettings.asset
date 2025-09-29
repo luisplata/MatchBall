@@ -140,13 +140,10 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 0.1.1
+  bundleVersion: 0.1.5
   preloadedAssets:
   - {fileID: 11400000, guid: db1dc5ac0d7e01e41b0ac1b3c166973f, type: 2}
   - {fileID: -944628639613478452, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
-  - {fileID: 7757035158338763570, guid: 17998ed1e94465d40bfb8e78210b01ce, type: 2}
-  - {fileID: 11400000, guid: 3a051021530da5f49bab11d8fc5e362d, type: 2}
-  - {fileID: 11400000, guid: 10fa26863f773654781691b6cba7b7d5, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -179,7 +176,7 @@ PlayerSettings:
     iPhone: 0
     tvOS: 0
   overrideDefaultApplicationIdentifier: 0
-  AndroidBundleVersionCode: 1
+  AndroidBundleVersionCode: 5
   AndroidMinSdkVersion: 30
   AndroidTargetSdkVersion: 36
   AndroidPreferredInstallLocation: 1
@@ -283,7 +280,7 @@ PlayerSettings:
   AndroidEnableTango: 0
   androidEnableBanner: 1
   androidUseLowAccuracyLocation: 0
-  androidUseCustomKeystore: 0
+  androidUseCustomKeystore: 1
   m_AndroidBanners:
   - width: 320
     height: 180
@@ -811,7 +808,7 @@ PlayerSettings:
   webGLCloseOnQuit: 0
   webWasm2023: 0
   scriptingDefineSymbols:
-    Android: DOTWEEN;UNITY_POST_PROCESSING_STACK_V2
+    Android: DOTWEEN;UNITY_POST_PROCESSING_STACK_V2;LEVELPLAY_DEPENDENCIES_INSTALLED
     EmbeddedLinux: DOTWEEN;UNITY_POST_PROCESSING_STACK_V2
     GameCoreScarlett: DOTWEEN
     GameCoreXboxOne: DOTWEEN;UNITY_POST_PROCESSING_STACK_V2
