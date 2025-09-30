@@ -396,7 +396,7 @@ MonoBehaviour:
   _canBeClicked: 0
   _pathType: 0
   speed: 1
-  id: POWERUP
+  id: POWERUP_JOKER
   type: all
   art: {fileID: 2036936225095808781}
   vfxManagerGame: {fileID: 8925842203029531240}
