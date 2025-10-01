@@ -25,6 +25,7 @@ public class GameManager : MonoBehaviour, IGameManager
     [SerializeField] private string music;
     [SerializeField] private PlayableDirector director;
     private bool _isGameOver;
+    private int _multiplier = 1;
 
     private void Awake()
     {
@@ -36,6 +37,11 @@ public class GameManager : MonoBehaviour, IGameManager
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         //set dont restart app if it was paused
         Application.runInBackground = true;
+    }
+
+    public void DuplcateCoins()
+    {
+        ServiceLocator.Instance.GetService<IAdModUseCase>().ShowRewarded(d => { _multiplier = (int)d; });
     }
 
     private void Start()
@@ -112,7 +118,7 @@ public class GameManager : MonoBehaviour, IGameManager
 
     private async void AddCoinsAndLoadScene()
     {
-        await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddCoins(Player1.GetCoins());
+        await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddCoins(Player1.GetCoins() * _multiplier);
         SceneManager.LoadScene("BallPass");
     }
 
