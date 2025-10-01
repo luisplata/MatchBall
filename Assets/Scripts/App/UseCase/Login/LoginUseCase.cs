@@ -6,15 +6,18 @@ namespace App.UseCase
     public class LoginUseCase : ILoginUseCase
     {
         private readonly IWebAdapter _webAdapter;
+        private readonly IAdModAdapter _adModAdapter;
 
-        public LoginUseCase(IWebAdapter webAdapter)
+        public LoginUseCase(IWebAdapter webAdapter, IAdModAdapter adModAdapter)
         {
             _webAdapter = webAdapter;
+            _adModAdapter = adModAdapter;
         }
 
         public async UniTask LoginPlayer(string playerId)
         {
             await _webAdapter.LoginPlayer(playerId);
+            _adModAdapter.Initialize();
         }
 
         public async UniTask AddPlayer(string playerId, string nickname, string key)
