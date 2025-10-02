@@ -1,3 +1,4 @@
+using App.UseCase;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -34,26 +35,28 @@ public class MatchingScene : MonoBehaviour
 
     private void StartMatching()
     {
-        ShowLoadingIcon();
-        this.tt().Loop(h =>
-        {
-            if (h.timeSinceStart > 5)
+        this.tt().Add(() => { ServiceLocator.Instance.GetService<IAdModUseCase>().ShowInterstitial(); })
+            .Wait(ServiceLocator.Instance.GetService<IAdModUseCase>().IsInterstitialFinished)
+            .Add(ShowLoadingIcon)
+            .Loop(h =>
             {
-                isMatching = true;
-            }
+                if (h.timeSinceStart > 5)
+                {
+                    isMatching = true;
+                }
 
-            if (isMatching)
-            {
-                h.Break();
-            }
+                if (isMatching)
+                {
+                    h.Break();
+                }
 
-            loading_icon.transform.Rotate(Vector3.forward, rotationSpeed * h.deltaTime);
-        }).Add(() =>
-        {
-            ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(() =>
+                loading_icon.transform.Rotate(Vector3.forward, rotationSpeed * h.deltaTime);
+            }).Add(() =>
             {
-                SceneManager.LoadScene(4);
+                ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(() =>
+                {
+                    SceneManager.LoadScene(4);
+                });
             });
-        });
     }
 }

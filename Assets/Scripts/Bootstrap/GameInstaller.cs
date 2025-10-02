@@ -4,6 +4,7 @@ using App.UseCase.GameConfiguration;
 using App.UseCase.PassBall;
 using App.UseCase.PowerUps;
 using App.UseCase.Reward;
+using Infra.AdModAdapter;
 using Infra.EventBus;
 using Infra.UnityAdapters;
 using Infra.UnityConfiguration;
@@ -15,9 +16,9 @@ namespace Bootstrap
 {
     public class GameInstaller : MonoBehaviour
     {
-        [SerializeField] private string url, uri;
+        [SerializeField] private string url, uri, interstitialId, rewardedId;
 
-        private void Awake()
+        private void Start()
         {
             //TODO: Falta refactorizar el pase de batalla para darle manejo.
             DontDestroyOnLoad(gameObject);
@@ -26,6 +27,7 @@ namespace Bootstrap
             var storageRepository = new SaveDataRepository();
             var gameConfigurationAdapter = new UnityConfigurationAdapter();
             var webAdapter = new WebAdapter(url, uri);
+            var adModAdapter = new FakeAdModAdapter();
 
             ServiceLocator.Instance.RegisterService<IEventBus>(memoryEventBus);
 
@@ -40,7 +42,8 @@ namespace Bootstrap
                 memoryEventBus));
             ServiceLocator.Instance.RegisterService<IClaimPowerUpUseCase>(new ClaimPowerUpUseCase(storeRepository));
             ServiceLocator.Instance.RegisterService<IPassBallUseCase>(new PassBallUseCase(webAdapter));
-            ServiceLocator.Instance.RegisterService<ILoginUseCase>(new LoginUseCase(webAdapter));
+            ServiceLocator.Instance.RegisterService<ILoginUseCase>(new LoginUseCase(webAdapter, adModAdapter));
+            ServiceLocator.Instance.RegisterService<IAdModUseCase>(new AdModUseCase(adModAdapter));
         }
     }
 }
