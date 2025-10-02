@@ -16,9 +16,9 @@ namespace Bootstrap
 {
     public class GameInstaller : MonoBehaviour
     {
-        [SerializeField] private string url, uri;
+        [SerializeField] private string url, uri, interstitialId, rewardedId;
 
-        private void Awake()
+        private void Start()
         {
             //TODO: Falta refactorizar el pase de batalla para darle manejo.
             DontDestroyOnLoad(gameObject);
@@ -27,10 +27,7 @@ namespace Bootstrap
             var storageRepository = new SaveDataRepository();
             var gameConfigurationAdapter = new UnityConfigurationAdapter();
             var webAdapter = new WebAdapter(url, uri);
-            var adModAdapter = new AdModAdapter(
-                "ca-app-pub-1968350662333818~8778670656",
-                "ca-app-pub-1968350662333818~8778670656"
-            );
+            var adModAdapter = new FakeAdModAdapter();
 
             ServiceLocator.Instance.RegisterService<IEventBus>(memoryEventBus);
 

@@ -18,16 +18,11 @@ namespace Infra.AdModAdapter
         public void Initialize()
         {
             if (_isInitialized) return;
-
-            MobileAds.Initialize(_ =>
-            {
-                Debug.Log("AdMob Inter initialized.");
-                _isInitialized = true;
-                LoadAd();
-            });
+            _isInitialized = true;
+            LoadAd();
         }
 
-        public void LoadAd()
+        private void LoadAd()
         {
             if (!_isInitialized) return;
 
@@ -36,7 +31,7 @@ namespace Infra.AdModAdapter
             {
                 if (error != null || ad == null)
                 {
-                    Debug.LogError($"Interstitial failed to load: {error}");
+                    Debug.LogError($"Rewarded failed to load: {error}");
                     return;
                 }
 

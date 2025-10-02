@@ -18,13 +18,8 @@ namespace Infra.AdModAdapter
         public void Initialize()
         {
             if (_isInitialized) return;
-
-            MobileAds.Initialize(_ =>
-            {
-                Debug.Log("AdMob Reward initialized.");
-                _isInitialized = true;
-                LoadAd();
-            });
+            _isInitialized = true;
+            LoadAd();
         }
 
         public void LoadAd()
@@ -40,6 +35,7 @@ namespace Infra.AdModAdapter
                     return;
                 }
 
+                _currentAd?.Destroy();
                 _currentAd = ad;
 
                 _currentAd.OnAdFullScreenContentClosed += () =>
