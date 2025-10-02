@@ -144,9 +144,6 @@ PlayerSettings:
   preloadedAssets:
   - {fileID: 11400000, guid: db1dc5ac0d7e01e41b0ac1b3c166973f, type: 2}
   - {fileID: -944628639613478452, guid: 8a2c70018f04a554eadd175375e7e048, type: 3}
-  - {fileID: 7757035158338763570, guid: 17998ed1e94465d40bfb8e78210b01ce, type: 2}
-  - {fileID: 11400000, guid: 3a051021530da5f49bab11d8fc5e362d, type: 2}
-  - {fileID: 11400000, guid: 10fa26863f773654781691b6cba7b7d5, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -262,7 +259,7 @@ PlayerSettings:
   clonedFromGUID: f918f204a65eb664ba9e5b39d533ff8e
   templatePackageId: com.unity.template.mobile2d@3.0.0
   templateDefaultScene: Assets/Scenes/SampleScene.unity
-  useCustomMainManifest: 0
+  useCustomMainManifest: 1
   useCustomLauncherManifest: 0
   useCustomMainGradleTemplate: 1
   useCustomLauncherGradleManifest: 0
