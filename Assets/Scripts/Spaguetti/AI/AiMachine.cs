@@ -3,11 +3,12 @@ using Commander;
 using Commander.Commands;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class AiMachine : IAiMachine
 {
     private bool _canPlay = true;
-    private TeaTime _waitFirstPlayerMove, _tryBallInRandomPath, _waitTimeState;
+    private TeaTime _waitFirstPlayerMove, _tryBallInRandomPath, _waitTimeState, _checkIfICanUsePowerUp, _usePowerUp;
     private float _deltaLocal = 0f;
 
     public AiMachine(IPlayer player, IGameManager gameManager)
@@ -15,6 +16,8 @@ public class AiMachine : IAiMachine
         _waitFirstPlayerMove = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
         _tryBallInRandomPath = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
         _waitTimeState = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
+        _checkIfICanUsePowerUp = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
+        _usePowerUp = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
 
         _waitFirstPlayerMove.Pause().Loop(h =>
         {
@@ -36,7 +39,7 @@ public class AiMachine : IAiMachine
         {
             if (!player.IsGameOver())
             {
-                _tryBallInRandomPath.Play();
+                _checkIfICanUsePowerUp.Play();
             }
         });
         _tryBallInRandomPath.Pause().Add(() =>
@@ -64,6 +67,38 @@ public class AiMachine : IAiMachine
                 _waitTimeState.Play();
             }
         });
+
+        _checkIfICanUsePowerUp.Pause().Add(() =>
+        {
+            //Validate if I can use the powerup
+            if (player.GetBallZone().IsHavePowerUps() && DiceTry())
+            {
+                _usePowerUp.Play();
+            }
+            else
+            {
+                _tryBallInRandomPath.Play();
+            }
+        });
+
+        _usePowerUp.Pause()
+            .Add(() =>
+            {
+                Debug.Log($"[AiMachine] I can use Powerup!");
+                player.GetBallZone().GetFirstPowerUp().Click();
+            })
+            .Add(() => { _waitTimeState.Play(); });
+    }
+
+    private static bool DiceTry()
+    {
+        var range = Random.Range(0, 100);
+        Debug.Log($"range is {range}");
+#if UNITY_EDITOR
+        return range <= 90;
+#else
+        return range >= 90;
+#endif
     }
 
     public bool CanPlay()

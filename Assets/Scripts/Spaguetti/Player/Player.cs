@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using App.UseCase.GameConfiguration;
+using App.UseCase.PowerUps;
 using Commander;
 using Commander.Commands;
+using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 
@@ -40,11 +43,16 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
         ballZone.EnableControls();
     }
 
+    public void ConsumePowerUp(string prefabID)
+    {
+        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().ConsumePowerUp(prefabID).Forget();
+    }
+
     private bool _isGameOver;
     private IGameManager _gameManager;
     private int _countOfPoints = 0;
 
-    public void Configure(IGameManager gameManager)
+    public void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)
     {
         balance.OnBalanceClicked += OnBalanceClicked;
         balance.OnGetPoints += OnGetPoints;
@@ -55,7 +63,7 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
         ServiceLocator.Instance.GetService<ICommandQueue>()
             .AddCommand(new OpeningGame(_gameManager.GetDirectorOpening()), this);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new PlayMusic(_gameManager.GetMusic()), this);
-        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(this), this);
+        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(this, powerUps), this);
         //Debug.Log("Player Configure");
         _readyToPlay = true;
     }
@@ -65,10 +73,10 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
         return _readyToPlay;
     }
 
-    public void ConfigureBallZone()
+    public void ConfigureBallZone(IReadOnlyList<PowerUpData> powerUps)
     {
         balance.Configure(this);
-        ballZone.Configure(this, _gameManager);
+        ballZone.Configure(this, _gameManager, powerUps);
     }
 
     private void OnGetPoints()
@@ -157,7 +165,7 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 public interface IPlayerReference
 {
     IPlayer GetPlayer();
-    void Configure(IGameManager gameManager);
+    void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
     bool ReadyToPlay();
 }
 
@@ -166,17 +174,18 @@ public interface IPlayer
     string Id { get; }
     void AddCommand(ICommand command);
     bool IsBusy();
-    void Configure(IGameManager gameManager);
+    void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
     int GetCoins();
     bool IsGameOver();
     void DisableControls();
-    void ConfigureBallZone();
+    void ConfigureBallZone(IReadOnlyList<PowerUpData> powerUps);
     IBalance GetBalance();
     IBallZone GetBallZone();
     IGameManager GetGameManager();
     void FreezeGame(bool isFreeze);
     void ClearCommands();
     void EnableControls();
+    void ConsumePowerUp(string prefabID);
 }
 
 public interface IMediatorBalance

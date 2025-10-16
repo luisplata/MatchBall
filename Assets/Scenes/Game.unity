@@ -6755,6 +6755,9 @@ MonoBehaviour:
   - blue
   - blue
   - blue
+  - blue
+  - blue
+  - blue
 --- !u!1 &464773570
 GameObject:
   m_ObjectHideFlags: 0
@@ -24233,7 +24236,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 065fcfecf708496f9795cc50b72de811, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  powerUpsConfiguration: {fileID: 11400000, guid: 9f967b362134b0247baf4b2abc30b563, type: 2}
+  powerUpsConfiguration: {fileID: 11400000, guid: 1e66078740ca63f49a61f91fd9602550, type: 2}
 --- !u!1 &2018968556
 GameObject:
   m_ObjectHideFlags: 0

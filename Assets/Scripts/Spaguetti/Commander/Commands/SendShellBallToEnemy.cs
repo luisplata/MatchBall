@@ -9,20 +9,22 @@ namespace Commander.Commands
         private IBalance _balance;
         private float _scaleToShell;
         private GameObject _imageToShell;
+        private IPlayer _player;
 
-        public SendShellBallToEnemy(IPowerUp powerUp, IBalance balance, float scaleToShell, GameObject imageToShell)
+        public SendShellBallToEnemy(IPowerUp powerUp, IBalance balance, float scaleToShell, GameObject imageToShell, IPlayer player)
         {
             _powerup = powerUp;
             _balance = balance;
             _scaleToShell = scaleToShell;
             _imageToShell = imageToShell;
+            _player = player;
         }
 
         public async UniTask Execute()
         {
             await _powerup.GetBall().MoveBall(_powerup.GetBall().gameObject.transform.position,
                 _balance.GetPlayer().GetBallZone().GetBallPointToSpawn().transform.position);
-            var otherPlayer = _balance.GetPlayer().GetGameManager().GetOtherPlayer();
+            var otherPlayer = _balance.GetPlayer().GetGameManager().GetOtherPlayer(_player);
             Path path = null;
             if (Random.Range(0, 2) == 0)
             {
