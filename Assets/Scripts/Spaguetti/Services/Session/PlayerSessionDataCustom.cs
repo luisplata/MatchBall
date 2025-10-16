@@ -31,9 +31,9 @@ public class PlayerSessionDataCustom
         // ListOfPowerUps
         return new List<PowerUpData>
         {
-            // new() { id = "POWERUP_LEAD", selected = false },
-            // new() { id = "POWERUP_RAY", selected = false },
-            // new() { id = "POWERUP_JOKER", selected = false },
+            new() { id = "POWERUP_LEAD", selected = false },
+            new() { id = "POWERUP_RAY", selected = false },
+            new() { id = "POWERUP_JOKER", selected = false },
             new() { id = "POWERUP_ICE", selected = false },
         };
 #else
