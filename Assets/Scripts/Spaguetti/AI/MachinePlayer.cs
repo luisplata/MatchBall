@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
+using App.UseCase.GameConfiguration;
 using Commander;
-using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
@@ -15,6 +15,8 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     private int _coins;
     private IAiMachine _aiMachine;
     private readonly CommandQueue _commandQueue;
+    private int _countOfPoints;
+    private IReadOnlyList<PowerUpData> _poweups;
 
     public MachinePlayer(OtherPlayer otherPlayer, IGameManager gameManager, FreezePlayerMono freezePlayerMono)
     {
@@ -25,9 +27,23 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
         Id = "Machine";
         _aiMachine = new AiMachine(this, gameManager);
         _commandQueue = new CommandQueue();
+        //configure the onGetPoint From IA
+        _balance.OnGetPoints += OnGetPoints;
+    }
+
+
+    private void OnGetPoints()
+    {
+        _countOfPoints++;
+        if (_countOfPoints < ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .how_much_match_to_get_power_up || !_ballZone.CanCreatePowerUp()) return;
+        _countOfPoints = 0;
+        ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("FeedPowerUp");
+        _ballZone.CreatePowerUp();
     }
 
     public string Id { get; }
+
     public void AddCommand(ICommand command)
     {
         _commandQueue.AddCommand(command);
@@ -50,10 +66,16 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
         _aiMachine.SetCanPlay(true);
     }
 
-    public void Configure(IGameManager gameManager)
+    public void ConsumePowerUp(string prefabID)
+    {
+        Debug.Log($"[Machine] Ia dont consume!");
+    }
+
+    public void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)
     {
         _gameManager = gameManager;
         _aiMachine.StartAI();
+        _poweups = powerUps;
     }
 
     public int GetCoins()
@@ -73,11 +95,11 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
         _aiMachine.SetCanPlay(false);
     }
 
-    public void ConfigureBallZone()
+    public void ConfigureBallZone(IReadOnlyList<PowerUpData> powerUps)
     {
         //Debug.Log("ConfigureBallZone");
         _balance.Configure(this);
-        _ballZone.Configure(this, _gameManager);
+        _ballZone.Configure(this, _gameManager, powerUps);
     }
 
     public void AddPoints()
@@ -110,8 +132,8 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     {
         return this;
     }
-    
-    
+
+
     public void FreezeGame(bool isFreeze)
     {
         if (isFreeze)

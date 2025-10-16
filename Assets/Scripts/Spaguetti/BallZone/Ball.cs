@@ -27,8 +27,9 @@ public abstract class Ball : MonoBehaviour, IBall
 
     public int indexQueueOfBalls;
     public int indexQueueOfPositions;
+    protected IPlayer _player;
 
-    public virtual void Configure(IBallZone ballZone, Vector3 startPosition, Vector3 targetPosition, float speed)
+    public virtual void Configure(IBallZone ballZone, Vector3 startPosition, Vector3 targetPosition, float speed, IPlayer player)
     {
         inputClickHandle.Configure(this);
         inputClickHandle.OnClickDown += OnDragFunction;
@@ -42,6 +43,7 @@ public abstract class Ball : MonoBehaviour, IBall
         //StartConfigSelf();
         //create a unique string
         _GUIID = $"{type}_{Guid.NewGuid()}";
+        _player = player;
     }
 
     [ContextMenu("ShootVfx")]

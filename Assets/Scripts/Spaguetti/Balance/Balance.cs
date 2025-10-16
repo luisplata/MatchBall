@@ -10,7 +10,8 @@ using UnityEngine.InputSystem;
 public class Balance : MonoBehaviour, IBalance
 {
     public Action<PathType> OnBalanceClicked;
-    public Action OnGetPoints;
+
+    // public Action OnGetPoints;
     [SerializeField] private Path leftPath;
     [SerializeField] private Path rightPath;
     [SerializeField] private CheckerOfBallsToGetPoints checkerOfBallsToGetPoints;
@@ -249,6 +250,8 @@ public class Balance : MonoBehaviour, IBalance
         }
     }
 
+    public Action OnGetPoints { get; set; }
+
     public Path GetLeftPath()
     {
         return leftPath;
@@ -314,6 +317,7 @@ public interface IBalance
     void EnableControls();
     IMediatorBalance GetMediatorBalance();
     void BallancesControllerArtUpdatePositions();
+    Action OnGetPoints { get; set; }
 }
 
 public enum PathType

@@ -1,30 +1,36 @@
 ﻿// comment to get real powerups
 // #define POWERUPS_TO_TEST
 
+using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
-using App.UseCase.PowerUps;
-using Cysharp.Threading.Tasks;
 
 public class PowerUpsFactory
 {
     private readonly PowerUpsConfiguration powerUpsConfiguration;
+    private readonly IReadOnlyList<PowerUpData> _powerUps;
+    private readonly IPlayer _player;
 
-    public PowerUpsFactory(PowerUpsConfiguration powerUpsConfiguration)
+    public PowerUpsFactory(PowerUpsConfiguration powerUpsConfiguration, IReadOnlyList<PowerUpData> powerUps,
+        IPlayer player)
     {
         this.powerUpsConfiguration = powerUpsConfiguration;
+        _powerUps = powerUps;
+        _player = player;
     }
 
     public PowerUpA Create(string id)
     {
-        // var powerUpsData = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUps();
 #if UNITY_EDITOR && POWERUPS_TO_TEST
+        // var powerUpsData = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUps();
         var powerUpsData = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData()
             .GetPowerUpsDummy();
         //id = "joker";
+        //ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps();
 #else
-        var powerUpsData = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps();
+
 #endif
+        var powerUpsData = _powerUps;
         if (powerUpsData.Count <= 0)
         {
             return null;
@@ -38,8 +44,9 @@ public class PowerUpsFactory
         }
 
         var prefab = powerUpsData.FirstOrDefault(powerUp => powerUp.id == id);
-        
-        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().ConsumePowerUp(prefab.id).Forget();
+
+        _player.ConsumePowerUp(prefab.id);
+
         return prefab == null
             ? null
             : Object.Instantiate(powerUpsConfiguration.GetPowerUpPrefabById(prefab.id));

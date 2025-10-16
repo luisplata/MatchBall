@@ -1,4 +1,5 @@
 ﻿using App.UseCase;
+using App.UseCase.PowerUps;
 using Commander;
 using Cysharp.Threading.Tasks;
 using TMPro;
@@ -46,7 +47,7 @@ public class GameManager : MonoBehaviour, IGameManager
 
     private void Start()
     {
-        Player1.Configure(this);
+        Player1.Configure(this, ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps());
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
 
         gameOverPanel.SetActive(false);
@@ -59,7 +60,7 @@ public class GameManager : MonoBehaviour, IGameManager
 
         ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
         {
-            PlayerRef1.Configure(this);
+            PlayerRef1.Configure(this, ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps());
 
             //get the gamemode to configure the game
             var gameMode = ServiceLocator.Instance.GetService<IStorageData>().LoadDataGlobal(GlobalData.GameMode);
@@ -77,7 +78,9 @@ public class GameManager : MonoBehaviour, IGameManager
                 //player2.Configure(this, (float)director.duration);
             }
 
-            player2.Configure(this, (float)director.duration);
+            player2.Configure(this, (float)director.duration, ServiceLocator.Instance
+                .GetService<IPlayerSessionService>().GetPlayerSessionData()
+                .GetPowerUpsDummy());
         });
     }
 
@@ -154,9 +157,9 @@ public class GameManager : MonoBehaviour, IGameManager
         return _isGameOver;
     }
 
-    public IPlayer GetOtherPlayer()
+    public IPlayer GetOtherPlayer(IPlayer player)
     {
-        return player2.GetPlayer();
+        return player is MachinePlayer ? Player1 : player2.GetPlayer();
     }
 }
 
@@ -168,5 +171,5 @@ public interface IGameManager
     string GetMusic();
     IPlayer GetFirstPlayer();
     bool IsGameOver();
-    IPlayer GetOtherPlayer();
+    IPlayer GetOtherPlayer(IPlayer player);
 }

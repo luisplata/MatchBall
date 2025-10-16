@@ -25,13 +25,14 @@ public class BallZone : MonoBehaviour, IBallZone
     private IMediatorBallZone _player;
     private IGameManager _gameManager;
 
-    public void Configure(IMediatorBallZone player, IGameManager gameManager)
+    public void Configure(IMediatorBallZone player, IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)
     {
         _player = player;
         _gameManager = gameManager;
         ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Feed3Balls");
         StartCoroutine(FillQueueCoroutine());
         switchBalls.OnSwitchClicked += OnSwitchClicked;
+        powerUpFactory.Configure(powerUps, _player.GetPlayer());
     }
 
     public IPlayer GetPlayer()
@@ -51,7 +52,6 @@ public class BallZone : MonoBehaviour, IBallZone
 
     public void EnableControls()
     {
-        
     }
 
     public BallFactory GetBallFactory()
@@ -144,7 +144,7 @@ public class BallZone : MonoBehaviour, IBallZone
         //var ballInstance = Instantiate(ballPrefab, ballPointToSpawn.transform.position, Quaternion.identity);
         var ballInstance = ballFactory.CreateBall();
         ballInstance.Configure(this, ballPointToSpawn.transform.position, ballPoints[_ballIndex].transform.position,
-            _speedToMove);
+            _speedToMove, _player.GetPlayer());
         //ballInstance.MoveBall(ballPointToSpawn.transform.position, ballPoints[_ballIndex].transform.position);
         _balls[_ballIndex] = ballInstance;
         if (_ballIndex >= _balls.Length - _overFlow) _ballIndex = _balls.Length - _overFlow - 1;
@@ -178,7 +178,7 @@ public class BallZone : MonoBehaviour, IBallZone
             if (_powerUps[i] == null)
             {
                 powerUpInstance.Configure(this, ballPointToSpawn.transform.position,
-                    powerUpsPoints[i].transform.position, _speedToMove);
+                    powerUpsPoints[i].transform.position, _speedToMove, _player.GetPlayer());
                 _powerUps[i] = powerUpInstance;
                 break;
             }
@@ -188,6 +188,16 @@ public class BallZone : MonoBehaviour, IBallZone
     public bool CanCreatePowerUp()
     {
         return _powerUps[^1] == null;
+    }
+
+    public bool IsHavePowerUps()
+    {
+        return GetFirstPowerUp() != null;
+    }
+
+    public PowerUpA GetFirstPowerUp()
+    {
+        return _powerUps[0];
     }
 
     public void UsePowerUp(IPowerUp powerUpWithClick)
@@ -254,10 +264,14 @@ public interface IBallZone
     Ball GetLastBall();
     void SetLastBall(Ball o);
     void DisableControls();
-    void Configure(IMediatorBallZone player, IGameManager gameManager);
+    void Configure(IMediatorBallZone player, IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
     IPlayer GetPlayer();
     IMediatorBallZone GetBallZone();
     GameObject GetBallPointToSpawn();
     void EnableControls();
     BallFactory GetBallFactory();
+    void CreatePowerUp();
+    bool CanCreatePowerUp();
+    bool IsHavePowerUps();
+    PowerUpA GetFirstPowerUp();
 }

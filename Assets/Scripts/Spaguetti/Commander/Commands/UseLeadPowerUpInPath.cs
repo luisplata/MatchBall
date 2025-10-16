@@ -7,11 +7,13 @@ namespace Commander.Commands
     {
         private IPowerUp _powerup;
         private IBalance _balance;
+        private IPlayer _player;
 
-        public UseLeadPowerUpInPath(IPowerUp powerUp, IBalance balance)
+        public UseLeadPowerUpInPath(IPowerUp powerUp, IBalance balance, IPlayer player)
         {
             _powerup = powerUp;
             _balance = balance;
+            _player = player;
         }
 
         public async UniTask Execute()
@@ -53,15 +55,23 @@ namespace Commander.Commands
             );*/
             await _balance.TryBall(_powerup.GetBall(), path.GetPath());
             int lastball = pathHeigher.GetLastIndexBall();
+            if (lastball < 0)
+            {
+                return;
+            }
             Ball ball = pathHeigher.ExtractBall(lastball);
+
             await ball.MoveBall(ball.gameObject.transform.position,
                 pathHeigher.GetPointToTransition().transform.position);
             await ball.MoveBall(ball.gameObject.transform.position,
-                _balance.GetPlayer().GetBallZone().GetBallPointToSpawn().transform.position);
+                _player.GetGameManager().GetOtherPlayer(_player).GetBallZone().GetBallPointToSpawn().transform
+                    .position);
             await _balance.BalanceBothPaths();
-            var otherPlayer = _balance.GetPlayer().GetGameManager().GetOtherPlayer();
+            var otherPlayer = _balance.GetPlayer().GetGameManager().GetOtherPlayer(_player);
+
             ServiceLocator.Instance.GetService<ICommandQueue>()
                 .AddCommand(new SetBallInFirstPositionInQueue(ball, otherPlayer.GetBallZone()), otherPlayer);
+
             ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(
                 new TryBallInBalanceCommand(otherPlayer.GetBallZone(), path.GetPath(), otherPlayer.GetBalance()),
                 otherPlayer);

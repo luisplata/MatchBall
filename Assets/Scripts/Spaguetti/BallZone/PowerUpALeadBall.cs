@@ -6,7 +6,8 @@ public class PowerUpALeadBall : PowerUpA
     protected override void OnActionWithClick()
     {
         ServiceLocator.Instance.GetService<ICommandQueue>()
-            .AddCommand(new UseLeadPowerUpInPath(this, _ballZone.GetBallZone().GetBalance()), _ballZone.GetPlayer());
+            .AddCommand(new UseLeadPowerUpInPath(this, _ballZone.GetBallZone().GetBalance(), _player),
+                _ballZone.GetPlayer());
     }
 
     protected override void StartConfigSelf()

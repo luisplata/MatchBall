@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 public class PowerUpFactory : MonoBehaviour
 {
@@ -6,12 +7,10 @@ public class PowerUpFactory : MonoBehaviour
     private PowerUpsFactory _powerUpsFactory;
     private PowerUpSpawner _powerUpSpawner;
 
-    private void Start()
+    public void Configure(IReadOnlyList<PowerUpData> powerUps, IPlayer player)
     {
-        _powerUpsFactory = new PowerUpsFactory(Instantiate(powerUpsConfiguration));
-        _powerUpSpawner =
-            new PowerUpSpawner(
-                _powerUpsFactory);
+        _powerUpsFactory = new PowerUpsFactory(Instantiate(powerUpsConfiguration), powerUps, player);
+        _powerUpSpawner = new PowerUpSpawner(_powerUpsFactory);
     }
 
     public PowerUpA CreatePowerUp()
