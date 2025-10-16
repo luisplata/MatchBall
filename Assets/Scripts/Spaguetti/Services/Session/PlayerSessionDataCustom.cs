@@ -27,14 +27,25 @@ public class PlayerSessionDataCustom
 
     public List<PowerUpData> GetPowerUpsDummy()
     {
+#if UNITY_EDITOR
         // ListOfPowerUps
         return new List<PowerUpData>
         {
-            new() { id = "lead", selected = false },
-            new() { id = "ray", selected = false },
-            new() { id = "joker", selected = false },
-            new() { id = "ice", selected = false },
+            new() { id = "POWERUP_LEAD", selected = false },
+            // new() { id = "POWERUP_RAY", selected = false },
+            // new() { id = "POWERUP_JOKER", selected = false },
+            // new() { id = "POWERUP_ICE", selected = false },
         };
+#else
+        // ListOfPowerUps
+        return new List<PowerUpData>
+        {
+            new() { id = "POWERUP_LEAD", selected = false },
+            new() { id = "POWERUP_RAY", selected = false },
+            new() { id = "POWERUP_JOKER", selected = false },
+            new() { id = "POWERUP_ICE", selected = false },
+        };
+#endif
     }
 
     public Dictionary<string, object> GetData()

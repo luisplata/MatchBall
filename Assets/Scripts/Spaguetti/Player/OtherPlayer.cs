@@ -1,4 +1,4 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using Commander;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -28,12 +28,12 @@ public class OtherPlayer : MonoBehaviour
     [SerializeField] private FreezePlayerMono freezePlayerMono;
 
 
-    public void Configure(IGameManager gameManager, float timeToWait = 0)
+    public void Configure(IGameManager gameManager, float timeToWait, IReadOnlyList<PowerUpData> powerUps)
     {
-        Player2.Configure(gameManager);
+        Player2.Configure(gameManager, powerUps);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new WaitTime(timeToWait), Player2);
-        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(Player2), Player2);
+        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(Player2, powerUps), Player2);
         //Debug.Log("OtherPlayer Configure");
         _readyToPlay = true;
     }
