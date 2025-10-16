@@ -159,7 +159,7 @@ public class GameManager : MonoBehaviour, IGameManager
 
     public IPlayer GetOtherPlayer(IPlayer player)
     {
-        return player is MachinePlayer ? player2.GetPlayer() : Player1;
+        return player is MachinePlayer ? Player1 : player2.GetPlayer();
     }
 }
 
