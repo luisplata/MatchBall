@@ -46,6 +46,13 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     public void ConsumePowerUp(string prefabID)
     {
         ServiceLocator.Instance.GetService<IPowerUpsUseCase>().ConsumePowerUp(prefabID).Forget();
+
+        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().LoadPowerUps().Forget();
+    }
+
+    public IReadOnlyList<PowerUpData> GetPowerUps()
+    {
+        return ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps();
     }
 
     private bool _isGameOver;
@@ -82,8 +89,13 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     private void OnGetPoints()
     {
         _countOfPoints++;
-        if (_countOfPoints < ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
-                .how_much_match_to_get_power_up || !ballZone.CanCreatePowerUp()) return;
+        if (
+            _countOfPoints < ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+                .how_much_match_to_get_power_up
+            || !ballZone.CanCreatePowerUp()
+            || ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUps().Count <= 0
+        ) return;
+        //TODO validar aqui que pueda crear powerups o que tenga para crear
         _countOfPoints = 0;
         ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("FeedPowerUp");
         ballZone.CreatePowerUp();
@@ -160,43 +172,4 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     {
         return _coins;
     }
-}
-
-public interface IPlayerReference
-{
-    IPlayer GetPlayer();
-    void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
-    bool ReadyToPlay();
-}
-
-public interface IPlayer
-{
-    string Id { get; }
-    void AddCommand(ICommand command);
-    bool IsBusy();
-    void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
-    int GetCoins();
-    bool IsGameOver();
-    void DisableControls();
-    void ConfigureBallZone(IReadOnlyList<PowerUpData> powerUps);
-    IBalance GetBalance();
-    IBallZone GetBallZone();
-    IGameManager GetGameManager();
-    void FreezeGame(bool isFreeze);
-    void ClearCommands();
-    void EnableControls();
-    void ConsumePowerUp(string prefabID);
-}
-
-public interface IMediatorBalance
-{
-    void AddPoints();
-    void GameOver();
-    IPlayer GetPlayer();
-}
-
-public interface IMediatorBallZone
-{
-    IBalance GetBalance();
-    IPlayer GetPlayer();
 }
