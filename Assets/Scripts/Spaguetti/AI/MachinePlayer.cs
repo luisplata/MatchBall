@@ -71,6 +71,11 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
         Debug.Log($"[Machine] Ia dont consume!");
     }
 
+    public IReadOnlyList<PowerUpData> GetPowerUps()
+    {
+        return _poweups;
+    }
+
     public void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)
     {
         _gameManager = gameManager;

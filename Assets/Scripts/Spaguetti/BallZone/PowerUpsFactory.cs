@@ -4,6 +4,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using App.UseCase.PowerUps;
+using Cysharp.Threading.Tasks;
 
 public class PowerUpsFactory
 {
@@ -30,7 +32,7 @@ public class PowerUpsFactory
 #else
 
 #endif
-        var powerUpsData = _powerUps;
+        var powerUpsData = _player.GetPowerUps();
         if (powerUpsData.Count <= 0)
         {
             return null;
@@ -44,6 +46,7 @@ public class PowerUpsFactory
         }
 
         var prefab = powerUpsData.FirstOrDefault(powerUp => powerUp.id == id);
+        
 
         _player.ConsumePowerUp(prefab.id);
 

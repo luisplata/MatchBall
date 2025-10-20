@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 
 namespace Commander.Commands
@@ -36,12 +37,19 @@ namespace Commander.Commands
         {
             for (int i = _ballZone.GetCountOfBalls(); i >= 0; i--)
             {
-                var ball = _ballZone.GetBall(i);
-                if (ball == null) continue;
-                await ball.MoveBall(ball.transform.position,
-                    _ballZone.GetBallPositionGameObject(i + 1).transform.position);
-                _ballZone.SetBall(i + 1, ball);
-                _ballZone.SetBall(i, null);
+                try
+                {
+                    var ball = _ballZone.GetBall(i);
+                    if (ball == null) continue;
+                    await ball.MoveBall(ball.transform.position,
+                        _ballZone.GetBallPositionGameObject(i + 1).transform.position);
+                    _ballZone.SetBall(i + 1, ball);
+                    _ballZone.SetBall(i, null);
+                }
+                catch (Exception e)
+                {
+                    // ignored
+                }
             }
         }
     }
