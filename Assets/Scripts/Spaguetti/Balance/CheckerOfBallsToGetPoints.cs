@@ -1,4 +1,5 @@
 ﻿using Cysharp.Threading.Tasks;
+using Spaguetti.Balance;
 using UnityEngine;
 
 public class CheckerOfBallsToGetPoints : MonoBehaviour
