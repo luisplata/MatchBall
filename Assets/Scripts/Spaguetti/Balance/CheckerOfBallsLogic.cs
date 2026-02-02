@@ -1,115 +1,60 @@
 ﻿using Cysharp.Threading.Tasks;
+using System.Collections.Generic;
+using Spaguetti.Balance.Rules;
 
-public class CheckerOfBallsLogic : ICheckerOfBallsToGetPoints
+namespace Spaguetti.Balance
 {
-    public async UniTask<bool> HaveCombinations(IBalance _balance)
+    public class CheckerOfBallsLogic : ICheckerOfBallsToGetPoints
     {
-        for (int i = 0; i < _balance.CountOfColumns(); i++)
+        private readonly IEnumerable<ICombinationRule> _rules;
+        private readonly IDelayProvider _delay;
+
+        // Constructor para inyección de dependencias
+        public CheckerOfBallsLogic(IEnumerable<ICombinationRule> rules, IDelayProvider delay)
         {
-            //if the type is himself destroy only that ball
-            if (_balance.GetLeftPath().TryGetBallInPosition(i, out var ballLeftHs))
-            {
-                if (ballLeftHs.GetId() == "himself")
-                {
-                    _balance.GetLeftPath().RemoveBall(i);
-                    ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("pop");
-                    await _balance.GetLeftPath().MoveBallsDownByIndexAsc(1, i);
-                    await UniTask.WaitForSeconds(.5f);
-                    _balance.AddPoints();
-                    return true;
-                }
-            }
-
-            if (_balance.GetRightPath().TryGetBallInPosition(i, out var ballRightHs))
-            {
-                if (ballRightHs.GetId() == "himself")
-                {
-                    _balance.GetRightPath().RemoveBall(i);
-                    ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("pop");
-                    await _balance.GetRightPath().MoveBallsDownByIndexAsc(1, i);
-                    await UniTask.WaitForSeconds(.5f);
-                    _balance.AddPoints();
-                    return true;
-                }
-            }
-
-            // if the left path has a ball and the above position is equal to the ball in the left path
-            if (_balance.GetLeftPath().TryGetBallInPosition(i, out var ballLeftRow))
-            {
-                if (_balance.GetLeftPath().TryGetBallInPosition(i + 2, out var ballLeftRowAbove))
-                {
-                    if (
-                        ballLeftRow.GetId() == ballLeftRowAbove.GetId() ||
-                        ballLeftRowAbove.GetId().Contains(ballLeftRow.GetId()) ||
-                        ballLeftRow.GetId().Contains(ballLeftRowAbove.GetId()) ||
-                        ballLeftRow.GetId() == "all" ||
-                        ballLeftRowAbove.GetId() == "all"
-                    )
-                    {
-                        _balance.GetLeftPath().RemoveBall(i);
-                        _balance.GetLeftPath().RemoveBall(i + 2);
-                        ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("pop");
-                        await _balance.GetLeftPath().MoveBallsDownByIndexAsc(2, i);
-                        await UniTask.WaitForSeconds(.5f);
-                        _balance.AddPoints();
-                        return true;
-                    }
-                }
-            }
-
-            // if the right path has a ball and the above position is equal to the ball in the right path
-            if (_balance.GetRightPath().TryGetBallInPosition(i, out var ballRightRow))
-            {
-                if (_balance.GetRightPath().TryGetBallInPosition(i + 2, out var ballRightRowAbove))
-                {
-                    if (
-                        ballRightRow.GetId() == ballRightRowAbove.GetId() ||
-                        ballRightRow.GetId().Contains(ballRightRowAbove.GetId()) ||
-                        ballRightRowAbove.GetId().Contains(ballRightRow.GetId()) ||
-                        ballRightRow.GetId() == "all" ||
-                        ballRightRowAbove.GetId() == "all"
-                    )
-                    {
-                        _balance.GetRightPath().RemoveBall(i);
-                        _balance.GetRightPath().RemoveBall(i + 2);
-                        ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("pop");
-                        await _balance.GetRightPath().MoveBallsDownByIndexAsc(2, i);
-                        await UniTask.WaitForSeconds(.5f);
-                        _balance.AddPoints();
-                        return true;
-                    }
-                }
-            }
-
-            if (_balance.GetLeftPath().TryGetBallInPosition(i, out var ballLeft) &&
-                _balance.GetRightPath().TryGetBallInPosition(i, out var ballRight))
-            {
-                // if the balls are the same and the id is "all"
-                if (
-                    ballRight.GetId() == "all" ||
-                    ballLeft.GetId() == "all" ||
-                    ballRight.GetId() == ballLeft.GetId() ||
-                    ballLeft.GetId().Contains(ballRight.GetId()) ||
-                    ballRight.GetId().Contains(ballLeft.GetId())
-                )
-                {
-                    _balance.GetLeftPath().RemoveBall(i);
-                    _balance.GetRightPath().RemoveBall(i);
-                    ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("pop");
-                    // await _balance.MoveBallsDownByIndex(1);
-                    await _balance.MoveBallsDownByIndexAsc(2, i);
-                    await UniTask.WaitForSeconds(.5f);
-                    _balance.AddPoints();
-                    return true;
-                }
-            }
+            _rules = rules ?? throw new System.ArgumentNullException(nameof(rules));
+            _delay = delay ?? new UniTaskDelayProvider();
         }
 
-        return false;
+        // Constructor por defecto para compatibilidad (usa ServiceLocator)
+        public CheckerOfBallsLogic() : this(DefaultRulesFactory.Create(ServiceLocator.Instance.GetService<IMusicController>(), new UniTaskDelayProvider()), new UniTaskDelayProvider())
+        {
+        }
+
+        public async UniTask<bool> HaveCombinations(IBalance _balance)
+        {
+            if (_balance == null)
+            {
+                UnityEngine.Debug.LogError("CheckerOfBallsLogic.HaveCombinations: balance is null");
+                return false;
+            }
+
+            int columns = _balance.CountOfColumns();
+            for (int i = 0; i < columns; i++)
+            {
+                foreach (var rule in _rules)
+                {
+                    try
+                    {
+                        if (await rule.TryApplyAsync(_balance, i))
+                        {
+                            return true;
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        UnityEngine.Debug.LogError($"Error applying rule {rule.GetType().Name} at index {i}: {ex}");
+                    }
+                }
+            }
+
+            return false;
+        }
     }
-}
 
 
-public interface ICheckerOfBallsToGetPoints
-{
+    public interface ICheckerOfBallsToGetPoints
+    {
+        UniTask<bool> HaveCombinations(IBalance _balance);
+    }
 }
