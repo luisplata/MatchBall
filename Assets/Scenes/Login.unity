@@ -1636,14 +1636,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 897792284893934298, guid: 5c6566ffeb0023f4faf9733a47f0527b, type: 3}
-      propertyPath: rewardedId
-      value: ca-app-pub-3940256099942544/5224354917
-      objectReference: {fileID: 0}
-    - target: {fileID: 897792284893934298, guid: 5c6566ffeb0023f4faf9733a47f0527b, type: 3}
-      propertyPath: interstitialId
-      value: ca-app-pub-3940256099942544/1033173712
-      objectReference: {fileID: 0}
     - target: {fileID: 3029076052994647227, guid: 5c6566ffeb0023f4faf9733a47f0527b, type: 3}
       propertyPath: m_Name
       value: GameInstaller

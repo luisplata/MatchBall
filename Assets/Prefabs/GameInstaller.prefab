@@ -46,5 +46,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   url: https://back.matchballance.com
   uri: /api/v1
-  interstitialId: ca-app-pub-1968350662333818/7653931871
-  rewardedId: ca-app-pub-1968350662333818/7836112317
+  interstitialId: ca-app-pub-3940256099942544/1033173712
+  rewardedId: ca-app-pub-3940256099942544/5224354917
