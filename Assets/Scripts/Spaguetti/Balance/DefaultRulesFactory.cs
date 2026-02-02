@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Spaguetti.Balance.Rules;
 
 namespace Spaguetti.Balance
 {
@@ -11,8 +12,9 @@ namespace Spaguetti.Balance
             {
                 // new Rules.VerticalPairRule(true, music, delay), // left
                 // new Rules.VerticalPairRule(false, music, delay), // right
-                new Rules.HorizontalPairRule(music, delay),
-                new Rules.HimselfRule(music, delay)
+                new LOrNRule(music, delay),
+                new HorizontalPairRule(music, delay),
+                new HimselfRule(music, delay)
             };
         }
     }
