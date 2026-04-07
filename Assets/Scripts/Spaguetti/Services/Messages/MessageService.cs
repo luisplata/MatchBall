@@ -13,6 +13,7 @@ public class MessageService : MonoBehaviour, IMessageService
     [SerializeField] private GameObject positionTop, positionBottom;
     [SerializeField] private bool _isMoving;
     [SerializeField] private bool _isShowing;
+    [SerializeField] private Color successColor, errorColor;
     private Queue<MessageData> _messageQueue = new();
 
     private void Awake()
@@ -79,10 +80,10 @@ public class MessageService : MonoBehaviour, IMessageService
             switch (data.type)
             {
                 case TypeMessage.Success:
-                    image.color = Color.green;
+                    image.color = successColor;
                     break;
                 case TypeMessage.Error:
-                    image.color = Color.red;
+                    image.color = errorColor;
                     break;
             }
 

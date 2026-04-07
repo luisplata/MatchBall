@@ -38,6 +38,7 @@ namespace Spaguetti.Balance
                     {
                         if (await rule.TryApplyAsync(_balance, i))
                         {
+                            // TODO: Here ask with the post effects by balls
                             return true;
                         }
                     }

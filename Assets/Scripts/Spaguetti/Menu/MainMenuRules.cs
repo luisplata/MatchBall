@@ -31,7 +31,7 @@ public class MainMenuRules : MonoBehaviour
         ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen();
         
         //move panel from left 0 to right -1000 with dotween
-        helpPanel.transform.position = new Vector3(-1000, helpPanel.transform.position.y, helpPanel.transform.position.z);
+        helpPanel.transform.position = new Vector3(-2000, helpPanel.transform.position.y, helpPanel.transform.position.z);
         ServiceLocator.Instance.GetService<IMusicController>().PlayMusic("Mystery");
         
     }

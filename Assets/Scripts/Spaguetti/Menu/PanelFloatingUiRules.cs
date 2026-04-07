@@ -15,7 +15,7 @@ public class PanelFloatingUiRules : MonoBehaviour
         if (_isShown) return;
         _isShown = true;
         //move panel from right -1000 to left 0 with dotween
-        panel.transform.localPosition = new Vector3(-1000, 0, 0);
+        panel.transform.localPosition = new Vector3(-2000, 0, 0);
         panel.transform.DOLocalMove(new Vector3(0, 0, 0), 0.5f);
     }
 
@@ -24,7 +24,7 @@ public class PanelFloatingUiRules : MonoBehaviour
         if (!_isShown) return;
         //move panel from right 0 to left -1000 with dotween
         panel.transform.localPosition = new Vector3(0, 0, 0);
-        panel.transform.DOLocalMove(new Vector3(-1000, 0, 0),
+        panel.transform.DOLocalMove(new Vector3(-2000, 0, 0),
             0.5f).onComplete += () => _isShown = false;
     }
 
@@ -42,6 +42,6 @@ public class PanelFloatingUiRules : MonoBehaviour
         }
 
         panel.transform.localPosition =
-            new Vector3(-1000, 0, 0);
+            new Vector3(-2000, 0, 0);
     }
 }
