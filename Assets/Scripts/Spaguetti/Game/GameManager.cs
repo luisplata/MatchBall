@@ -110,7 +110,9 @@ public class GameManager : MonoBehaviour, IGameManager
 
     private void OnDestroy()
     {
+        ServiceLocator.Instance.GetService<ICommandQueue>().ClearCommands(Player1);
         ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(Player1);
+        ServiceLocator.Instance.GetService<ICommandQueue>().ClearCommands(player2.GetPlayer());
         ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(player2.GetPlayer());
     }
 

@@ -16,5 +16,6 @@ namespace App.Ports
         UniTask AddPlayer(string playerId, string nickname, string key);
         UniTask UpdatePlayerNickname(string playerId, string playerName);
         UniTask<List<RewardData>> GetPlayerRewards();
+        UniTask<List<Hero>> GetHeroes();
     }
 }

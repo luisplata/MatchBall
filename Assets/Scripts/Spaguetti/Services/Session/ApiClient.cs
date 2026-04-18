@@ -11,6 +11,7 @@ public class ApiClient : MonoBehaviour, IHttpMediator
     public PlayerApi PlayerApi { get; private set; }
     public BattlePassApi BattlePassApi { get; private set; }
     public PlayerRewardApi PlayerRewardApi { get; private set; }
+    public HeroApi HeroApi { get; private set; }
 
     private void Awake()
     {
@@ -26,6 +27,7 @@ public class ApiClient : MonoBehaviour, IHttpMediator
         PlayerApi = new PlayerApi(serverUrl, uri, this);
         BattlePassApi = new BattlePassApi(serverUrl, uri, this);
         PlayerRewardApi = new PlayerRewardApi(serverUrl, uri, this);
+        HeroApi = new HeroApi(serverUrl, uri, this);
     }
 
     // Métodos para actualizar el token JWT en las APIs
@@ -34,6 +36,7 @@ public class ApiClient : MonoBehaviour, IHttpMediator
         PlayerApi.JwtToken = token;
         BattlePassApi.JwtToken = token;
         PlayerRewardApi.JwtToken = token;
+        HeroApi.JwtToken = token;
     }
 }
 

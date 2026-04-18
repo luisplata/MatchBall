@@ -11,12 +11,14 @@ namespace Infra.WebAdapter
         private readonly PlayerApi _playerApi;
         private readonly BattlePassApi _battlePassApi;
         private readonly PlayerRewardApi _playerRewardApi;
+        private readonly HeroApi _heroApi;
 
         public WebAdapter(string serverUrl, string uri)
         {
             _playerApi = new PlayerApi(serverUrl, uri, this);
             _battlePassApi = new BattlePassApi(serverUrl, uri, this);
             _playerRewardApi = new PlayerRewardApi(serverUrl, uri, this);
+            _heroApi = new HeroApi(serverUrl, uri, this);
         }
 
         public async UniTask<PlayerPassBall> GetPlayerPassBall()
@@ -54,11 +56,21 @@ namespace Infra.WebAdapter
             );
         }
 
+        public async UniTask<List<Hero>> GetHeroes()
+        {
+            return await SafeExecute(
+                () => _heroApi.GetHeroes(),
+                new List<Hero>(),
+                nameof(GetHeroes)
+            );
+        }
+
         public void UpdateJwtToken(string token)
         {
             _playerApi.JwtToken = token;
             _battlePassApi.JwtToken = token;
             _playerRewardApi.JwtToken = token;
+            _heroApi.JwtToken = token;
         }
 
         public async UniTask LoginPlayer(string playerId)
