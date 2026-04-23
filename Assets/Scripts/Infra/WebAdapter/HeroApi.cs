@@ -16,9 +16,9 @@ namespace Infra.WebAdapter
         {
         }
 
-        public async UniTask<List<Hero>> GetHeroes()
+        public async UniTask<List<Hero>> GetHeroes(string playerId)
         {
-            var requestUri = $"{ServerUrl}{Uri}/heroes";
+            var requestUri = $"{ServerUrl}{Uri}/heroes/player/{playerId}";
             var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             request.Headers.Authorization =

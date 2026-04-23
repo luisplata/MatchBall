@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 3611555619981663640}
   - component: {fileID: 2257281197654080935}
   - component: {fileID: 7789320067470329618}
+  - component: {fileID: 4953309306552375979}
   m_Layer: 5
   m_Name: HeroPrefab
   m_TagString: Untagged
@@ -81,6 +82,20 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &4953309306552375979
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 500399971420026146}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75a6beaaa3f726f4ca21a306749cfc10, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HeroCardProfile
+  heroName: {fileID: 2241144590468941778}
+  heroCardImage: {fileID: 2291396916514057106}
 --- !u!1 &843059113466252282
 GameObject:
   m_ObjectHideFlags: 0

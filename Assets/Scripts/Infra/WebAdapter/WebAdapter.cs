@@ -56,10 +56,10 @@ namespace Infra.WebAdapter
             );
         }
 
-        public async UniTask<List<Hero>> GetHeroes()
+        public async UniTask<List<Hero>> GetHeroes(string playerId)
         {
             return await SafeExecute(
-                () => _heroApi.GetHeroes(),
+                () => _heroApi.GetHeroes(playerId),
                 new List<Hero>(),
                 nameof(GetHeroes)
             );

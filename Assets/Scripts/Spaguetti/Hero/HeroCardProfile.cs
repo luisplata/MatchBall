@@ -1,16 +1,17 @@
+using Spaguetti.Hero;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using Hero = Domain.Entities.Hero;
 
 public class HeroCardProfile : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
+    [SerializeField] private TextMeshProUGUI heroName;
+    [SerializeField] private Image heroCardImage;
 
-    // Update is called once per frame
-    void Update()
+    public void Configure(Hero hero, IProfilePictureFactory pictureFactory)
     {
-        
+        heroName.text = hero.Name;
+        heroCardImage.sprite = pictureFactory.GetProfilePicture(hero.Id);
     }
 }

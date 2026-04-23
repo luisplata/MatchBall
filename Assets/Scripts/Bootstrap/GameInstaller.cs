@@ -44,6 +44,7 @@ namespace Bootstrap
             ServiceLocator.Instance.RegisterService<IPassBallUseCase>(new PassBallUseCase(webAdapter));
             ServiceLocator.Instance.RegisterService<ILoginUseCase>(new LoginUseCase(webAdapter, adModAdapter));
             ServiceLocator.Instance.RegisterService<IAdModUseCase>(new AdModUseCase(adModAdapter));
+            ServiceLocator.Instance.RegisterService<IWebAdapter>(webAdapter);
         }
     }
 }
