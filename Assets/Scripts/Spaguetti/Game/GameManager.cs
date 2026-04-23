@@ -1,4 +1,5 @@
 ﻿using App.UseCase;
+using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
 using Commander;
 using Cysharp.Threading.Tasks;
@@ -56,7 +57,9 @@ public class GameManager : MonoBehaviour, IGameManager
         _isGameOver = false;
 
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player1);
-        player2.AddPlayerInQueue(this);
+        var randomToUsePowerUp = ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
+            .random_to_use_power_up;
+        player2.AddPlayerInQueue(this, randomToUsePowerUp);
 
         ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
         {

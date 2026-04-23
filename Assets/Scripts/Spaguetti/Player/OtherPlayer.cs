@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using App.UseCase.GameConfiguration;
 using Commander;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -21,10 +22,10 @@ public class OtherPlayer : MonoBehaviour
 
     //Player AI or Multiplayer
     private IPlayer Player2;
-    
+
     private bool _readyToPlay;
-    
-    
+
+
     [SerializeField] private FreezePlayerMono freezePlayerMono;
 
 
@@ -33,7 +34,8 @@ public class OtherPlayer : MonoBehaviour
         Player2.Configure(gameManager, powerUps);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new WaitTime(timeToWait), Player2);
-        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(Player2, powerUps), Player2);
+        ServiceLocator.Instance.GetService<ICommandQueue>()
+            .AddCommand(new ConfigureBallZone(Player2, powerUps), Player2);
         //Debug.Log("OtherPlayer Configure");
         _readyToPlay = true;
     }
@@ -48,9 +50,9 @@ public class OtherPlayer : MonoBehaviour
         return _readyToPlay;
     }
 
-    public void AddPlayerInQueue(IGameManager gameManager)
+    public void AddPlayerInQueue(IGameManager gameManager, int randomToUsePowerUp)
     {
-        Player2 = new MachinePlayer(this, gameManager, freezePlayerMono);
+        Player2 = new MachinePlayer(this, gameManager, freezePlayerMono, randomToUsePowerUp);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);
     }
 

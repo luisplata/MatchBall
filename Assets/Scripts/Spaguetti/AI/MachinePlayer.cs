@@ -18,14 +18,15 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     private int _countOfPoints;
     private IReadOnlyList<PowerUpData> _poweups;
 
-    public MachinePlayer(OtherPlayer otherPlayer, IGameManager gameManager, FreezePlayerMono freezePlayerMono)
+    public MachinePlayer(OtherPlayer otherPlayer, IGameManager gameManager, FreezePlayerMono freezePlayerMono,
+        int randomToUsePowerUp)
     {
         _otherPlayer = otherPlayer;
         _freezePlayerMono = freezePlayerMono;
         _balance = otherPlayer.Balance;
         _ballZone = otherPlayer.BallZone;
         Id = "Machine";
-        _aiMachine = new AiMachine(this, gameManager);
+        _aiMachine = new AiMachine(this, gameManager, randomToUsePowerUp);
         _commandQueue = new CommandQueue();
         //configure the onGetPoint From IA
         _balance.OnGetPoints += OnGetPoints;

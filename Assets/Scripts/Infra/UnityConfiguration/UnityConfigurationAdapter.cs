@@ -14,10 +14,19 @@ namespace Infra.UnityConfiguration
             var powerUpJokerPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_joker_per_buy");
             var powerUpLeadPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_lead_per_buy");
             var powerUpRayPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ray_per_buy");
+            var randomToUsePowerUp = RemoteConfigService.Instance.appConfig.GetInt("random_to_use_power_up");
             var howMuchMatchToGetPowerUp =
                 RemoteConfigService.Instance.appConfig.GetInt("how_much_match_to_get_power_up");
-            return new GameConfiguration(loseExperience, winExperience, powerUpIcePerBuy, powerUpJokerPerBuy,
-                powerUpLeadPerBuy, powerUpRayPerBuy, howMuchMatchToGetPowerUp);
+            return new GameConfiguration(
+                loseExperience,
+                winExperience,
+                powerUpIcePerBuy,
+                powerUpJokerPerBuy,
+                powerUpLeadPerBuy,
+                powerUpRayPerBuy,
+                howMuchMatchToGetPowerUp,
+                randomToUsePowerUp
+            );
         }
     }
 }

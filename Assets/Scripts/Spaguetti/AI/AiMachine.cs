@@ -7,12 +7,14 @@ using Random = UnityEngine.Random;
 
 public class AiMachine : IAiMachine
 {
+    private readonly int _randomToUsePowerUp;
     private bool _canPlay = true;
     private TeaTime _waitFirstPlayerMove, _tryBallInRandomPath, _waitTimeState, _checkIfICanUsePowerUp, _usePowerUp;
     private float _deltaLocal = 0f;
 
-    public AiMachine(IPlayer player, IGameManager gameManager)
+    public AiMachine(IPlayer player, IGameManager gameManager, int randomToUsePowerUp)
     {
+        _randomToUsePowerUp = randomToUsePowerUp;
         _waitFirstPlayerMove = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
         _tryBallInRandomPath = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
         _waitTimeState = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
@@ -45,8 +47,7 @@ public class AiMachine : IAiMachine
         _tryBallInRandomPath.Pause().Add(() =>
         {
             //get random path
-            var randomPath = UnityEngine.Random.Range(0, 2);
-            PathType path = randomPath == 0 ? PathType.Left : PathType.Right;
+            PathType path;
             if (player.GetBalance().GetLeftPath().GetOnlyBalls() - player.GetBalance().GetRightPath().GetOnlyBalls() >=
                 3)
             {
@@ -56,6 +57,11 @@ public class AiMachine : IAiMachine
                      player.GetBalance().GetRightPath().GetOnlyBalls() <= -3)
             {
                 path = PathType.Left;
+            }
+            else
+            {
+                var randomPath = Random.Range(0, 2);
+                path = randomPath == 0 ? PathType.Left : PathType.Right;
             }
 
             ServiceLocator.Instance.GetService<ICommandQueue>()
@@ -97,7 +103,7 @@ public class AiMachine : IAiMachine
 #if UNITY_EDITOR
         return range <= 90;
 #else
-        return range >= 90;
+        return range >= _randomToUsePowerUp;
 #endif
     }
 
