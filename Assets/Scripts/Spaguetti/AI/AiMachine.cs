@@ -96,7 +96,7 @@ public class AiMachine : IAiMachine
             .Add(() => { _waitTimeState.Play(); });
     }
 
-    private static bool DiceTry()
+    private bool DiceTry()
     {
         var range = Random.Range(0, 100);
         Debug.Log($"range is {range}");

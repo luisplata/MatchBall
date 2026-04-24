@@ -1,15 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net.Http;
 using Cysharp.Threading.Tasks;
 using Domain.Entities;
 using Infra.WebAdapter.Mapper;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Infra.WebAdapter
 {
     public class PlayerRewardApi : ApiBase
     {
+        private const int MaxTransientRetries = 3;
+        private const int RequestTimeoutSeconds = 12;
+
         public PlayerRewardApi(string serverUrl, string uri, IHttpMediator mediator)
             : base(serverUrl, uri, mediator)
         {
@@ -18,14 +21,12 @@ namespace Infra.WebAdapter
         public async UniTask<List<RewardData>> GetRewards()
         {
             var requestUri = $"{ServerUrl}{Uri}/battle-pass-reward";
-            var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
+            var (statusCode, responseData, hasTransportError) =
+                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbGET, null, includeAuth: true);
 
-            var response = await Client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
+            if (hasTransportError || statusCode < 200 || statusCode > 299)
                 return new List<RewardData>();
 
-            var responseData = await response.Content.ReadAsStringAsync();
             Debug.Log($"Rewards response: {responseData}");
 
             // Como es un array, usamos wrapper
@@ -39,15 +40,14 @@ namespace Infra.WebAdapter
                 .GetPlayerSessionData().playerId;
             var requestUri = $"{ServerUrl}{Uri}/battle-pass/{id}";
 
-            var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
+            var (statusCode, responseData, hasTransportError) =
+                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbGET, null, includeAuth: true);
 
-            var response = await Client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"Error getting player pass ball {response.StatusCode}");
+            if (hasTransportError)
+                throw new Exception("Error getting player pass ball: transport error");
+            if (statusCode < 200 || statusCode > 299)
+                throw new Exception($"Error getting player pass ball {statusCode}");
 
-            var responseData = await response.Content.ReadAsStringAsync();
             Debug.Log($"PassBall response: {responseData}");
 
             var wrapper = JsonUtility.FromJson<PlayerPassBallResponseDto>(responseData);
@@ -70,19 +70,15 @@ namespace Infra.WebAdapter
                 level = rewardDataLevel
             });
 
-            var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
-            {
-                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
-            };
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
+            var (statusCode, responseData, hasTransportError) =
+                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbPOST, json, includeAuth: true);
 
-            var response = await Client.SendAsync(request);
-            var responseData = await response.Content.ReadAsStringAsync();
             Debug.Log($"ClaimReward response: {responseData}");
 
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"Error claiming reward: {response.StatusCode}");
+            if (hasTransportError)
+                throw new Exception("Error claiming reward: transport error");
+            if (statusCode < 200 || statusCode > 299)
+                throw new Exception($"Error claiming reward: {statusCode}");
 
             return JsonUtility.FromJson<ClaimRewardResponse>(responseData);
         }
@@ -98,35 +94,18 @@ namespace Infra.WebAdapter
             var requestUri = $"{ServerUrl}{Uri}/battle-pass/experience";
 
             var json = JsonUtility.ToJson(new ExperienceRequest { experience = experienceToWin, playerId = id });
-            var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
-            {
-                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
-            };
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
+            var (statusCode, responseData, hasTransportError) =
+                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbPOST, json, includeAuth: true);
 
-            var response = await Client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-                throw new Exception("Error adding experience");
+            if (hasTransportError)
+                throw new Exception("Error adding experience: transport error");
+            if (statusCode < 200 || statusCode > 299)
+                throw new Exception($"Error adding experience: {statusCode}");
 
-            var responseData = await response.Content.ReadAsStringAsync();
             Debug.Log($"AddExperience response: {responseData}");
 
             var wrapper = JsonUtility.FromJson<AddExperienceResponseDto>(responseData);
             var dto = wrapper.data;
-
-            // si hay reward, lo puedes mapear también
-            RewardData rewardData = null;
-            if (dto.reward != null)
-            {
-                // RewardEarnedDto -> RewardData
-                string rewardJson = JsonUtility.ToJson(dto.reward);
-                rewardData = new RewardData(
-                    dto.reward.rewardLevel,
-                    dto.reward.rewardLevel,
-                    rewardJson
-                );
-            }
 
             return new PlayerPassBall(
                 dto.id,
@@ -137,6 +116,76 @@ namespace Infra.WebAdapter
                 DateTime.Parse(dto.updated_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
                 new List<PlayerReward>() // por ahora vacío; rewards se piden con otro endpoint
             );
+        }
+
+        private async UniTask<(long statusCode, string body, bool hasTransportError)> SendJsonWithUnityWebRequestRetry(
+            string requestUri,
+            string method,
+            string jsonPayload,
+            bool includeAuth)
+        {
+            for (int attempt = 1; attempt <= MaxTransientRetries; attempt++)
+            {
+                using var request = new UnityWebRequest(requestUri, method)
+                {
+                    downloadHandler = new DownloadHandlerBuffer(),
+                    timeout = RequestTimeoutSeconds
+                };
+
+                if (!string.IsNullOrEmpty(jsonPayload))
+                {
+                    request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(jsonPayload));
+                    request.SetRequestHeader("Content-Type", "application/json");
+                }
+
+                request.SetRequestHeader("Accept", "application/json");
+                request.SetRequestHeader("Connection", "close");
+                if (includeAuth && !string.IsNullOrWhiteSpace(JwtToken))
+                    request.SetRequestHeader("Authorization", $"Bearer {JwtToken}");
+
+                try
+                {
+                    await request.SendWebRequest().ToUniTask();
+                }
+                catch (Exception ex)
+                {
+                    if (attempt < MaxTransientRetries)
+                    {
+                        var delayMs = attempt * 1200;
+                        Debug.LogWarning($"[PlayerRewardApi] Exception {method} {requestUri} attempt {attempt}/{MaxTransientRetries}: {ex.Message}. Retrying in {delayMs}ms.");
+                        await UniTask.Delay(delayMs);
+                        continue;
+                    }
+
+                    return (-1, string.Empty, true);
+                }
+
+                var statusCode = request.responseCode;
+                var responseData = request.downloadHandler?.text ?? string.Empty;
+
+                if (IsTransientUnityError(request, statusCode) && attempt < MaxTransientRetries)
+                {
+                    var delayMs = attempt * 1200;
+                    Debug.LogWarning($"[PlayerRewardApi] Transient {method} error {requestUri} attempt {attempt}/{MaxTransientRetries}. Retrying in {delayMs}ms. status={statusCode} result={request.result} error={request.error}");
+                    await UniTask.Delay(delayMs);
+                    continue;
+                }
+
+                return (statusCode, responseData, false);
+            }
+
+            return (-1, string.Empty, true);
+        }
+
+        private static bool IsTransientUnityError(UnityWebRequest request, long statusCode)
+        {
+            if (request.result == UnityWebRequest.Result.ConnectionError)
+                return true;
+
+            if (request.result == UnityWebRequest.Result.DataProcessingError)
+                return true;
+
+            return statusCode == 408 || statusCode == 429 || statusCode >= 500;
         }
     }
 

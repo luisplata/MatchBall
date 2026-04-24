@@ -1,13 +1,18 @@
 ﻿using System;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Infra.WebAdapter
 {
     public class PlayerApi : ApiBase
     {
+        private const int MaxTransientRetries = 3;
+        private const int RequestTimeoutSeconds = 12;
+
         public PlayerApi(string serverUrl, string uri, IHttpMediator mediator)
             : base(serverUrl, uri, mediator)
         {
@@ -15,22 +20,33 @@ namespace Infra.WebAdapter
 
         public async UniTask<ApiResponse<PlayerDto>> AddPlayer(string playerId, string nickname, string key)
         {
-            var json = JsonUtility.ToJson(new AddPlayerRequest
+            var requestUri = $"{ServerUrl}{Uri}/player";
+            var payload = new AddPlayerRequest
             {
                 playerId = playerId,
                 nickname = nickname,
                 key = key
-            });
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var requestUri = $"{ServerUrl}{Uri}/player";
+            };
 
-            var response = await Client.PostAsync(requestUri, content);
-            var responseData = await response.Content.ReadAsStringAsync();
-            Debug.Log($"AddPlayer response: {responseData}");
+            var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
+                requestUri,
+                UnityWebRequest.kHttpVerbPOST,
+                payload,
+                includeAuth: false);
+            Debug.Log($"[PlayerApi] AddPlayer status={statusCode} response: {responseData}");
 
-            if (!response.IsSuccessStatusCode)
-                throw new Exception("Failed to add player");
+            if (statusCode == (long)HttpStatusCode.Conflict)
+            {
+                Debug.LogWarning("[PlayerApi] AddPlayer returned 409 (already exists). Continuing as idempotent success.");
+                return new ApiResponse<PlayerDto>
+                {
+                    success = true,
+                    message = "Player already exists",
+                    data = null
+                };
+            }
 
+            EnsureSuccessOrThrow("add player", requestUri, statusCode, responseData);
             return JsonUtility.FromJson<ApiResponse<PlayerDto>>(responseData);
         }
 
@@ -70,22 +86,17 @@ namespace Infra.WebAdapter
 
         public async UniTask<ApiResponse<object>> UpdatePlayerNickname(string playerId, string nickname)
         {
-            var json = JsonUtility.ToJson(new UpdateNicknameRequest
-            {
-                nickname = nickname
-            });
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
             var requestUri = $"{ServerUrl}{Uri}/player/nickname/{playerId}";
+            var payload = new UpdateNicknameRequest { nickname = nickname };
 
-            var request = new HttpRequestMessage(HttpMethod.Put, requestUri) { Content = content };
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", JwtToken);
+            var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
+                requestUri,
+                UnityWebRequest.kHttpVerbPUT,
+                payload,
+                includeAuth: true);
 
-            var response = await Client.SendAsync(request);
-            var responseData = await response.Content.ReadAsStringAsync();
-            Debug.Log($"UpdateNickname response: {responseData}");
-
-            if (!response.IsSuccessStatusCode)
-                throw new Exception("Failed to update nickname");
+            Debug.Log($"[PlayerApi] UpdateNickname status={statusCode} response: {responseData}");
+            EnsureSuccessOrThrow("update nickname", requestUri, statusCode, responseData);
 
             return JsonUtility.FromJson<ApiResponse<object>>(responseData);
         }
@@ -93,22 +104,96 @@ namespace Infra.WebAdapter
         public async UniTask<string> LoginPlayer(string playerId)
         {
             var requestDto = new LoginPlayerRequest { playerId = playerId };
-            var json = JsonUtility.ToJson(requestDto);
-
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
             var requestUri = $"{ServerUrl}{Uri}/player/login";
 
-            var response = await Client.PostAsync(requestUri, content);
-            var responseData = await response.Content.ReadAsStringAsync();
-            Debug.Log($"LoginPlayer response: {responseData}");
-
-            if (!response.IsSuccessStatusCode)
-                throw new Exception("Failed to login player");
+            var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
+                requestUri,
+                UnityWebRequest.kHttpVerbPOST,
+                requestDto,
+                includeAuth: false);
+            Debug.Log($"[PlayerApi] LoginPlayer status={statusCode} response: {responseData}");
+            EnsureSuccessOrThrow("login player", requestUri, statusCode, responseData);
 
             var parsed = JsonUtility.FromJson<ApiResponse<TokenResponseDto>>(responseData);
             var token = parsed.data.token;
             _mediator.UpdateJwtToken(token);
             return token;
+        }
+
+        private async UniTask<(long statusCode, string body)> SendJsonWithUnityWebRequestRetry(
+            string requestUri,
+            string method,
+            object payload,
+            bool includeAuth)
+        {
+            Exception lastException = null;
+
+            for (int attempt = 1; attempt <= MaxTransientRetries; attempt++)
+            {
+                try
+                {
+                    var json = JsonUtility.ToJson(payload);
+                    using var request = new UnityWebRequest(requestUri, method)
+                    {
+                        uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json)),
+                        downloadHandler = new DownloadHandlerBuffer(),
+                        timeout = RequestTimeoutSeconds
+                    };
+
+                    request.SetRequestHeader("Content-Type", "application/json");
+                    request.SetRequestHeader("Accept", "application/json");
+                    request.SetRequestHeader("Connection", "close");
+                    if (includeAuth && !string.IsNullOrWhiteSpace(JwtToken))
+                        request.SetRequestHeader("Authorization", $"Bearer {JwtToken}");
+
+                    await request.SendWebRequest().ToUniTask();
+
+                    var statusCode = request.responseCode;
+                    var responseData = request.downloadHandler?.text ?? string.Empty;
+
+                    if (IsTransientUnityError(request, statusCode) && attempt < MaxTransientRetries)
+                    {
+                        var delayMs = attempt * 1200;
+                        Debug.LogWarning($"[PlayerApi] Transient network error {method} {requestUri} attempt {attempt}/{MaxTransientRetries}. Retrying in {delayMs}ms. error={request.error}");
+                        await UniTask.Delay(delayMs);
+                        continue;
+                    }
+
+                    return (statusCode, responseData);
+                }
+                catch (Exception ex) when (attempt < MaxTransientRetries)
+                {
+                    lastException = ex;
+                    var delayMs = attempt * 1200;
+                    Debug.LogWarning($"[PlayerApi] Exception {method} {requestUri} attempt {attempt}/{MaxTransientRetries}: {ex.Message}. Retrying in {delayMs}ms.");
+                    await UniTask.Delay(delayMs);
+                }
+            }
+
+            throw new Exception($"HTTP request failed after {MaxTransientRetries} attempts: {method} {requestUri}", lastException);
+        }
+
+        private static bool IsTransientUnityError(UnityWebRequest request, long statusCode)
+        {
+            if (request.result == UnityWebRequest.Result.ConnectionError)
+                return true;
+
+            if (request.result == UnityWebRequest.Result.DataProcessingError)
+                return true;
+
+            return statusCode == 408 || statusCode == 429 || statusCode >= 500;
+        }
+
+        private static void EnsureSuccessOrThrow(
+            string operation,
+            string requestUri,
+            long statusCode,
+            string responseData)
+        {
+            if ((int)statusCode >= 200 && (int)statusCode <= 299)
+                return;
+
+            throw new Exception($"Failed to {operation}. Status={(int)statusCode} Url={requestUri} Body={responseData}");
         }
 
         public async UniTask<PlayerDto> GetPlayerById(string playerId)

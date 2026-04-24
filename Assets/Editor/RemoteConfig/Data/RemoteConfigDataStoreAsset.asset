@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 469c24fdb3bd6431b92cc1465bd9166b, type: 3}
+  m_Name: RemoteConfigDataStoreAsset
+  m_EditorClassIdentifier: Unity.RemoteConfig.Editor::Unity.RemoteConfig.Editor.RemoteConfigDataStore
+  _rsKeyList: "[\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\": \"ed8412dc-ca5a-4797-b13e-c01a69bad171\"\r\n   
+    },\r\n    \"rs\": {\r\n      \"key\": \"powerup_ice_per_buy\",\r\n      \"type\":
+    \"int\",\r\n      \"value\": 5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n     
+    \"entityId\": \"ad7c71f0-1bb0-4cf1-b3b4-08089c465bce\"\r\n    },\r\n    \"rs\":
+    {\r\n      \"key\": \"powerup_ray_per_buy\",\r\n      \"type\": \"int\",\r\n     
+    \"value\": 5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\":
+    \"d2dd3927-d338-429f-9c06-6bba3447dda8\"\r\n    },\r\n    \"rs\": {\r\n     
+    \"key\": \"powerup_lead_per_buy\",\r\n      \"type\": \"int\",\r\n      \"value\":
+    5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\": \"18d55d17-86eb-4da6-89b7-c7a7d2070714\"\r\n   
+    },\r\n    \"rs\": {\r\n      \"key\": \"powerup_joker_per_buy\",\r\n      \"type\":
+    \"int\",\r\n      \"value\": 3\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n     
+    \"entityId\": \"89d3d4f6-d952-4d69-b394-cf34a2addd72\"\r\n    },\r\n    \"rs\":
+    {\r\n      \"key\": \"exp_by_win\",\r\n      \"type\": \"int\",\r\n      \"value\":
+    70\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\": \"9651b3a8-25bd-45b3-bf3c-606b599c4e2e\"\r\n   
+    },\r\n    \"rs\": {\r\n      \"key\": \"exp_by_lose\",\r\n      \"type\": \"int\",\r\n     
+    \"value\": 30\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\":
+    \"0576f695-6946-4dca-b784-0b495e5fdd61\"\r\n    },\r\n    \"rs\": {\r\n     
+    \"key\": \"how_much_match_to_get_power_up\",\r\n      \"type\": \"int\",\r\n     
+    \"value\": 5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\":
+    \"65af3432-bb48-4c43-bf7b-6561e4ca826a\"\r\n    },\r\n    \"rs\": {\r\n     
+    \"key\": \"random_to_use_power_up\",\r\n      \"type\": \"int\",\r\n      \"value\":
+    30\r\n    }\r\n  }\r\n]"
+  _rsLastCachedKeyList: "[\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\": \"ed8412dc-ca5a-4797-b13e-c01a69bad171\"\r\n   
+    },\r\n    \"rs\": {\r\n      \"key\": \"powerup_ice_per_buy\",\r\n      \"type\":
+    \"int\",\r\n      \"value\": 5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n     
+    \"entityId\": \"ad7c71f0-1bb0-4cf1-b3b4-08089c465bce\"\r\n    },\r\n    \"rs\":
+    {\r\n      \"key\": \"powerup_ray_per_buy\",\r\n      \"type\": \"int\",\r\n     
+    \"value\": 5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\":
+    \"d2dd3927-d338-429f-9c06-6bba3447dda8\"\r\n    },\r\n    \"rs\": {\r\n     
+    \"key\": \"powerup_lead_per_buy\",\r\n      \"type\": \"int\",\r\n      \"value\":
+    5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\": \"18d55d17-86eb-4da6-89b7-c7a7d2070714\"\r\n   
+    },\r\n    \"rs\": {\r\n      \"key\": \"powerup_joker_per_buy\",\r\n      \"type\":
+    \"int\",\r\n      \"value\": 3\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n     
+    \"entityId\": \"89d3d4f6-d952-4d69-b394-cf34a2addd72\"\r\n    },\r\n    \"rs\":
+    {\r\n      \"key\": \"exp_by_win\",\r\n      \"type\": \"int\",\r\n      \"value\":
+    70\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\": \"9651b3a8-25bd-45b3-bf3c-606b599c4e2e\"\r\n   
+    },\r\n    \"rs\": {\r\n      \"key\": \"exp_by_lose\",\r\n      \"type\": \"int\",\r\n     
+    \"value\": 30\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\":
+    \"0576f695-6946-4dca-b784-0b495e5fdd61\"\r\n    },\r\n    \"rs\": {\r\n     
+    \"key\": \"how_much_match_to_get_power_up\",\r\n      \"type\": \"int\",\r\n     
+    \"value\": 5\r\n    }\r\n  },\r\n  {\r\n    \"metadata\": {\r\n      \"entityId\":
+    \"65af3432-bb48-4c43-bf7b-6561e4ca826a\"\r\n    },\r\n    \"rs\": {\r\n     
+    \"key\": \"random_to_use_power_up\",\r\n      \"type\": \"int\",\r\n      \"value\":
+    30\r\n    }\r\n  }\r\n]"
+  _environments: "[\r\n  {\r\n    \"projectId\": \"e04580fe-8256-4ae1-ada1-013d9b8a9f10\",\r\n   
+    \"name\": \"production\",\r\n    \"id\": \"a3a51f36-9dcc-485c-956f-255d1d05ea9a\",\r\n   
+    \"isDefault\": true,\r\n    \"createdAt\": \"2024-10-30T20:44:54Z\",\r\n    \"updatedAt\":
+    \"2024-10-30T20:44:54Z\"\r\n  },\r\n  {\r\n    \"projectId\": \"e04580fe-8256-4ae1-ada1-013d9b8a9f10\",\r\n   
+    \"name\": \"qa\",\r\n    \"id\": \"a7a37c52-3c07-4479-8180-f69af54ddbe9\",\r\n   
+    \"isDefault\": false,\r\n    \"createdAt\": \"2024-11-19T15:24:06Z\",\r\n   
+    \"updatedAt\": \"2024-11-19T15:24:06Z\"\r\n  }\r\n]"

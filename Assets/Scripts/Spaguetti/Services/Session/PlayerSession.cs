@@ -227,9 +227,17 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
 
                 // ✅ Sync with backend
                 var loginUseCase = ServiceLocator.Instance.GetService<ILoginUseCase>();
-                await loginUseCase.AddPlayer(_playerSessionData.playerId,
-                    _playerSessionData.playerName,
-                    "dev_player_key_change_in_production");
+                try
+                {
+                    await loginUseCase.AddPlayer(_playerSessionData.playerId,
+                        _playerSessionData.playerName,
+                        "dev_player_key_change_in_production");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[Auth] AddPlayer failed, continuing with LoginPlayer. {ex.Message}");
+                }
+
                 await loginUseCase.LoginPlayer(_playerSessionData.playerId);
 
                 // ✅ Language setup
