@@ -20,6 +20,18 @@ namespace Infra.WebAdapter
 
         public async UniTask<ApiResponse<PlayerDto>> AddPlayer(string playerId, string nickname, string key)
         {
+            // Validate input locally to avoid sending requests that the server will reject
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(nickname))
+            {
+                Debug.LogWarning($"[PlayerApi] AddPlayer called with empty playerId or nickname. playerId='{playerId}' nickname='{nickname}'");
+                return new ApiResponse<PlayerDto>
+                {
+                    success = false,
+                    message = "playerId and nickname are required",
+                    data = null
+                };
+            }
+
             var requestUri = $"{ServerUrl}{Uri}/player";
             var payload = new AddPlayerRequest
             {
@@ -27,6 +39,8 @@ namespace Infra.WebAdapter
                 nickname = nickname,
                 key = key
             };
+
+            Debug.Log($"[PlayerApi] url {requestUri} payload: {JsonUtility.ToJson(payload)}");
 
             var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
                 requestUri,
@@ -105,6 +119,8 @@ namespace Infra.WebAdapter
         {
             var requestDto = new LoginPlayerRequest { playerId = playerId };
             var requestUri = $"{ServerUrl}{Uri}/player/login";
+            
+            Debug.Log($"[PlayerApi] url {requestUri} payload: {JsonUtility.ToJson(requestDto)}");
 
             var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
                 requestUri,
@@ -140,9 +156,9 @@ namespace Infra.WebAdapter
                         timeout = RequestTimeoutSeconds
                     };
 
+                    // Unity manages some headers (Connection etc.) internally; avoid setting them manually
                     request.SetRequestHeader("Content-Type", "application/json");
                     request.SetRequestHeader("Accept", "application/json");
-                    request.SetRequestHeader("Connection", "close");
                     if (includeAuth && !string.IsNullOrWhiteSpace(JwtToken))
                         request.SetRequestHeader("Authorization", $"Bearer {JwtToken}");
 

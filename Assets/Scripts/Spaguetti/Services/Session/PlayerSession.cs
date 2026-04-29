@@ -24,6 +24,18 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     private bool _readyToSignIn;
     private PowerUpsConfiguration _powerUpsConfigurationInstance;
 
+
+    /// <summary>
+    /// Indica si la sesión está lista para permitir el cambio de escena.
+    /// </summary>
+    public bool IsSessionReadyForSceneChange()
+    {
+        // Considera la sesión lista si está inicializada, logueada y los datos principales están cargados.
+        // Puedes agregar más validaciones según necesidades (por ejemplo, que no haya operaciones pendientes).
+        return _readyToSignIn && _playerSessionData != null && !string.IsNullOrEmpty(_playerSessionData.playerId) &&
+               !string.IsNullOrEmpty(_playerSessionData.playerName);
+    }
+
     public struct userAttributes
     {
     }
@@ -77,7 +89,11 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             return;
         }
 
-        await SignInAnonymouslyAsync();
+        if (!await SignInAnonymouslyAsync())
+        {
+            return;
+        }
+
         await UpdatePlayerData(_playerSessionData);
 
         RemoteConfigService.Instance.FetchCompleted += ApplyRemoteSettings;
@@ -190,12 +206,38 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                     await AuthenticationService.Instance.SignInAnonymouslyAsync();
                 }
 
-                // ✅ Initialize friends service
-                await FriendsService.Instance.InitializeAsync();
-                var friends = FriendsService.Instance.Friends;
-                foreach (var friend in friends)
+                // ✅ Initialize friends service (best-effort). Failures here (DNS, network, Unity Services) should
+                // not block sign-in — we'll log and continue without friends if initialization fails.
+                var friendsInitialized = false;
+                try
                 {
-                    Debug.Log($"[Friends] {friend}");
+                    await FriendsService.Instance.InitializeAsync();
+                    friendsInitialized = true;
+                }
+                catch (RequestFailedException ex)
+                {
+                    Debug.LogWarning(
+                        $"[Auth] FriendsService.InitializeAsync failed: {ex.Message}. Continuing without friends.");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[Auth] FriendsService.InitializeAsync unexpected error: {ex}");
+                }
+
+                if (friendsInitialized)
+                {
+                    try
+                    {
+                        var friends = FriendsService.Instance.Friends;
+                        foreach (var friend in friends)
+                        {
+                            Debug.Log($"[Friends] {friend}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[Auth] Failed reading FriendsService.Instance.Friends: {ex.Message}");
+                    }
                 }
 
                 // ✅ Load saved session or create new one
@@ -203,6 +245,33 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 {
                     var data = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
                     _playerSessionData.LoadData(data);
+                    // Ensure loaded session has required identifiers. CloudSave may have been saved without
+                    // playerId or playerName (or they could be empty). In that case, fill with sensible
+                    // defaults and persist back to CloudSave so future runs are consistent.
+                    var dirty = false;
+                    if (string.IsNullOrWhiteSpace(_playerSessionData.playerId))
+                    {
+                        _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
+                        Debug.Log($"[Auth] Loaded session missing playerId, set to {_playerSessionData.playerId}");
+                        dirty = true;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(_playerSessionData.playerName))
+                    {
+                        int randomSuffix = Random.Range(1000, 9999);
+                        string baseName = SystemInfo.deviceUniqueIdentifier;
+                        _playerSessionData.playerName = $"{baseName}_{randomSuffix}";
+                        Debug.Log(
+                            $"[Auth] Loaded session had empty playerName, assigned {_playerSessionData.playerName}");
+                        dirty = true;
+                    }
+
+                    if (dirty)
+                    {
+                        // Persist corrected values
+                        await UpdatePlayerData(_playerSessionData);
+                    }
+
                     Debug.Log($"[Auth] Loaded existing session for {_playerSessionData.playerName}");
                 }
                 else

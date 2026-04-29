@@ -20,6 +20,9 @@ namespace Bootstrap
 
         private void Start()
         {
+            #if UNITY_EDITOR
+                url = "http://localhost";
+            #endif
             //TODO: Falta refactorizar el pase de batalla para darle manejo.
             DontDestroyOnLoad(gameObject);
             var storeRepository = new UnityEconomyStoreRepository(); //IStoreRepository, IInventoryRepository

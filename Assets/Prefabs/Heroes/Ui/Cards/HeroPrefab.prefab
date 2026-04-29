@@ -96,6 +96,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HeroCardProfile
   heroName: {fileID: 2241144590468941778}
   heroCardImage: {fileID: 2291396916514057106}
+  startConversation: {fileID: 501700779308198225}
 --- !u!1 &843059113466252282
 GameObject:
   m_ObjectHideFlags: 0

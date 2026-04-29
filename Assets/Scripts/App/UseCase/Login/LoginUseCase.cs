@@ -16,12 +16,21 @@ namespace App.UseCase
 
         public async UniTask LoginPlayer(string playerId)
         {
+            if (string.IsNullOrWhiteSpace(playerId))
+                throw new System.ArgumentException("playerId is required", nameof(playerId));
+
             await _webAdapter.LoginPlayer(playerId);
             _adModAdapter.Initialize();
         }
 
         public async UniTask AddPlayer(string playerId, string nickname, string key)
         {
+            if (string.IsNullOrWhiteSpace(playerId))
+                throw new System.ArgumentException("playerId is required", nameof(playerId));
+
+            if (string.IsNullOrWhiteSpace(nickname))
+                throw new System.ArgumentException("nickname is required", nameof(nickname));
+
             await _webAdapter.AddPlayer(playerId, nickname, key);
         }
 
