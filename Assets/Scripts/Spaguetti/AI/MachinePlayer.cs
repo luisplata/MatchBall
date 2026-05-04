@@ -17,6 +17,8 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     private readonly CommandQueue _commandQueue;
     private int _countOfPoints;
     private IReadOnlyList<PowerUpData> _poweups;
+    
+    private bool _readyToPlay;
 
     public MachinePlayer(OtherPlayer otherPlayer, IGameManager gameManager, FreezePlayerMono freezePlayerMono,
         int randomToUsePowerUp)
@@ -58,6 +60,7 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     public void ClearCommands()
     {
         _commandQueue.ClearCommands();
+        _aiMachine.StopAI();
     }
 
     public void EnableControls()
@@ -75,6 +78,16 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     public IReadOnlyList<PowerUpData> GetPowerUps()
     {
         return _poweups;
+    }
+
+    public void ReadyToPlay()
+    {
+        _readyToPlay = true;
+    }
+
+    public bool IsReadyToPlay()
+    {
+        return _readyToPlay;
     }
 
     public void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)

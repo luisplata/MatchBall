@@ -1,15 +1,17 @@
-﻿using App.UseCase;
+﻿using System.Collections.Generic;
+using App.UseCase;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
 using Commander;
 using Cysharp.Threading.Tasks;
+using Spaguetti.Game;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
-public class GameManager : MonoBehaviour, IGameManager
+public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 {
     [SerializeField, InterfaceType(typeof(IPlayerReference))]
     private Object player1;
@@ -29,6 +31,13 @@ public class GameManager : MonoBehaviour, IGameManager
     private bool _isGameOver;
     private int _multiplier = 1;
 
+    private readonly FullBalanceCondition _fullBalanceCondition = new();
+    private readonly FirstTo100PointsRule _firstTo100PointsRule = new();
+    private readonly TimeAttackRule _timeAttackRule = new();
+    private List<IWinCondition> _winConditions = new();
+    private IWinCondition _winCondition;
+    private float _elapsedGameTime;
+
     private void Awake()
     {
         //set FPS to 60
@@ -39,6 +48,8 @@ public class GameManager : MonoBehaviour, IGameManager
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
         //set dont restart app if it was paused
         Application.runInBackground = true;
+        _winConditions.Add(_firstTo100PointsRule);
+        _winConditions.Add(_timeAttackRule);
     }
 
     public void DuplcateCoins()
@@ -55,6 +66,11 @@ public class GameManager : MonoBehaviour, IGameManager
         youWinPanel.SetActive(false);
         HideMessage();
         _isGameOver = false;
+
+        //load win condition from random wincondition and inject context
+        _winCondition = _timeAttackRule;// _winConditions[Random.Range(0, _winConditions.Count)];
+        _winCondition.SetContext(this);
+        Debug.Log($"Selected win condition: {_winCondition.GetDescription()}");
 
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player1);
         var randomToUsePowerUp = ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
@@ -89,27 +105,73 @@ public class GameManager : MonoBehaviour, IGameManager
 
     private void FixedUpdate()
     {
-        if (!PlayerRef1.ReadyToPlay() || !player2.ReadyToPlay()) return;
-        if ((Player1.IsGameOver() || player2.IsGameOver()) && !_isGameOver)
+        if (!PlayerRef1.IsReadyToPlay() || !player2.ReadyToPlay()) return;
+
+        // Track elapsed game time for time-based win conditions
+        _elapsedGameTime += Time.deltaTime;
+
+        // Update win condition (e.g., accumulate timer)
+        _winCondition.OnFrameUpdate();
+
+        if (_isGameOver) return;
+
+        // Check full balance first (always has priority - safety fallback)
+        WinResult balanceResult = _fullBalanceCondition.CheckWinCondition(Player1, player2.GetPlayer());
+        if (balanceResult.IsValid)
         {
-            Player1.DisableControls();
-            _isGameOver = true;
-            ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
-            Debug.Log("Game Over");
-            if (Player1.IsGameOver())
-            {
-                gameOverPanel.SetActive(true);
-                ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Lose");
-                ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
-            }
-            else if (player2.IsGameOver())
-            {
-                youWinPanel.SetActive(true);
-                ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Win");
-                ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
-            }
+            ResolveGameOver(balanceResult);
+            return;
+        }
+
+        // Check active win condition
+        WinResult conditionResult = _winCondition.CheckWinCondition(Player1, player2.GetPlayer());
+        if (conditionResult.IsValid)
+        {
+            ResolveGameOver(conditionResult);
         }
     }
+
+    private void ResolveGameOver(WinResult result)
+    {
+        Player1.DisableControls();
+        _isGameOver = true;
+        ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
+        Debug.Log($"Game Over! Winner: {result.Winner.GetType().Name}, Loser: {result.Loser.GetType().Name}");
+
+        bool playerWon = result.Winner == Player1;
+
+        if (playerWon)
+        {
+            youWinPanel.SetActive(true);
+            ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Win");
+            ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
+        }
+        else
+        {
+            gameOverPanel.SetActive(true);
+            ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Lose");
+            ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
+        }
+    }
+
+    #region IGameWinConditionContext Implementation
+
+    public float GetDeltaTime()
+    {
+        return Time.deltaTime;
+    }
+
+    public float GetElapsedGameTime()
+    {
+        return _elapsedGameTime;
+    }
+
+    public bool ArePlayersReady()
+    {
+        return PlayerRef1.IsReadyToPlay() && player2.ReadyToPlay();
+    }
+
+    #endregion
 
     private void OnDestroy()
     {

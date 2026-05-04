@@ -19,4 +19,6 @@ public interface IPlayer
     void EnableControls();
     void ConsumePowerUp(string prefabID);
     IReadOnlyList<PowerUpData> GetPowerUps();
+    void ReadyToPlay();
+    bool IsReadyToPlay();
 }

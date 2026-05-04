@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-4381195144860658297
+--- !u!114 &-5277726208970802716
 MonoBehaviour:
   m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
@@ -188,7 +188,7 @@ MonoBehaviour:
       m_MinBound: 0.01
       m_MaxBound: 1
   m_AddedScalerViaScan:
-  - {fileID: -4381195144860658297}
+  - {fileID: -5277726208970802716}
   m_ActiveScalerProfile:
     m_AdaptiveFramerate:
       m_Name: Adaptive Framerate

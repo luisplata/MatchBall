@@ -4,5 +4,5 @@ public interface IPlayerReference
 {
     IPlayer GetPlayer();
     void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
-    bool ReadyToPlay();
+    bool IsReadyToPlay();
 }

@@ -11,6 +11,10 @@ public class AiMachine : IAiMachine
     private bool _canPlay = true;
     private TeaTime _waitFirstPlayerMove, _tryBallInRandomPath, _waitTimeState, _checkIfICanUsePowerUp, _usePowerUp;
     private float _deltaLocal = 0f;
+    
+    // Track current active state for debugging and stopping
+    private TeaTime _currentActiveTeaTime;
+    private string _currentStateName = "IDLE";
 
     public AiMachine(IPlayer player, IGameManager gameManager, int randomToUsePowerUp)
     {
@@ -23,12 +27,15 @@ public class AiMachine : IAiMachine
 
         _waitFirstPlayerMove.Pause().Loop(h =>
         {
-            if (gameManager.GetFirstPlayer().GetBalance().GetLeftPath().GetOnlyBalls() > 0 ||
-                gameManager.GetFirstPlayer().GetBalance().GetRightPath().GetOnlyBalls() > 0)
+            if (gameManager.GetFirstPlayer().IsReadyToPlay())
             {
                 h.Break();
             }
-        }).Add(() => { _waitTimeState.Play(); });
+        }).Add(() => 
+        { 
+            _currentStateName = "WAIT_TIME_STATE";
+            _waitTimeState.Play(); 
+        });
 
         _waitTimeState.Pause().Add(() => { _deltaLocal = 0f; }).Loop(h =>
         {
@@ -41,6 +48,7 @@ public class AiMachine : IAiMachine
         {
             if (!player.IsGameOver())
             {
+                _currentStateName = "CHECK_IF_CAN_USE_POWERUP";
                 _checkIfICanUsePowerUp.Play();
             }
         });
@@ -70,6 +78,7 @@ public class AiMachine : IAiMachine
         {
             if (!player.IsGameOver())
             {
+                _currentStateName = "WAIT_TIME_STATE";
                 _waitTimeState.Play();
             }
         });
@@ -79,10 +88,12 @@ public class AiMachine : IAiMachine
             //Validate if I can use the powerup
             if (player.GetBallZone().IsHavePowerUps() && DiceTry())
             {
+                _currentStateName = "USE_POWERUP";
                 _usePowerUp.Play();
             }
             else
             {
+                _currentStateName = "TRY_BALL_IN_RANDOM_PATH";
                 _tryBallInRandomPath.Play();
             }
         });
@@ -93,7 +104,11 @@ public class AiMachine : IAiMachine
                 Debug.Log($"[AiMachine] I can use Powerup!");
                 player.GetBallZone().GetFirstPowerUp().Click();
             })
-            .Add(() => { _waitTimeState.Play(); });
+            .Add(() => 
+            { 
+                _currentStateName = "WAIT_TIME_STATE";
+                _waitTimeState.Play(); 
+            });
     }
 
     private bool DiceTry()
@@ -119,7 +134,27 @@ public class AiMachine : IAiMachine
 
     public void StartAI()
     {
+        _currentStateName = "WAIT_FIRST_PLAYER_MOVE";
         _waitFirstPlayerMove.Play();
+    }
+
+    public void StopAI()
+    {
+        Debug.Log($"[AiMachine] Stopping AI. Current state was: {_currentStateName}");
+        
+        // Pause all TeaTime instances
+        _waitFirstPlayerMove.Pause();
+        _tryBallInRandomPath.Pause();
+        _waitTimeState.Pause();
+        _checkIfICanUsePowerUp.Pause();
+        _usePowerUp.Pause();
+        
+        _currentStateName = "STOPPED";
+    }
+
+    public string GetCurrentState()
+    {
+        return _currentStateName;
     }
 }
 
@@ -128,4 +163,6 @@ public interface IAiMachine
     bool CanPlay();
     void SetCanPlay(bool canplay);
     void StartAI();
+    void StopAI();
+    string GetCurrentState();
 }

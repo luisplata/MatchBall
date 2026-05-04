@@ -4,7 +4,7 @@ using UnityEngine;
 public class ShowProfileInLobby : MonoBehaviour
 {
     [SerializeField] private CanvasGroup profileCanvasGroup;
-    
+
     private void Start()
     {
         Configure();
@@ -16,14 +16,15 @@ public class ShowProfileInLobby : MonoBehaviour
     {
         profileCanvasGroup.alpha = 0;
     }
-    
+
     public void ShowProfile()
     {
+        profileCanvasGroup.gameObject.SetActive(true);
         profileCanvasGroup.DOFade(1, 0.5f);
     }
-    
+
     public void HideProfile()
     {
-        profileCanvasGroup.DOFade(0, 0.5f);
+        profileCanvasGroup.DOFade(0, 0.5f).onComplete = () => { profileCanvasGroup.gameObject.SetActive(false); };
     }
 }

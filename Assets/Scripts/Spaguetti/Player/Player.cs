@@ -71,11 +71,12 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
             .AddCommand(new OpeningGame(_gameManager.GetDirectorOpening()), this);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new PlayMusic(_gameManager.GetMusic()), this);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new ConfigureBallZone(this, powerUps), this);
+        ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new PlayerReadyToPlay(this), this);
+        // _readyToPlay = true;
         //Debug.Log("Player Configure");
-        _readyToPlay = true;
     }
 
-    public bool ReadyToPlay()
+    public bool IsReadyToPlay()
     {
         return _readyToPlay;
     }
@@ -171,5 +172,10 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     public int GetCoins()
     {
         return _coins;
+    }
+
+    public void ReadyToPlay()
+    {
+        _readyToPlay = true;
     }
 }
