@@ -4,6 +4,6 @@ namespace Spaguetti.Hero
 {
     public interface IProfilePictureFactory
     {
-        Sprite GetProfilePicture(int heroId);
+        Sprite GetProfilePicture(string heroId);
     }
 }

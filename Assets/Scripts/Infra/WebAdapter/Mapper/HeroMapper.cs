@@ -6,7 +6,7 @@ namespace Infra.WebAdapter.Mapper
 {
     public static class HeroMapper
     {
-        public static Hero ToDomain(HeroDto dto)
+        public static Hero ToDomain(HeroApi.HeroDto dto)
         {
             return new Hero(
                 dto.id,
@@ -14,7 +14,11 @@ namespace Infra.WebAdapter.Mapper
                 dto.name ?? string.Empty,
                 dto.metadata?.role ?? string.Empty,
                 ParseDate(dto.created_at),
-                ParseDate(dto.updated_at)
+                ParseDate(dto.updated_at),
+                currentXp: dto.currentXp,
+                level: dto.level,
+                xpToNextLevel: dto.xpToNextLevel,
+                progressPct: dto.progressPct
             );
         }
 
@@ -27,5 +31,3 @@ namespace Infra.WebAdapter.Mapper
         }
     }
 }
-
-

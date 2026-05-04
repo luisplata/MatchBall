@@ -65,6 +65,25 @@ namespace Infra.WebAdapter
             );
         }
 
+        public async UniTask<DialogData> StartDialog(Hero hero, string playerId)
+        {
+            return await SafeExecute(
+                () => _heroApi.StartDialogByHero(hero.HeroId, playerId),
+                new DialogData(),
+                nameof(GetHeroes)
+            );
+        }
+
+        public UniTask<AnswerDialogResult> AnswerDialog(string playerId, string currentHeroHeroId, string nodeSequence,
+            string optionKey)
+        {
+            return SafeExecute(
+                () => _heroApi.AnswerDialog(playerId, currentHeroHeroId, nodeSequence, optionKey),
+                new AnswerDialogResult(),
+                nameof(AnswerDialog)
+            );
+        }
+
         public void UpdateJwtToken(string token)
         {
             _playerApi.JwtToken = token;

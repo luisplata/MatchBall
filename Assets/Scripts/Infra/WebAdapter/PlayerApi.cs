@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using Domain.Entities;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -228,14 +229,6 @@ namespace Infra.WebAdapter
             var parsed = JsonUtility.FromJson<ApiResponse<PlayerDto>>(responseData);
             return parsed.data;
         }
-    }
-
-    [Serializable]
-    public class ApiResponse<T>
-    {
-        public bool success;
-        public string message;
-        public T data;
     }
 
     [Serializable]

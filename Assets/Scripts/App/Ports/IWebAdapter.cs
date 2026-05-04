@@ -17,5 +17,7 @@ namespace App.Ports
         UniTask UpdatePlayerNickname(string playerId, string playerName);
         UniTask<List<RewardData>> GetPlayerRewards();
         UniTask<List<Hero>> GetHeroes(string playerId);
+        UniTask<DialogData> StartDialog(Hero hero, string playerId);
+        UniTask<AnswerDialogResult> AnswerDialog(string playerId, string currentHeroHeroId, string nodeSequence, string optionKey);
     }
 }
