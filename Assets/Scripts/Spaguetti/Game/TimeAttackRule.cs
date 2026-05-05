@@ -9,13 +9,13 @@
     /// </summary>
     public class TimeAttackRule : IWinCondition
     {
-        private readonly float _matchDurationSeconds = 30f; // 30 seconds for quick testing, can be set to 180f for 3 minutes
+        private readonly float _matchDurationSeconds = 60f; // 30 seconds for quick testing, can be set to 180f for 3 minutes
         private float _elapsedTime = 0f;
         private IGameWinConditionContext _context;
 
         public string GetDescription()
         {
-            return "Time Attack (30 seg): Player with the most points when time runs out wins.";
+            return "Time Attack (60 seg): Player with the most points when time runs out wins.";
         }
 
         public void SetContext(IGameWinConditionContext context)

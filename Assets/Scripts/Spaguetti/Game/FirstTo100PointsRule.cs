@@ -6,7 +6,7 @@
 
         public string GetDescription()
         {
-            return "First to 10 points rule";
+            return "First to 20 points win";
         }
 
         public void SetContext(IGameWinConditionContext context)
@@ -24,12 +24,12 @@
             int player1Coins = player1.GetCoins();
             int player2Coins = player2.GetCoins();
 
-            if (player1Coins >= 10)
+            if (player1Coins >= 20)
             {
                 return new WinResult(player1, player2);
             }
 
-            if (player2Coins >= 10)
+            if (player2Coins >= 20)
             {
                 return new WinResult(player2, player1);
             }

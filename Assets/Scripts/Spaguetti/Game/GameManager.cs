@@ -37,6 +37,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     private List<IWinCondition> _winConditions = new();
     private IWinCondition _winCondition;
     private float _elapsedGameTime;
+    [SerializeField] private TextMeshProUGUI gameMode;
 
     private void Awake()
     {
@@ -68,8 +69,9 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         _isGameOver = false;
 
         //load win condition from random wincondition and inject context
-        _winCondition = _timeAttackRule;// _winConditions[Random.Range(0, _winConditions.Count)];
+        _winCondition = _winConditions[Random.Range(0, _winConditions.Count)];
         _winCondition.SetContext(this);
+        gameMode.text = $"Game Mode: {_winCondition.GetDescription()}";
         Debug.Log($"Selected win condition: {_winCondition.GetDescription()}");
 
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player1);
