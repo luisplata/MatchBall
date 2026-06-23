@@ -20,28 +20,29 @@ namespace Infra.WebAdapter
 
         public async UniTask<List<Hero>> GetHeroes(string playerId)
         {
-            var requestUri = $"{ServerUrl}{Uri}/heroes/player/{playerId}";
-
-            var (statusCode, responseData, hasTransportError) =
-                await GetJsonWithUnityWebRequestRetry(requestUri, includeAuth: true);
-
-            if (hasTransportError)
-            {
-                Debug.LogWarning($"[HeroApi] GetHeroes transport error after retries. url={requestUri}");
-                return new List<Hero>();
-            }
-
-            if (statusCode < 200 || statusCode > 299)
-            {
-                Debug.LogWarning(
-                    $"[HeroApi] GetHeroes non-success status={statusCode} url={requestUri} body={responseData}");
-                return new List<Hero>();
-            }
-
-            Debug.Log($"[HeroApi] GetHeroes status={statusCode} response: {responseData}");
-
-            var heroesDto = ParseHeroes(responseData);
-            return heroesDto.ConvertAll(HeroMapper.ToDomain);
+            // var requestUri = $"{ServerUrl}{Uri}/heroes/player/{playerId}";
+            //
+            // var (statusCode, responseData, hasTransportError) =
+            //     await GetJsonWithUnityWebRequestRetry(requestUri, includeAuth: true);
+            //
+            // if (hasTransportError)
+            // {
+            //     Debug.LogWarning($"[HeroApi] GetHeroes transport error after retries. url={requestUri}");
+            //     return new List<Hero>();
+            // }
+            //
+            // if (statusCode < 200 || statusCode > 299)
+            // {
+            //     Debug.LogWarning(
+            //         $"[HeroApi] GetHeroes non-success status={statusCode} url={requestUri} body={responseData}");
+            //     return new List<Hero>();
+            // }
+            //
+            // Debug.Log($"[HeroApi] GetHeroes status={statusCode} response: {responseData}");
+            //
+            // var heroesDto = ParseHeroes(responseData);
+            // return heroesDto.ConvertAll(HeroMapper.ToDomain);
+            return new List<Hero>();
         }
 
         private async UniTask<(long statusCode, string body, bool hasTransportError)> GetJsonWithUnityWebRequestRetry(

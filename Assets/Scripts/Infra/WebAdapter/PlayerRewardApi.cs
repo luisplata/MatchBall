@@ -21,100 +21,124 @@ namespace Infra.WebAdapter
         public async UniTask<List<RewardData>> GetRewards()
         {
             var requestUri = $"{ServerUrl}{Uri}/battle-pass-reward";
-            var (statusCode, responseData, hasTransportError) =
-                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbGET, null, includeAuth: true);
+            // var (statusCode, responseData, hasTransportError) = await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbGET, null, includeAuth: true);
 
-            if (hasTransportError || statusCode < 200 || statusCode > 299)
-                return new List<RewardData>();
-
-            Debug.Log($"Rewards response: {responseData}");
-
-            // Como es un array, usamos wrapper
-            var listWrapper = new RewardDtoListWrapper { rewards = JsonHelper.FromJson<RewardDto>(responseData) };
-            return listWrapper.rewards.ConvertAll(PlayerRewardMapper.ToDomain);
+            // if (hasTransportError || statusCode < 200 || statusCode > 299)
+            //     return new List<RewardData>();
+            //
+            // Debug.Log($"Rewards response: {responseData}");
+            //
+            // // Como es un array, usamos wrapper
+            // var listWrapper = new RewardDtoListWrapper { rewards = JsonHelper.FromJson<RewardDto>(responseData) };
+            // return listWrapper.rewards.ConvertAll(PlayerRewardMapper.ToDomain);
+            return new List<RewardData>();
         }
 
         public async UniTask<PlayerPassBall> GetPlayerPassBall()
         {
-            var id = ServiceLocator.Instance.GetService<IPlayerSessionService>()
-                .GetPlayerSessionData().playerId;
-            var requestUri = $"{ServerUrl}{Uri}/battle-pass/{id}";
-
-            var (statusCode, responseData, hasTransportError) =
-                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbGET, null, includeAuth: true);
-
-            if (hasTransportError)
-                throw new Exception("Error getting player pass ball: transport error");
-            if (statusCode < 200 || statusCode > 299)
-                throw new Exception($"Error getting player pass ball {statusCode}");
-
-            Debug.Log($"PassBall response: {responseData}");
-
-            var wrapper = JsonUtility.FromJson<PlayerPassBallResponseDto>(responseData);
-
-            // Mapear usando tu PlayerRewardMapper
-            return PlayerRewardMapper.ToDomain(wrapper.data.battlePass, wrapper.data.rewards);
+            // var id = ServiceLocator.Instance.GetService<IPlayerSessionService>()
+            //     .GetPlayerSessionData().playerId;
+            // var requestUri = $"{ServerUrl}{Uri}/battle-pass/{id}";
+            //
+            // var (statusCode, responseData, hasTransportError) =
+            //     await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbGET, null, includeAuth: true);
+            //
+            // if (hasTransportError)
+            //     throw new Exception("Error getting player pass ball: transport error");
+            // if (statusCode < 200 || statusCode > 299)
+            //     throw new Exception($"Error getting player pass ball {statusCode}");
+            //
+            // Debug.Log($"PassBall response: {responseData}");
+            //
+            // var wrapper = JsonUtility.FromJson<PlayerPassBallResponseDto>(responseData);
+            //
+            // // Mapear usando tu PlayerRewardMapper
+            // return PlayerRewardMapper.ToDomain(wrapper.data.battlePass, wrapper.data.rewards);
+            return new PlayerPassBall(
+                0,
+                "playerId",
+                0,
+                0,
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                new List<PlayerReward>()
+            );
         }
 
         public async UniTask<ClaimRewardResponse> ClaimReward(int rewardDataLevel)
         {
-            var id = ServiceLocator.Instance
-                .GetService<IPlayerSessionService>()
-                .GetPlayerSessionData().playerId;
-
-            var requestUri = $"{ServerUrl}{Uri}/player-reward/claim";
-
-            var json = JsonUtility.ToJson(new ClaimRewardRequest
+            // var id = ServiceLocator.Instance
+            //     .GetService<IPlayerSessionService>()
+            //     .GetPlayerSessionData().playerId;
+            //
+            // var requestUri = $"{ServerUrl}{Uri}/player-reward/claim";
+            //
+            // var json = JsonUtility.ToJson(new ClaimRewardRequest
+            // {
+            //     playerId = id,
+            //     level = rewardDataLevel
+            // });
+            //
+            // var (statusCode, responseData, hasTransportError) =
+            //     await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbPOST, json,
+            //         includeAuth: true);
+            //
+            // Debug.Log($"ClaimReward response: {responseData}");
+            //
+            // if (hasTransportError)
+            //     throw new Exception("Error claiming reward: transport error");
+            // if (statusCode < 200 || statusCode > 299)
+            //     throw new Exception($"Error claiming reward: {statusCode}");
+            //
+            // return JsonUtility.FromJson<ClaimRewardResponse>(responseData);
+            return new ClaimRewardResponse
             {
-                playerId = id,
-                level = rewardDataLevel
-            });
-
-            var (statusCode, responseData, hasTransportError) =
-                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbPOST, json, includeAuth: true);
-
-            Debug.Log($"ClaimReward response: {responseData}");
-
-            if (hasTransportError)
-                throw new Exception("Error claiming reward: transport error");
-            if (statusCode < 200 || statusCode > 299)
-                throw new Exception($"Error claiming reward: {statusCode}");
-
-            return JsonUtility.FromJson<ClaimRewardResponse>(responseData);
+                message = "Reward claimed successfully"
+            };
         }
 
         public async UniTask<PlayerPassBall> AddExperience(bool win)
         {
-            var experienceToWin = win
-                ? ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToWin()
-                : ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToLose();
-
-            var id = ServiceLocator.Instance.GetService<IPlayerSessionService>()
-                .GetPlayerSessionData().playerId;
-            var requestUri = $"{ServerUrl}{Uri}/battle-pass/experience";
-
-            var json = JsonUtility.ToJson(new ExperienceRequest { experience = experienceToWin, playerId = id });
-            var (statusCode, responseData, hasTransportError) =
-                await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbPOST, json, includeAuth: true);
-
-            if (hasTransportError)
-                throw new Exception("Error adding experience: transport error");
-            if (statusCode < 200 || statusCode > 299)
-                throw new Exception($"Error adding experience: {statusCode}");
-
-            Debug.Log($"AddExperience response: {responseData}");
-
-            var wrapper = JsonUtility.FromJson<AddExperienceResponseDto>(responseData);
-            var dto = wrapper.data;
-
+            // var experienceToWin = win
+            //     ? ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToWin()
+            //     : ServiceLocator.Instance.GetService<IGlobalSessionService>().GetExperienceToLose();
+            //
+            // var id = ServiceLocator.Instance.GetService<IPlayerSessionService>()
+            //     .GetPlayerSessionData().playerId;
+            // var requestUri = $"{ServerUrl}{Uri}/battle-pass/experience";
+            //
+            // var json = JsonUtility.ToJson(new ExperienceRequest { experience = experienceToWin, playerId = id });
+            // var (statusCode, responseData, hasTransportError) =
+            //     await SendJsonWithUnityWebRequestRetry(requestUri, UnityWebRequest.kHttpVerbPOST, json,
+            //         includeAuth: true);
+            //
+            // if (hasTransportError)
+            //     throw new Exception("Error adding experience: transport error");
+            // if (statusCode < 200 || statusCode > 299)
+            //     throw new Exception($"Error adding experience: {statusCode}");
+            //
+            // Debug.Log($"AddExperience response: {responseData}");
+            //
+            // var wrapper = JsonUtility.FromJson<AddExperienceResponseDto>(responseData);
+            // var dto = wrapper.data;
+            //
+            // return new PlayerPassBall(
+            //     dto.id,
+            //     dto.playerId,
+            //     dto.level,
+            //     dto.experience,
+            //     DateTime.Parse(dto.created_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
+            //     DateTime.Parse(dto.updated_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
+            //     new List<PlayerReward>() // por ahora vacío; rewards se piden con otro endpoint
+            // );
             return new PlayerPassBall(
-                dto.id,
-                dto.playerId,
-                dto.level,
-                dto.experience,
-                DateTime.Parse(dto.created_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
-                DateTime.Parse(dto.updated_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
-                new List<PlayerReward>() // por ahora vacío; rewards se piden con otro endpoint
+                0,
+                "playerId",
+                0,
+                0,
+                DateTime.UtcNow,
+                DateTime.UtcNow,
+                new List<PlayerReward>()
             );
         }
 
@@ -152,7 +176,8 @@ namespace Infra.WebAdapter
                     if (attempt < MaxTransientRetries)
                     {
                         var delayMs = attempt * 1200;
-                        Debug.LogWarning($"[PlayerRewardApi] Exception {method} {requestUri} attempt {attempt}/{MaxTransientRetries}: {ex.Message}. Retrying in {delayMs}ms.");
+                        Debug.LogWarning(
+                            $"[PlayerRewardApi] Exception {method} {requestUri} attempt {attempt}/{MaxTransientRetries}: {ex.Message}. Retrying in {delayMs}ms.");
                         await UniTask.Delay(delayMs);
                         continue;
                     }
@@ -166,7 +191,8 @@ namespace Infra.WebAdapter
                 if (IsTransientUnityError(request, statusCode) && attempt < MaxTransientRetries)
                 {
                     var delayMs = attempt * 1200;
-                    Debug.LogWarning($"[PlayerRewardApi] Transient {method} error {requestUri} attempt {attempt}/{MaxTransientRetries}. Retrying in {delayMs}ms. status={statusCode} result={request.result} error={request.error}");
+                    Debug.LogWarning(
+                        $"[PlayerRewardApi] Transient {method} error {requestUri} attempt {attempt}/{MaxTransientRetries}. Retrying in {delayMs}ms. status={statusCode} result={request.result} error={request.error}");
                     await UniTask.Delay(delayMs);
                     continue;
                 }
@@ -228,7 +254,7 @@ namespace Infra.WebAdapter
         public int rewardId;
         public string awarded_at;
         public int claimed; // 0 o 1
-        public int level;   // <-- agregado
+        public int level; // <-- agregado
         public RewardDetail reward; // <-- agregado
     }
 

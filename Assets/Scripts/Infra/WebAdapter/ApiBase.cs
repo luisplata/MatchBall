@@ -2,7 +2,7 @@
 
 namespace Infra.WebAdapter
 {
-    public abstract class ApiBase
+    public abstract class ApiBase: IApiBase
     {
         protected readonly HttpClient Client;
         protected readonly string ServerUrl;

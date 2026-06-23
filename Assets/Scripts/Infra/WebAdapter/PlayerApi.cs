@@ -24,7 +24,8 @@ namespace Infra.WebAdapter
             // Validate input locally to avoid sending requests that the server will reject
             if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(nickname))
             {
-                Debug.LogWarning($"[PlayerApi] AddPlayer called with empty playerId or nickname. playerId='{playerId}' nickname='{nickname}'");
+                Debug.LogWarning(
+                    $"[PlayerApi] AddPlayer called with empty playerId or nickname. playerId='{playerId}' nickname='{nickname}'");
                 return new ApiResponse<PlayerDto>
                 {
                     success = false,
@@ -33,36 +34,49 @@ namespace Infra.WebAdapter
                 };
             }
 
-            var requestUri = $"{ServerUrl}{Uri}/player";
-            var payload = new AddPlayerRequest
+            // var requestUri = $"{ServerUrl}{Uri}/player";
+            // var payload = new AddPlayerRequest
+            // {
+            //     playerId = playerId,
+            //     nickname = nickname,
+            //     key = key
+            // };
+            //
+            // Debug.Log($"[PlayerApi] url {requestUri} payload: {JsonUtility.ToJson(payload)}");
+            //
+            // var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
+            //     requestUri,
+            //     UnityWebRequest.kHttpVerbPOST,
+            //     payload,
+            //     includeAuth: false);
+            // Debug.Log($"[PlayerApi] AddPlayer status={statusCode} response: {responseData}");
+            //
+            // if (statusCode == (long)HttpStatusCode.Conflict)
+            // {
+            //     Debug.LogWarning("[PlayerApi] AddPlayer returned 409 (already exists). Continuing as idempotent success.");
+            //     return new ApiResponse<PlayerDto>
+            //     {
+            //         success = true,
+            //         message = "Player already exists",
+            //         data = null
+            //     };
+            // }
+            //
+            // EnsureSuccessOrThrow("add player", requestUri, statusCode, responseData);
+            // return JsonUtility.FromJson<ApiResponse<PlayerDto>>(responseData);
+            var response = new ApiResponse<PlayerDto>()
             {
-                playerId = playerId,
-                nickname = nickname,
-                key = key
-            };
-
-            Debug.Log($"[PlayerApi] url {requestUri} payload: {JsonUtility.ToJson(payload)}");
-
-            var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
-                requestUri,
-                UnityWebRequest.kHttpVerbPOST,
-                payload,
-                includeAuth: false);
-            Debug.Log($"[PlayerApi] AddPlayer status={statusCode} response: {responseData}");
-
-            if (statusCode == (long)HttpStatusCode.Conflict)
-            {
-                Debug.LogWarning("[PlayerApi] AddPlayer returned 409 (already exists). Continuing as idempotent success.");
-                return new ApiResponse<PlayerDto>
+                message = "Ok",
+                data = new PlayerDto
                 {
-                    success = true,
-                    message = "Player already exists",
-                    data = null
-                };
-            }
-
-            EnsureSuccessOrThrow("add player", requestUri, statusCode, responseData);
-            return JsonUtility.FromJson<ApiResponse<PlayerDto>>(responseData);
+                    playerId = playerId,
+                    nickname = nickname,
+                    created_at = DateTime.UtcNow.ToString("o"),
+                    updated_at = DateTime.UtcNow.ToString("o")
+                },
+                success = true
+            };
+            return response;
         }
 
         public async UniTask<bool> IsNicknameAvailable(string nickname)
@@ -101,38 +115,45 @@ namespace Infra.WebAdapter
 
         public async UniTask<ApiResponse<object>> UpdatePlayerNickname(string playerId, string nickname)
         {
-            var requestUri = $"{ServerUrl}{Uri}/player/nickname/{playerId}";
-            var payload = new UpdateNicknameRequest { nickname = nickname };
-
-            var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
-                requestUri,
-                UnityWebRequest.kHttpVerbPUT,
-                payload,
-                includeAuth: true);
-
-            Debug.Log($"[PlayerApi] UpdateNickname status={statusCode} response: {responseData}");
-            EnsureSuccessOrThrow("update nickname", requestUri, statusCode, responseData);
-
-            return JsonUtility.FromJson<ApiResponse<object>>(responseData);
+            // var requestUri = $"{ServerUrl}{Uri}/player/nickname/{playerId}";
+            // var payload = new UpdateNicknameRequest { nickname = nickname };
+            //
+            // var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
+            //     requestUri,
+            //     UnityWebRequest.kHttpVerbPUT,
+            //     payload,
+            //     includeAuth: true);
+            //
+            // Debug.Log($"[PlayerApi] UpdateNickname status={statusCode} response: {responseData}");
+            // EnsureSuccessOrThrow("update nickname", requestUri, statusCode, responseData);
+            //
+            // return JsonUtility.FromJson<ApiResponse<object>>(responseData);
+            return new ApiResponse<object>
+            {
+                success = true,
+                message = "Nickname updated successfully",
+                data = null
+            };
         }
 
         public async UniTask<string> LoginPlayer(string playerId)
         {
             var requestDto = new LoginPlayerRequest { playerId = playerId };
             var requestUri = $"{ServerUrl}{Uri}/player/login";
-            
-            Debug.Log($"[PlayerApi] url {requestUri} payload: {JsonUtility.ToJson(requestDto)}");
-
-            var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
-                requestUri,
-                UnityWebRequest.kHttpVerbPOST,
-                requestDto,
-                includeAuth: false);
-            Debug.Log($"[PlayerApi] LoginPlayer status={statusCode} response: {responseData}");
-            EnsureSuccessOrThrow("login player", requestUri, statusCode, responseData);
-
-            var parsed = JsonUtility.FromJson<ApiResponse<TokenResponseDto>>(responseData);
-            var token = parsed.data.token;
+            //
+            // Debug.Log($"[PlayerApi] url {requestUri} payload: {JsonUtility.ToJson(requestDto)}");
+            //
+            // var (statusCode, responseData) = await SendJsonWithUnityWebRequestRetry(
+            //     requestUri,
+            //     UnityWebRequest.kHttpVerbPOST,
+            //     requestDto,
+            //     includeAuth: false);
+            // Debug.Log($"[PlayerApi] LoginPlayer status={statusCode} response: {responseData}");
+            // EnsureSuccessOrThrow("login player", requestUri, statusCode, responseData);
+            //
+            // var parsed = JsonUtility.FromJson<ApiResponse<TokenResponseDto>>(responseData);
+            // var token = parsed.data.token;
+            var token = playerId;
             _mediator.UpdateJwtToken(token);
             return token;
         }
@@ -171,7 +192,8 @@ namespace Infra.WebAdapter
                     if (IsTransientUnityError(request, statusCode) && attempt < MaxTransientRetries)
                     {
                         var delayMs = attempt * 1200;
-                        Debug.LogWarning($"[PlayerApi] Transient network error {method} {requestUri} attempt {attempt}/{MaxTransientRetries}. Retrying in {delayMs}ms. error={request.error}");
+                        Debug.LogWarning(
+                            $"[PlayerApi] Transient network error {method} {requestUri} attempt {attempt}/{MaxTransientRetries}. Retrying in {delayMs}ms. error={request.error}");
                         await UniTask.Delay(delayMs);
                         continue;
                     }
@@ -182,12 +204,14 @@ namespace Infra.WebAdapter
                 {
                     lastException = ex;
                     var delayMs = attempt * 1200;
-                    Debug.LogWarning($"[PlayerApi] Exception {method} {requestUri} attempt {attempt}/{MaxTransientRetries}: {ex.Message}. Retrying in {delayMs}ms.");
+                    Debug.LogWarning(
+                        $"[PlayerApi] Exception {method} {requestUri} attempt {attempt}/{MaxTransientRetries}: {ex.Message}. Retrying in {delayMs}ms.");
                     await UniTask.Delay(delayMs);
                 }
             }
 
-            throw new Exception($"HTTP request failed after {MaxTransientRetries} attempts: {method} {requestUri}", lastException);
+            throw new Exception($"HTTP request failed after {MaxTransientRetries} attempts: {method} {requestUri}",
+                lastException);
         }
 
         private static bool IsTransientUnityError(UnityWebRequest request, long statusCode)
@@ -210,7 +234,8 @@ namespace Infra.WebAdapter
             if ((int)statusCode >= 200 && (int)statusCode <= 299)
                 return;
 
-            throw new Exception($"Failed to {operation}. Status={(int)statusCode} Url={requestUri} Body={responseData}");
+            throw new Exception(
+                $"Failed to {operation}. Status={(int)statusCode} Url={requestUri} Body={responseData}");
         }
 
         public async UniTask<PlayerDto> GetPlayerById(string playerId)
