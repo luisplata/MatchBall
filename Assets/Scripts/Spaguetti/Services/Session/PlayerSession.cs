@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using App.Ports;
 using App.UseCase;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
@@ -44,7 +45,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     {
     }
 
-    private async void Awake()
+    private void Awake()
     {
         if (FindObjectsOfType<PlayerSession>().Length > 1)
         {
@@ -56,7 +57,9 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             ServiceLocator.Instance.RegisterService<IStorageData>(this) &&
             ServiceLocator.Instance.RegisterService<IGlobalSessionService>(this))
         {
-            await Initialize();
+            // await Initialize();
+
+            _playerSessionData = new PlayerSessionDataCustom();
             DontDestroyOnLoad(gameObject);
             _readyToSignIn = true;
             _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
@@ -76,8 +79,6 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
             .SetEnvironmentName(environmentName);
 
         await UnityServices.InitializeAsync(initializationOptions);
-
-        _playerSessionData = new PlayerSessionDataCustom();
     }
 
     public async UniTask Login()
@@ -96,8 +97,11 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
 
         await UpdatePlayerData(_playerSessionData);
 
-        RemoteConfigService.Instance.FetchCompleted += ApplyRemoteSettings;
-        RemoteConfigService.Instance.FetchConfigs(new userAttributes(), new appAttributes());
+        ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().LoadConfig();
+        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().LoadPowerUps().Forget();
+
+        // RemoteConfigService.Instance.FetchCompleted += ApplyRemoteSettings;
+        // RemoteConfigService.Instance.FetchConfigs(new userAttributes(), new appAttributes());
     }
 
     private void ApplyRemoteSettings(ConfigResponse obj)
@@ -108,10 +112,10 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
 
     public async UniTask UpdatePlayerData(PlayerSessionDataCustom player)
     {
-        foreach (var (key, value) in player.GetData())
-        {
-            await SaveData(key, value);
-        }
+        // foreach (var (key, value) in player.GetData())
+        // {
+        //     await SaveData(key, value);
+        // }
 
         _playerSessionData = player;
         // await ServiceLocator.Instance.GetService<ILoginUseCase>().UpdatePlayerNickname(_playerSessionData.playerId, _playerSessionData.playerName);
@@ -140,7 +144,11 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
 
     public async UniTask AddCoins(int coins)
     {
-        await EconomyService.Instance.PlayerBalances.IncrementBalanceAsync("COINS", coins);
+        const string currencyId = "GOLD";
+        int currentAmount = PlayerPrefs.GetInt(currencyId, 0);
+        int newAmount = currentAmount + coins * 10;
+        PlayerPrefs.SetInt(currencyId, newAmount);
+        PlayerPrefs.Save();
     }
 
     public bool PowerUpSelected(string powerUpName, bool isSelected)
@@ -170,18 +178,19 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
     {
         try
         {
-            var keys = await CloudSaveService.Instance.Data.Player.ListAllKeysAsync();
-            if (keys.Any(itemKey => itemKey.Key == "isCreated"))
-            {
-                var datas = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
-                foreach (var data in datas.Where(data => data.Key == "isCreated"))
-                {
-                    _playerSessionData.isCreated = bool.TryParse(data.Value.ToString(), out var isCreated) && isCreated;
-                    return true;
-                }
-            }
-
-            throw new Exception("Data not found");
+            return false;
+            // var keys = await CloudSaveService.Instance.Data.Player.ListAllKeysAsync();
+            // if (keys.Any(itemKey => itemKey.Key == "isCreated"))
+            // {
+            //     var datas = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
+            //     foreach (var data in datas.Where(data => data.Key == "isCreated"))
+            //     {
+            //         _playerSessionData.isCreated = bool.TryParse(data.Value.ToString(), out var isCreated) && isCreated;
+            //         return true;
+            //     }
+            // }
+            //
+            // throw new Exception("Data not found");
         }
         catch (Exception ex)
         {
@@ -190,7 +199,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         }
     }
 
-    async UniTask<bool> SignInAnonymouslyAsync(int maxRetries = 3)
+    private async UniTask<bool> SignInAnonymouslyAsync(int maxRetries = 3)
     {
         int attempt = 0;
 
@@ -201,17 +210,17 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 attempt++;
                 Debug.Log($"[Auth] Anonymous sign-in attempt {attempt}/{maxRetries}");
 
-                if (!AuthenticationService.Instance.IsSignedIn)
-                {
-                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                }
+                // if (!AuthenticationService.Instance.IsSignedIn)
+                // {
+                //     await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                // }
 
                 // ✅ Initialize friends service (best-effort). Failures here (DNS, network, Unity Services) should
                 // not block sign-in — we'll log and continue without friends if initialization fails.
                 var friendsInitialized = false;
                 try
                 {
-                    await FriendsService.Instance.InitializeAsync();
+                    // await FriendsService.Instance.InitializeAsync();
                     friendsInitialized = true;
                 }
                 catch (RequestFailedException ex)
@@ -228,11 +237,11 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 {
                     try
                     {
-                        var friends = FriendsService.Instance.Friends;
-                        foreach (var friend in friends)
-                        {
-                            Debug.Log($"[Friends] {friend}");
-                        }
+                        // var friends = FriendsService.Instance.Friends;
+                        // foreach (var friend in friends)
+                        // {
+                        //     Debug.Log($"[Friends] {friend}");
+                        // }
                     }
                     catch (Exception ex)
                     {
@@ -243,15 +252,15 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 // ✅ Load saved session or create new one
                 if (await HasSavedSessionData())
                 {
-                    var data = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
-                    _playerSessionData.LoadData(data);
+                    // var data = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
+                    // _playerSessionData.LoadData(data);
                     // Ensure loaded session has required identifiers. CloudSave may have been saved without
                     // playerId or playerName (or they could be empty). In that case, fill with sensible
                     // defaults and persist back to CloudSave so future runs are consistent.
                     var dirty = false;
                     if (string.IsNullOrWhiteSpace(_playerSessionData.playerId))
                     {
-                        _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
+                        // _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
                         Debug.Log($"[Auth] Loaded session missing playerId, set to {_playerSessionData.playerId}");
                         dirty = true;
                     }
@@ -276,7 +285,8 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 }
                 else
                 {
-                    _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
+                    // _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
+                    _playerSessionData.playerId = "Anonimus";
 
                     // Nickname único por dispositivo
                     int randomSuffix = Random.Range(1000, 9999);

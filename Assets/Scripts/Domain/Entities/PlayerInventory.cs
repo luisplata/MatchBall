@@ -7,6 +7,12 @@ namespace Domain.Model
         public List<PowerUp> PowerUps { get; }
         public List<Currency> Currencies { get; }
 
+        public PlayerInventory()
+        {
+            PowerUps = new List<PowerUp>();
+            Currencies = new List<Currency>();
+        }
+
         public PlayerInventory(List<PowerUp> powerUps, List<Currency> currencies)
         {
             PowerUps = powerUps;

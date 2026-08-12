@@ -8,15 +8,24 @@ namespace Infra.UnityConfiguration
     {
         public GameConfiguration LoadConfig()
         {
-            var winExperience = RemoteConfigService.Instance.appConfig.GetInt("exp_by_win");
-            var loseExperience = RemoteConfigService.Instance.appConfig.GetInt("exp_by_lose");
-            var powerUpIcePerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ice_per_buy");
-            var powerUpJokerPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_joker_per_buy");
-            var powerUpLeadPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_lead_per_buy");
-            var powerUpRayPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ray_per_buy");
-            var randomToUsePowerUp = RemoteConfigService.Instance.appConfig.GetInt("random_to_use_power_up");
-            var howMuchMatchToGetPowerUp =
-                RemoteConfigService.Instance.appConfig.GetInt("how_much_match_to_get_power_up");
+            // var winExperience = RemoteConfigService.Instance.appConfig.GetInt("exp_by_win");
+            // var loseExperience = RemoteConfigService.Instance.appConfig.GetInt("exp_by_lose");
+            // var powerUpIcePerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ice_per_buy");
+            // var powerUpJokerPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_joker_per_buy");
+            // var powerUpLeadPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_lead_per_buy");
+            // var powerUpRayPerBuy = RemoteConfigService.Instance.appConfig.GetInt("powerup_ray_per_buy");
+            // var randomToUsePowerUp = RemoteConfigService.Instance.appConfig.GetInt("random_to_use_power_up");
+            // var howMuchMatchToGetPowerUp = RemoteConfigService.Instance.appConfig.GetInt("how_much_match_to_get_power_up");
+            
+            var winExperience = 15;
+            var loseExperience = 10;
+            var powerUpIcePerBuy = 1;
+            var powerUpJokerPerBuy = 1;
+            var powerUpLeadPerBuy = 1;
+            var powerUpRayPerBuy = 1;
+            var randomToUsePowerUp = 20;
+            var howMuchMatchToGetPowerUp = 5;
+            
             return new GameConfiguration(
                 loseExperience,
                 winExperience,

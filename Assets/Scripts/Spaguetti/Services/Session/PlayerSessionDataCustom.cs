@@ -67,24 +67,7 @@ public class PlayerSessionDataCustom
 
     public async UniTask<int> GetCoins()
     {
-        var options = new GetBalancesOptions
-        {
-            ItemsPerFetch = 5
-        };
-
-        var getBalancesResult = await EconomyService.Instance.PlayerBalances.GetBalancesAsync(options);
-        var firstFiveBalances = getBalancesResult.Balances;
-        // do something with your balances
-        foreach (var balance in firstFiveBalances)
-        {
-            //Debug.Log($"CurrencyId: {balance.CurrencyId}");
-            if (balance.CurrencyId == "COINS")
-            {
-                return (int)balance.Balance;
-            }
-        }
-
-        throw new Exception("Coins not found");
+        return PlayerPrefs.GetInt("GOLD", 0);
     }
 
     public void LoadData(Dictionary<string, Item> loadAllAsync)

@@ -167,7 +167,7 @@ MonoBehaviour:
       m_MinBound: 0.01
       m_MaxBound: 1
   m_AddedScalerViaScan:
-  - {fileID: 8344833201567457732}
+  - {fileID: 3802750441475343826}
   m_ActiveScalerProfile:
     m_AdaptiveFramerate:
       m_Name: Adaptive Framerate
@@ -466,7 +466,7 @@ MonoBehaviour:
   k_AssetVersion: 2
   m_GoogleProviderLogging: 0
   m_FrameStatsDialogDisplayed: 0
---- !u!114 &8344833201567457732
+--- !u!114 &3802750441475343826
 MonoBehaviour:
   m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}

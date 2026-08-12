@@ -25,7 +25,7 @@ namespace Bootstrap
             #endif
             //TODO: Falta refactorizar el pase de batalla para darle manejo.
             DontDestroyOnLoad(gameObject);
-            var storeRepository = new UnityEconomyStoreRepository(); //IStoreRepository, IInventoryRepository
+            var storeRepository = new EconomyLocal(); //IStoreRepository, IInventoryRepository
             var memoryEventBus = new MemoryEventBus(); //IEventBus
             var storageRepository = new SaveDataRepository();
             var gameConfigurationAdapter = new UnityConfigurationAdapter();
