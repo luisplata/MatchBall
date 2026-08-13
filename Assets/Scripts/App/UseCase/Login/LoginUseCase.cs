@@ -1,5 +1,6 @@
 ﻿using App.Ports;
 using Cysharp.Threading.Tasks;
+using UnityEngine;
 
 namespace App.UseCase
 {
@@ -32,6 +33,25 @@ namespace App.UseCase
                 throw new System.ArgumentException("nickname is required", nameof(nickname));
 
             await _webAdapter.AddPlayer(playerId, nickname, key);
+        }
+
+        public async UniTask AddPlayer(PlayerSessionDataCustom playerSessionData, string devPlayerKeyChangeInProduction)
+        {
+            if (string.IsNullOrWhiteSpace(playerSessionData.playerId))
+                throw new System.ArgumentException("playerId is required", nameof(playerSessionData.playerId));
+
+            if (string.IsNullOrWhiteSpace(playerSessionData.playerName))
+                throw new System.ArgumentException("playerName is required", nameof(playerSessionData.playerName));
+
+            if (string.IsNullOrWhiteSpace(playerSessionData.playerName))
+                throw new System.ArgumentException("nickname is required", nameof(playerSessionData.playerName));
+
+            await _webAdapter.AddPlayer(playerSessionData.playerId, playerSessionData.playerName,
+                devPlayerKeyChangeInProduction);
+            playerSessionData.isCreated = true;
+            //serializar el playerSessionData en PlayerPrefs
+            PlayerPrefs.SetString("playerSessionData", JsonUtility.ToJson(playerSessionData));
+            PlayerPrefs.Save();
         }
 
         public async UniTask UpdatePlayerNickname(string playerId, string playerName)

@@ -33,6 +33,8 @@ namespace Bootstrap
             var adModAdapter = new FakeAdModAdapter();
 
             ServiceLocator.Instance.RegisterService<IEventBus>(memoryEventBus);
+            
+            ServiceLocator.Instance.RegisterService<IInventoryRepository>(storeRepository);
 
             ServiceLocator.Instance.RegisterService<IListStoreItemsUseCase>(new ListStoreItemsUseCase(storeRepository));
             ServiceLocator.Instance.RegisterService<IBuyItemUseCase>(new BuyItemUseCase(storeRepository,

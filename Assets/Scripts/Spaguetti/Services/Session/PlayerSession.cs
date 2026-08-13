@@ -174,11 +174,18 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         return _playerSessionData.CheckPowerUp(powerUpId);
     }
 
-    private async UniTask<bool> HasSavedSessionData()
+    private async UniTask<(bool, PlayerSessionDataCustom)> HasSavedSessionData()
     {
         try
         {
-            return false;
+            var playerSessionData =
+                JsonUtility.FromJson<PlayerSessionDataCustom>(PlayerPrefs.GetString("playerSessionData"));
+            if (playerSessionData == null)
+            {
+                return (false, null);
+            }
+
+            return (true, playerSessionData);
             // var keys = await CloudSaveService.Instance.Data.Player.ListAllKeysAsync();
             // if (keys.Any(itemKey => itemKey.Key == "isCreated"))
             // {
@@ -195,7 +202,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         catch (Exception ex)
         {
             Debug.LogException(ex);
-            return false;
+            return (false, null);
         }
     }
 
@@ -250,7 +257,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 }
 
                 // ✅ Load saved session or create new one
-                if (await HasSavedSessionData())
+                if (await HasSavedSessionData() is (true, var savedSessionData))
                 {
                     // var data = await CloudSaveService.Instance.Data.Player.LoadAllAsync();
                     // _playerSessionData.LoadData(data);
@@ -261,6 +268,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                     if (string.IsNullOrWhiteSpace(_playerSessionData.playerId))
                     {
                         // _playerSessionData.playerId = AuthenticationService.Instance.PlayerId;
+                        _playerSessionData = savedSessionData;
                         Debug.Log($"[Auth] Loaded session missing playerId, set to {_playerSessionData.playerId}");
                         dirty = true;
                     }
@@ -308,8 +316,7 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
                 var loginUseCase = ServiceLocator.Instance.GetService<ILoginUseCase>();
                 try
                 {
-                    await loginUseCase.AddPlayer(_playerSessionData.playerId,
-                        _playerSessionData.playerName,
+                    await loginUseCase.AddPlayer(_playerSessionData,
                         "dev_player_key_change_in_production");
                 }
                 catch (Exception ex)

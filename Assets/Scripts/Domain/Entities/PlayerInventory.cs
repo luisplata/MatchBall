@@ -1,11 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Domain.Model
 {
+    [Serializable]
     public class PlayerInventory
     {
-        public List<PowerUp> PowerUps { get; }
-        public List<Currency> Currencies { get; }
+        public List<PowerUp> PowerUps;
+        public List<Currency> Currencies;
 
         public PlayerInventory()
         {

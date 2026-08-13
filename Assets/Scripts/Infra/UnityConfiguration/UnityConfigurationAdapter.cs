@@ -19,10 +19,10 @@ namespace Infra.UnityConfiguration
             
             var winExperience = 15;
             var loseExperience = 10;
-            var powerUpIcePerBuy = 1;
-            var powerUpJokerPerBuy = 1;
-            var powerUpLeadPerBuy = 1;
-            var powerUpRayPerBuy = 1;
+            var powerUpIcePerBuy = 5;
+            var powerUpJokerPerBuy = 5;
+            var powerUpLeadPerBuy = 5;
+            var powerUpRayPerBuy = 5;
             var randomToUsePowerUp = 20;
             var howMuchMatchToGetPowerUp = 5;
             

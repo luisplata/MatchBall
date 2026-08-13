@@ -3,12 +3,13 @@
 namespace Domain.Model
 {
     // Un powerup definido en el dominio
+    [Serializable]
     public class PowerUp
     {
-        public string Id { get; }
-        public string Name { get; }
-        public string Type { get; }
-        public int Quantity { get; private set; }
+        public string Id;
+        public string Name;
+        public string Type;
+        public int Quantity;
 
         public PowerUp(string id, string name, string type, int quantity)
         {

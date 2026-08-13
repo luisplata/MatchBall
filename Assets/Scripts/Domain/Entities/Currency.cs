@@ -2,10 +2,11 @@
 
 namespace Domain.Model
 {
+    [Serializable]
     public class Currency
     {
-        public string Id { get; }
-        public int Amount { get; private set; }
+        public string Id;
+        public int Amount;
 
         public Currency(string id, int amount)
         {

@@ -23,7 +23,7 @@ namespace Infrastructure.UnityEconomy
                     "BUY_ICE",
                     "buy_ice",
                     "ICE",
-                    new List<(string, int)> { ("ICE", 100) },
+                    new List<(string, int)> { ("GOLD", 100) },
                     ("POWERUP_ICE", "POWERUP_ICE", "POWERUP_ICE",
                         ServiceLocator.Instance.GetService<IGlobalSessionService>()
                             .HowMuchPowerUpsByBuy("POWERUP_ICE"))
@@ -32,7 +32,7 @@ namespace Infrastructure.UnityEconomy
                     "BUY_JOKER",
                     "buy_joker",
                     "JOKER",
-                    new List<(string, int)> { ("JOKER", 100) },
+                    new List<(string, int)> { ("GOLD", 100) },
                     ("POWERUP_JOKER", "POWERUP_JOKER", "POWERUP_JOKER",
                         ServiceLocator.Instance.GetService<IGlobalSessionService>()
                             .HowMuchPowerUpsByBuy("POWERUP_JOKER"))
@@ -41,7 +41,7 @@ namespace Infrastructure.UnityEconomy
                     "BUY_LEAD",
                     "buy_lead",
                     "LEAD",
-                    new List<(string, int)> { ("LEAD", 100) },
+                    new List<(string, int)> { ("GOLD", 100) },
                     ("POWERUP_LEAD", "POWERUP_LEAD", "POWERUP_LEAD",
                         ServiceLocator.Instance.GetService<IGlobalSessionService>()
                             .HowMuchPowerUpsByBuy("POWERUP_LEAD"))
@@ -50,7 +50,7 @@ namespace Infrastructure.UnityEconomy
                     "BUY_RAY",
                     "buy_ray",
                     "RAY",
-                    new List<(string, int)> { ("RAY", 100) },
+                    new List<(string, int)> { ("GOLD", 100) },
                     ("POWERUP_RAY", "POWERUP_RAY", "POWERUP_RAY",
                         ServiceLocator.Instance.GetService<IGlobalSessionService>()
                             .HowMuchPowerUpsByBuy("POWERUP_RAY"))
@@ -71,6 +71,16 @@ namespace Infrastructure.UnityEconomy
         {
             string jsonData = PlayerPrefs.GetString("PlayerInventory", "{\"PowerUps\":[],\"Currencies\":[]}");
             PlayerInventory inventory = JsonUtility.FromJson<PlayerInventory>(jsonData);
+            if (!inventory.Currencies.Select(c => c.Id).Contains("GOLD"))
+            {
+                inventory.Currencies.Add(new Currency("GOLD", PlayerPrefs.GetInt("GOLD", 1000)));
+            }
+            else
+            {
+                var goldCurrency = inventory.Currencies.First(c => c.Id == "GOLD");
+                goldCurrency.Amount = PlayerPrefs.GetInt("GOLD", 1000);
+            }
+
             return inventory;
         }
 
@@ -83,7 +93,9 @@ namespace Infrastructure.UnityEconomy
 
         public async UniTask<PlayerInventory> GetPlayerInventory()
         {
-            var currencies = new List<Currency> { new("GOLD", PlayerPrefs.GetInt("GOLD", 0)) };
+            var currencies = new List<Currency> { new("GOLD", PlayerPrefs.GetInt("GOLD", 1000)) };
+            PlayerPrefs.SetInt("GOLD", currencies[0].Amount);
+            PlayerPrefs.Save();
 
             var powerUps = GetInventory().PowerUps
                 .Select(pItem => new PowerUp(pItem.Id, pItem.Name, pItem.Type, pItem.Quantity)).ToList();
@@ -94,8 +106,9 @@ namespace Infrastructure.UnityEconomy
         public async UniTask DecrementCurrency(string currencyId, int amount)
         {
             int currentAmount = PlayerPrefs.GetInt(currencyId, 0);
-            int newAmount = Mathf.Max(0, currentAmount - amount);
+            int newAmount = Mathf.Clamp(0, currentAmount - amount, int.MaxValue);
             PlayerPrefs.SetInt(currencyId, newAmount);
+            PlayerPrefs.Save();
         }
 
         public async UniTask<List<PowerUpData>> GetPowerUpsInventoryFromStore()

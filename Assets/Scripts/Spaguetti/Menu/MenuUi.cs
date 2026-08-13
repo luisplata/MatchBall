@@ -1,3 +1,4 @@
+using App.Ports;
 using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
@@ -22,8 +23,8 @@ public class MenuUi : MonoBehaviour, IMenuUi
     public async UniTask UpdatePlayerData(PlayerSessionDataCustom playerData)
     {
         //profileImage.sprite = playerData.playerPhotoUrl;
-        var s = await playerData.GetCoins();
-        coinsText.text = $"{s}";
+        var s = await ServiceLocator.Instance.GetService<IInventoryRepository>().GetPlayerInventory();
+        coinsText.text = $"{s.Currencies[0].Amount}";
         cupsText.text = playerData.cups.ToString();
     }
 }

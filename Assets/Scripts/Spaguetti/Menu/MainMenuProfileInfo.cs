@@ -36,9 +36,10 @@ public class MainMenuProfileInfo : MonoBehaviour, IWaitToLoadInfo, IProfileInfo
     public async UniTaskVoid UpdateInfo()
     {
         var playerSession = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
+        var s = await ServiceLocator.Instance.GetService<IInventoryRepository>().GetPlayerInventory();
         //profileImage.sprite = playerSession.playerImage;
         profileCups.text = playerSession.cups.ToString();
-        profileCurrency.text = $"{await playerSession.GetCoins()}";
+        profileCurrency.text = $"{s.Currencies[0].Amount}";
         IsReady = true;
     }
 

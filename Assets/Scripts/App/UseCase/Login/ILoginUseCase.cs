@@ -10,5 +10,6 @@ namespace App.UseCase
         UniTask UpdatePlayerNickname(string playerId, string playerName);
         UniTask ClaimReward(int rewardDataLevel);
         UniTask AddExperience(bool b);
+        UniTask AddPlayer(PlayerSessionDataCustom playerSessionData, string devPlayerKeyChangeInProduction);
     }
 }

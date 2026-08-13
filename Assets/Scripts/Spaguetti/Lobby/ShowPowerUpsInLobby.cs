@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
 
@@ -14,14 +15,14 @@ public class ShowPowerUpsInLobby : MonoBehaviour
     PlayerSessionDataCustom _playerSessionDataCustom;
     private List<PowerUpSelector> _powerUpSelectors = new();
 
-    private void Start()
+    private async void Start()
     {
-        Configure();
+        await Configure();
         ShowPowerUps();
         HidePowerUps();
     }
 
-    public void Configure()
+    public async UniTask Configure()
     {
         powerUpsCanvasGroup.alpha = 0;
         _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
@@ -32,7 +33,7 @@ public class ShowPowerUpsInLobby : MonoBehaviour
         }
 
         _powerUpSelectors.Clear();
-
+        await ServiceLocator.Instance.GetService<IPowerUpsUseCase>().LoadPowerUps();
         var powerUps = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUps();
 
         foreach (var powerUpData in powerUps)
