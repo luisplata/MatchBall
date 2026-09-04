@@ -25,7 +25,7 @@ namespace Infra.WebAdapter
         {
             return await SafeExecute(
                 () => _playerRewardApi.GetPlayerPassBall(),
-                new PlayerPassBall(0, string.Empty, 0, 0, DateTime.MinValue, DateTime.MinValue,
+                new PlayerPassBall(0, string.Empty, 1, 0, DateTime.MinValue, DateTime.MinValue,
                     new List<PlayerReward>()),
                 nameof(GetPlayerPassBall)
             );

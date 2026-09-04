@@ -17,8 +17,8 @@ namespace Infra.UnityConfiguration
             // var randomToUsePowerUp = RemoteConfigService.Instance.appConfig.GetInt("random_to_use_power_up");
             // var howMuchMatchToGetPowerUp = RemoteConfigService.Instance.appConfig.GetInt("how_much_match_to_get_power_up");
             
-            var winExperience = 15;
-            var loseExperience = 10;
+            var winExperience = 150;
+            var loseExperience = 100;
             var powerUpIcePerBuy = 5;
             var powerUpJokerPerBuy = 5;
             var powerUpLeadPerBuy = 5;

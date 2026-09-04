@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace Infra.WebAdapter.Mapper
@@ -9,6 +10,35 @@ namespace Infra.WebAdapter.Mapper
 
     public static class PlayerRewardMapper
     {
+        private static DateTime ParseDateTimeSafely(string dateTimeString)
+        {
+            // Si es null o vacío, devuelve la fecha de hoy
+            if (string.IsNullOrWhiteSpace(dateTimeString))
+                return DateTime.Now; // O DateTime.UtcNow si trabajas con UTC
+
+            // Intentamos parsear con el formato exacto que espera RoundtripKind (ISO 8601)
+            // Ejemplo de formato: "2026-09-04T15:30:00.123Z" o "2026-09-04T15:30:00.123+02:00"
+            string[] formats =
+            {
+                "yyyy-MM-ddTHH:mm:ss.fffZ",
+                "yyyy-MM-ddTHH:mm:ss.fffzzz",
+                "yyyy-MM-ddTHH:mm:ssZ",
+                "yyyy-MM-ddTHH:mm:sszzz",
+                "yyyy-MM-ddTHH:mm:ss.fff",
+                "yyyy-MM-ddTHH:mm:ss"
+            };
+
+            if (DateTime.TryParseExact(dateTimeString, formats, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out DateTime result))
+            {
+                return result;
+            }
+
+            // Si falla, logueamos el error (opcional) y devolvemos hoy
+            Debug.LogWarning($"No se pudo parsear la fecha: '{dateTimeString}'. Se usará DateTime.Now");
+            return DateTime.Now;
+        }
+
         public static PlayerPassBall ToDomain(PlayerPassBallDto dto, List<PlayerRewardDto> rewards)
         {
             return new PlayerPassBall(
@@ -16,8 +46,8 @@ namespace Infra.WebAdapter.Mapper
                 dto.playerId,
                 dto.level,
                 dto.experience,
-                DateTime.Parse(dto.created_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
-                DateTime.Parse(dto.updated_at, null, System.Globalization.DateTimeStyles.RoundtripKind),
+                ParseDateTimeSafely(dto.created_at),
+                ParseDateTimeSafely(dto.updated_at),
                 rewards?.Select(r => new PlayerReward(
                     r.id,
                     r.playerId,

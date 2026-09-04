@@ -1,6 +1,5 @@
 using System;
 using App.UseCase.PassBall;
-using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
