@@ -2,11 +2,12 @@
 {
     public class FirstTo100PointsRule : IWinCondition
     {
+        private const int TargetPoints = 100;
         private IGameWinConditionContext _context;
 
         public string GetDescription()
         {
-            return "First to 20 points win";
+            return "First to 100 points win";
         }
 
         public void SetContext(IGameWinConditionContext context)
@@ -24,12 +25,12 @@
             int player1Coins = player1.GetCoins();
             int player2Coins = player2.GetCoins();
 
-            if (player1Coins >= 20)
+            if (player1Coins >= TargetPoints)
             {
                 return new WinResult(player1, player2);
             }
 
-            if (player2Coins >= 20)
+            if (player2Coins >= TargetPoints)
             {
                 return new WinResult(player2, player1);
             }
