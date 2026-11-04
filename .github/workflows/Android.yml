@@ -131,7 +131,9 @@ jobs:
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
-          android: false
+          # El SDK de Android del runner no se usa: el contenedor de Unity
+          # trae el propio. Liberarlo devuelve ~9 GB.
+          android: true
           dotnet: true
 
       # androidUseCustomKeystore está activo, así que Unity exige keystore
@@ -211,7 +213,9 @@ jobs:
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
-          android: false
+          # El SDK de Android del runner no se usa: el contenedor de Unity
+          # trae el propio. Liberarlo devuelve ~9 GB.
+          android: true
           dotnet: true
 
       - uses: game-ci/unity-builder@v4
