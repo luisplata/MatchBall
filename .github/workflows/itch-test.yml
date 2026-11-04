@@ -1,0 +1,31 @@
+name: itch smoke test
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MatchBall-debug-apk
+          path: dist
+          run-id: 41919724032
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+          ls -la dist
+          curl -sSL -o /tmp/butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q -o /tmp/butler.zip -d /tmp/butler
+          chmod +x /tmp/butler/butler
+          /tmp/butler/butler version
+          /tmp/butler/butler push dist/*.apk "peryloth/matchballance:android" --userversion 0.2.10-test
