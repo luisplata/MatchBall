@@ -1,4 +1,4 @@
-name: Android — Debug APK + Signed Release AAB
+name: Android + WebGL
 
 on:
   workflow_dispatch:
@@ -7,13 +7,14 @@ on:
         description: What to build
         required: true
         type: choice
-        default: both
+        default: apk
         options:
-          - both
-          - dev
-          - release
+          - apk
+          - aab
+          - webgl
+          - all
       bump:
-        description: SemVer bump for the next release (ignored on dev-only builds)
+        description: SemVer bump for the next release (ignored unless aab or all)
         required: true
         type: choice
         default: patch
@@ -25,7 +26,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: android-release
+  group: matchball-build
   cancel-in-progress: false
 
 env:
@@ -85,7 +86,7 @@ jobs:
           echo "versionCode=$NEXT_VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Pre-check tag & release idempotency
-        if: github.event.inputs.target != 'dev'
+        if: github.event.inputs.target == 'aab' || github.event.inputs.target == 'all'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -103,11 +104,11 @@ jobs:
             echo "Tag ${TAG} is free — proceeding."
           fi
 
-  # ── Debug APK: sólo artifact del run, 1 día de retención ────────────────
+  # ── Debug APK: artifact del run (1 día) + itch canal android ────────────
   build-apk:
     name: Debug APK
     needs: validate
-    if: github.event.inputs.target != 'release'
+    if: github.event.inputs.target == 'apk' || github.event.inputs.target == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -190,11 +191,83 @@ jobs:
             "peryloth/matchballance:android" \
             --userversion "${{ needs.validate.outputs.version }}"
 
+  # ── WebGL: artifact del run (1 día) + itch canal html5 ──────────────────
+  build-webgl:
+    name: WebGL
+    needs: validate
+    if: github.event.inputs.target == 'webgl' || github.event.inputs.target == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-WebGL-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-WebGL-
+            Library-
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+
+      - uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: auto
+          projectPath: .
+          targetPlatform: WebGL
+          buildName: MatchBall-webgl
+          buildsPath: build
+          versioning: Custom
+          version: ${{ needs.validate.outputs.version }}
+
+      - name: Package WebGL
+        run: |
+          set -euo pipefail
+          if [ ! -f build/WebGL/index.html ]; then
+            echo "::error::WebGL build is missing index.html"
+            find build -maxdepth 2 -type d | head -20
+            exit 1
+          fi
+          mkdir -p dist
+          (cd build/WebGL && zip -qr "../../dist/MatchBall-${{ needs.validate.outputs.version }}-webgl.zip" .)
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MatchBall-webgl
+          path: dist
+          retention-days: 1
+
+      - name: Publish to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q -o /tmp/butler.zip -d /tmp/butler
+          chmod +x /tmp/butler/butler
+          /tmp/butler/butler version
+          /tmp/butler/butler push \
+            "dist/MatchBall-${{ needs.validate.outputs.version }}-webgl.zip" \
+            "peryloth/matchballance:html5" \
+            --userversion "${{ needs.validate.outputs.version }}"
+
   # ── Release AAB: firmado, va adjunto al GitHub Release ──────────────────
   build-aab:
     name: Release AAB
     needs: validate
-    if: github.event.inputs.target != 'dev'
+    if: github.event.inputs.target == 'aab' || github.event.inputs.target == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -218,8 +291,6 @@ jobs:
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
-          # El SDK de Android del runner no se usa: el contenedor de Unity
-          # trae el propio. Liberarlo devuelve ~9 GB.
           android: true
           dotnet: true
 
@@ -262,7 +333,7 @@ jobs:
   publish:
     name: Publish signed release
     needs: [validate, build-aab]
-    if: github.event.inputs.target != 'dev'
+    if: github.event.inputs.target == 'aab' || github.event.inputs.target == 'all'
     runs-on: ubuntu-latest
     permissions:
       contents: write
