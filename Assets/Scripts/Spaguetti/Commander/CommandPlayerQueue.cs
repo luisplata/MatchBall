@@ -22,7 +22,13 @@ namespace Commander
         public void AddCommand(ICommand command, IPlayer playerId)
         {
             var player = _players.FirstOrDefault(player => player.Id == playerId.Id);
-            player?.AddCommand(command);
+            if (player == null)
+            {
+                Debug.LogWarning($"ICommandQueue: player '{playerId.Id}' is not registered - command dropped.");
+                return;
+            }
+
+            player.AddCommand(command);
         }
 
         public bool IsBusy(IPlayer player)
