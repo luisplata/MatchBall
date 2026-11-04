@@ -1,60 +1,258 @@
-name: Actions Android 😎
+name: Android — Debug APK + Signed Release AAB
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: SemVer bump for the next release
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions: {}
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
 
 jobs:
-  buildAndTestForLinuxBasedPlatforms:
-    name: Build for ${{ matrix.targetPlatform }}
+  # ── Calcula la próxima versión a partir de los tags ─────────────────────
+  validate:
+    name: Compute version
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        targetPlatform:
-          - Android # Build an Android player.
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.compute.outputs.tag }}
+      version: ${{ steps.compute.outputs.version }}
+      versionCode: ${{ steps.compute.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard — main branch only
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow must run from main (current: ${{ github.ref }})."
+          exit 1
+
+      - name: Compute next SemVer tag
+        id: compute
+        run: |
+          BUMP="${{ github.event.inputs.bump }}"
+          LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No semver tags found — starting at v1.0.0"
+            MAJOR=1; MINOR=0; PATCH=0
+          else
+            echo "Latest semver tag: $LATEST_TAG"
+            VERSION="${LATEST_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          fi
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+            *) echo "::error::Unknown bump '$BUMP'"; exit 1 ;;
+          esac
+          NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          NEXT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          # versionCode de Play Store: DEBE ser mayor al publicado (1.0.2 -> 1000002).
+          # Esquema: major*1e6 + minor*1e3 + patch. No cambiar la escala.
+          NEXT_VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+          echo "Next tag: $NEXT_TAG (version: $NEXT_VERSION, versionCode: $NEXT_VERSION_CODE)"
+          echo "tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$NEXT_VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Pre-check tag & release idempotency
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.compute.outputs.tag }}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            DRAFT_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+              --jq ".[] | select(.tag_name == \"${TAG}\" and .draft == true and .target_commitish == \"${GITHUB_SHA}\") | .id" 2>/dev/null | head -1)
+            if [ -z "$DRAFT_ID" ]; then
+              echo "::error::Tag ${TAG} already exists but no draft release on this commit (${GITHUB_SHA}). Aborting to avoid clobbering."
+              exit 1
+            fi
+            echo "Draft release ${DRAFT_ID} targets this commit — idempotent re-publish OK."
+          else
+            echo "Tag ${TAG} is free — proceeding."
+          fi
+
+  # ── Debug APK: sólo artifact del run, 1 día de retención ────────────────
+  build-apk:
+    name: Debug APK
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
-      - uses: actions/cache@v3
+
+      - uses: actions/cache@v4
         with:
-          path: ${{ matrix.projectPath }}/Library
-          key:
-            Library-${{ matrix.projectPath }}-${{ matrix.targetPlatform }}-${{
-            hashFiles(matrix.projectPath) }}
+          path: Library
+          key: Library-Android-debug-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-${{ matrix.projectPath }}-${{ matrix.targetPlatform }}-
-            Library-${{ matrix.projectPath }}-
+            Library-Android-debug-
+            Library-Android-
             Library-
-      - uses: game-ci/unity-test-runner@v4
-        id: testRunner
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
         with:
-          projectPath: ${{ matrix.projectPath }}
-          unityVersion: ${{ matrix.unityVersion }}
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Test results (all modes)
-          path: ${{ steps.testRunner.outputs.artifactsPath }}
-      - if: matrix.targetPlatform == 'Android'
-        uses: jlumbroso/free-disk-space@v1.2.0
+          tool-cache: false
+          android: false
+          dotnet: true
+
+      # androidUseCustomKeystore está activo, así que Unity exige keystore
+      # también para el build de desarrollo.
       - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          projectPath: ${{ matrix.projectPath }}
-          unityVersion: ${{ matrix.unityVersion }}
-          targetPlatform: ${{ matrix.targetPlatform }}
-          customParameters: '-myParameter myValue -myBoolean -ThirdParameter andItsValue'
+          unityVersion: auto
+          projectPath: .
+          targetPlatform: Android
+          androidExportType: androidPackage
+          buildName: MatchBall-debug
+          buildsPath: build
+          versioning: Custom
+          version: ${{ needs.validate.outputs.version }}
+          androidVersionCode: ${{ needs.validate.outputs.versionCode }}
+          customParameters: -development
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystoreName: .github/release.keystore
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+
+      - name: Normalize APK
+        run: |
+          set -euo pipefail
+          APK=$(find build/Android -name '*.apk' | head -1)
+          if [ -z "$APK" ]; then
+            echo "::error::No .apk found under build/Android"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$APK" "dist/MatchBall-${{ needs.validate.outputs.version }}-debug.apk"
+          ls -la dist
+
       - uses: actions/upload-artifact@v4
         with:
-          name: Build
-          path: build
+          name: MatchBall-debug-apk
+          path: dist
+          retention-days: 1
+
+  # ── Release AAB: firmado, va adjunto al GitHub Release ──────────────────
+  build-aab:
+    name: Release AAB
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Android-release-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Android-release-
+            Library-Android-
+            Library-
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+
+      - uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: auto
+          projectPath: .
+          targetPlatform: Android
+          androidExportType: androidAppBundle
+          buildName: MatchBall-release
+          buildsPath: build
+          versioning: Custom
+          version: ${{ needs.validate.outputs.version }}
+          androidVersionCode: ${{ needs.validate.outputs.versionCode }}
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystoreName: .github/release.keystore
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+
+      - name: Normalize AAB
+        run: |
+          set -euo pipefail
+          AAB=$(find build/Android -name '*.aab' | head -1)
+          if [ -z "$AAB" ]; then
+            echo "::error::No .aab found under build/Android"
+            exit 1
+          fi
+          mkdir -p release
+          cp "$AAB" "release/MatchBall-${{ needs.validate.outputs.version }}.aab"
+          ls -la release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MatchBall-release-aab
+          path: release
+          retention-days: 1
+
+  # ── GitHub Release firmado ──────────────────────────────────────────────
+  publish:
+    name: Publish signed release
+    needs: [validate, build-aab]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MatchBall-release-aab
+          path: release
+
+      - name: Verify AAB downloaded
+        run: |
+          set -euo pipefail
+          test -n "$(find release -name '*.aab' | head -1)" || { echo "::error::AAB missing after download"; exit 1; }
+          ls -la release
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: MatchBall ${{ needs.validate.outputs.version }}
+          # NO usar target_commitish con un SHA: GITHUB_TOKEN devuelve 403
+          # si ese commit ya no es el HEAD. El commit va en el cuerpo.
+          body: |
+            Build commit: `${{ github.sha }}`
+            Versión: `${{ needs.validate.outputs.version }}`
+            Version code: `${{ needs.validate.outputs.versionCode }}`
+          files: release/MatchBall-${{ needs.validate.outputs.version }}.aab
