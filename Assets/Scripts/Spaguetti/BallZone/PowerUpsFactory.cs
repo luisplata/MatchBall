@@ -46,12 +46,8 @@ public class PowerUpsFactory
         }
 
         var prefab = powerUpsData.FirstOrDefault(powerUp => powerUp.id == id);
-        
+        if (prefab == null) return null;
 
-        _player.ConsumePowerUp(prefab.id);
-
-        return prefab == null
-            ? null
-            : Object.Instantiate(powerUpsConfiguration.GetPowerUpPrefabById(prefab.id));
+        return Object.Instantiate(powerUpsConfiguration.GetPowerUpPrefabById(prefab.id));
     }
 }

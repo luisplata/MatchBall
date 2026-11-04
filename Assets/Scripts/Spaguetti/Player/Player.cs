@@ -133,7 +133,7 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
             _countOfPoints < ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
                 .how_much_match_to_get_power_up
             || !ballZone.CanCreatePowerUp()
-            || ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUps().Count <= 0
+            || GetPowerUps().Count <= 0
         ) return;
         //TODO validar aqui que pueda crear powerups o que tenga para crear
         _countOfPoints = 0;

@@ -12,9 +12,8 @@ public abstract class PowerUpA : Ball, IPowerUp
     protected override void OnDragFunction()
     {
         base.OnDragFunction();
-        if (_ballZone.CanUsePowerUp())
+        if (_ballZone.CanUsePowerUp() && _ballZone.UsePowerUp(this))
         {
-            _ballZone.UsePowerUp(this);
             OnActionWithClick();
         }
     }

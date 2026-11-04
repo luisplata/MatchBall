@@ -214,7 +214,7 @@ public class BallZone : MonoBehaviour, IBallZone
         return _powerUps[0];
     }
 
-    public void UsePowerUp(IPowerUp powerUpWithClick)
+    public bool UsePowerUp(IPowerUp powerUpWithClick)
     {
         for (var i = 0; i < _powerUps.Length; i++)
         {
@@ -222,6 +222,9 @@ public class BallZone : MonoBehaviour, IBallZone
             if (powerUp != null && powerUp.GetIdUnique() == powerUpWithClick.GetIdUnique())
             {
                 _powerUps[i] = null;
+                // The orb left the board: this is the one and only place a use is charged.
+                // The slot is already null, so a second activation cannot find it and cannot charge again.
+                GetPlayer().ConsumePowerUp(powerUp.GetBall().Id);
                 // Move all powerUps down
                 for (var j = i; j < _powerUps.Length - 1; j++)
                 {
@@ -234,9 +237,27 @@ public class BallZone : MonoBehaviour, IBallZone
                     }
                 }
 
-                return;
+                return true;
             }
         }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Orbs of this type currently on the board (this match only). Derived from occupancy on purpose:
+    /// a stored counter would be a second source of truth and could drift.
+    /// </summary>
+    public int CountReservedPowerUps(string id)
+    {
+        var reserved = 0;
+        for (var i = 0; i < _powerUps.Length; i++)
+        {
+            var powerUp = _powerUps[i];
+            if (powerUp != null && powerUp.GetBall().Id == id) reserved++;
+        }
+
+        return reserved;
     }
 
     public void AddPowerUpInQueue(IPowerUp powerUpJoker)
@@ -263,7 +284,7 @@ public class BallZone : MonoBehaviour, IBallZone
 
 public interface IBallZone
 {
-    void UsePowerUp(IPowerUp powerUpWithClick);
+    bool UsePowerUp(IPowerUp powerUpWithClick);
     void AddPowerUpInQueue(IPowerUp powerUpJoker);
     void IncrementOverFlow();
     void DecrementOverFlow();
