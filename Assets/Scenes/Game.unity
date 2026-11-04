@@ -6573,6 +6573,7 @@ MonoBehaviour:
   ballzone: {fileID: 74485331}
   freezePlayerMono: {fileID: 711200424}
   scoreText: {fileID: 1976662514}
+  nameText: {fileID: 798647882}
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
@@ -9553,7 +9554,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Agus
+  m_text: Player
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -11303,7 +11304,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PeryLoth
+  m_text: AI
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -11330,7 +11331,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 2532.35
+  m_fontSize: 2939.5
   m_fontSizeBase: 2500
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -20322,6 +20323,7 @@ MonoBehaviour:
   balance: {fileID: 1049846897}
   ballZone: {fileID: 1479719646}
   scoreText: {fileID: 1656619207}
+  nameText: {fileID: 657906931}
   countOfPointToGetPowerUp: 3
   id: 1
   freezePlayerMono: {fileID: 651360746}
@@ -20883,7 +20885,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 700
+  m_text: 0
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -24500,7 +24502,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 4000
+  m_text: 0
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}

@@ -12,6 +12,7 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     [SerializeField] private Balance balance;
     [SerializeField] private BallZone ballZone;
     [SerializeField] private TextMeshProUGUI scoreText;
+    [SerializeField] private TextMeshProUGUI nameText;
     [SerializeField] private int countOfPointToGetPowerUp;
     [SerializeField] private string id;
     [SerializeField] private FreezePlayerMono freezePlayerMono;
@@ -61,6 +62,8 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     public void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)
     {
+        RefreshHud();
+
         balance.OnBalanceClicked += OnBalanceClicked;
         balance.OnGetPoints += OnGetPoints;
 
@@ -113,7 +116,16 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     public void AddPoints()
     {
         _coins++;
-        scoreText.text = $"{_coins}";
+        RefreshHud();
+    }
+
+    private void RefreshHud()
+    {
+        if (scoreText != null) scoreText.text = _coins.ToString();
+        else Debug.LogWarning("[Player] scoreText is not wired.");
+
+        if (nameText != null) nameText.text = "Player";
+        else Debug.LogWarning("[Player] nameText is not wired.");
     }
 
     public void GameOver()

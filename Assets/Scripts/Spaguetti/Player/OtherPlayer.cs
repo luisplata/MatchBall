@@ -26,12 +26,20 @@ public class OtherPlayer : MonoBehaviour
 
     [SerializeField] private FreezePlayerMono freezePlayerMono;
     [SerializeField] private TextMeshProUGUI scoreText;
+    [SerializeField] private TextMeshProUGUI nameText;
 
     public TextMeshProUGUI ScoreText => scoreText;
+    public TextMeshProUGUI NameText => nameText;
 
 
     public void Configure(IGameManager gameManager, float timeToWait, IReadOnlyList<PowerUpData> powerUps)
     {
+        if (scoreText != null) scoreText.text = "0";
+        else Debug.LogWarning("[OtherPlayer] scoreText is not wired.");
+
+        if (nameText != null) nameText.text = "AI";
+        else Debug.LogWarning("[OtherPlayer] nameText is not wired.");
+
         Player2.Configure(gameManager, powerUps);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);
         ServiceLocator.Instance.GetService<ICommandQueue>().AddCommand(new WaitTime(timeToWait), Player2);
