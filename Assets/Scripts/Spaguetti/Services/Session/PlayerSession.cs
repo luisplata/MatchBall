@@ -151,6 +151,18 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         PlayerPrefs.Save();
     }
 
+    /// <summary>
+    /// Match income: score converts to gold 1:1 (no legacy x10).
+    /// </summary>
+    public async UniTask AddMatchGold(int amount)
+    {
+        const string currencyId = "GOLD";
+        int currentAmount = PlayerPrefs.GetInt(currencyId, 0);
+        int newAmount = currentAmount + amount;
+        PlayerPrefs.SetInt(currencyId, newAmount);
+        PlayerPrefs.Save();
+    }
+
     public bool PowerUpSelected(string powerUpName, bool isSelected)
     {
         var player = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
@@ -459,6 +471,7 @@ public interface IPlayerSessionService
     UniTask Logout();
     PlayerSessionDataCustom GetPlayerSessionData();
     UniTask AddCoins(int coins);
+    UniTask AddMatchGold(int amount);
     bool PowerUpSelected(string powerUpName, bool isSelected);
     void AddPowerUpToPlayer(StoreItemDataFromCloud powerUp, int count);
     bool CheckPowerUp(string powerUpId);

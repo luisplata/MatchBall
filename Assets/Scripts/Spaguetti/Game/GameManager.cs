@@ -192,7 +192,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private async void AddCoinsAndLoadScene()
     {
-        await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddCoins(Player1.GetCoins() * _multiplier);
+        await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddMatchGold(Player1.GetCoins() * _multiplier);
         SceneManager.LoadScene("BallPass");
     }
 
