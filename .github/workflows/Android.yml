@@ -3,10 +3,20 @@ name: Android — Debug APK + Signed Release AAB
 on:
   workflow_dispatch:
     inputs:
-      bump:
-        description: SemVer bump for the next release
+      target:
+        description: What to build
         required: true
         type: choice
+        default: both
+        options:
+          - both
+          - dev
+          - release
+      bump:
+        description: SemVer bump for the next release (ignored on dev-only builds)
+        required: true
+        type: choice
+        default: patch
         options:
           - patch
           - minor
@@ -75,6 +85,7 @@ jobs:
           echo "versionCode=$NEXT_VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Pre-check tag & release idempotency
+        if: github.event.inputs.target != 'dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -96,6 +107,7 @@ jobs:
   build-apk:
     name: Debug APK
     needs: validate
+    if: github.event.inputs.target != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -164,6 +176,7 @@ jobs:
   build-aab:
     name: Release AAB
     needs: validate
+    if: github.event.inputs.target != 'dev'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -229,6 +242,7 @@ jobs:
   publish:
     name: Publish signed release
     needs: [validate, build-aab]
+    if: github.event.inputs.target != 'dev'
     runs-on: ubuntu-latest
     permissions:
       contents: write
