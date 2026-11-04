@@ -2,6 +2,7 @@
   "dependencies": {
     "com.bellseboss.servicelocator": "https://github.com/luisplata/ServiceLocatorToUnity.git",
     "com.bellseboss.state": "https://github.com/luisplata/State-PatterDesing.git",
+    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main",
     "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask",
     "com.google.ads.mobile": "10.4.2",
     "com.unity.2d.sprite": "1.0.0",
