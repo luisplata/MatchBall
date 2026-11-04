@@ -105,12 +105,17 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         });
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
-        if (!PlayerRef1.IsReadyToPlay() || !player2.ReadyToPlay()) return;
+        if (!ArePlayersReady() || _isGameOver) return;
 
         // Track elapsed game time for time-based win conditions
         _elapsedGameTime += Time.deltaTime;
+    }
+
+    private void FixedUpdate()
+    {
+        if (!PlayerRef1.IsReadyToPlay() || !player2.ReadyToPlay()) return;
 
         // Update win condition (e.g., accumulate timer)
         _winCondition.OnFrameUpdate();
@@ -157,11 +162,6 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     }
 
     #region IGameWinConditionContext Implementation
-
-    public float GetDeltaTime()
-    {
-        return Time.deltaTime;
-    }
 
     public float GetElapsedGameTime()
     {

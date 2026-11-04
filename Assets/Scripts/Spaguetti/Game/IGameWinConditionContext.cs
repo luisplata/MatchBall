@@ -7,11 +7,6 @@
     public interface IGameWinConditionContext
     {
         /// <summary>
-        /// Get current frame's delta time (Time.deltaTime).
-        /// </summary>
-        float GetDeltaTime();
-
-        /// <summary>
         /// Get total elapsed time since game started (for timer-based conditions).
         /// </summary>
         float GetElapsedGameTime();
