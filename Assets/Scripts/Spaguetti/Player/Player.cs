@@ -46,14 +46,48 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     public void ConsumePowerUp(string prefabID)
     {
-        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().ConsumePowerUp(prefabID).Forget();
-
-        ServiceLocator.Instance.GetService<IPowerUpsUseCase>().LoadPowerUps().Forget();
+        ConsumePowerUpAsync(prefabID).Forget();
     }
 
+    private async UniTaskVoid ConsumePowerUpAsync(string prefabID)
+    {
+        try
+        {
+            // PowerUpsUseCase.ConsumePowerUp already reloads the inventory; do not reload twice.
+            await ServiceLocator.Instance.GetService<IPowerUpsUseCase>().ConsumePowerUp(prefabID);
+        }
+        catch (System.Exception exception)
+        {
+            // The effect was already committed at click time; the write is best-effort and must stay visible.
+            Debug.LogError($"[PowerUp] consume '{prefabID}' failed: {exception}");
+        }
+    }
+
+    /// <summary>
+    /// Selected power-ups projected onto this match's remaining budget: owned (persisted) minus
+    /// the orbs of that type already on the board. Types with no budget are dropped, so the random
+    /// spawn pool is filtered per type: an aggregate count would let an exhausted type spawn a
+    /// budgetless orb.
+    /// </summary>
     public IReadOnlyList<PowerUpData> GetPowerUps()
     {
-        return ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps();
+        var selectedPowerUps = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps();
+        if (ballZone == null) return selectedPowerUps;
+
+        var budget = new List<PowerUpData>(selectedPowerUps.Count);
+        foreach (var powerUp in selectedPowerUps)
+        {
+            var available = powerUp.quantity - ballZone.CountReservedPowerUps(powerUp.id);
+            if (available <= 0) continue;
+            budget.Add(new PowerUpData
+            {
+                id = powerUp.id,
+                selected = powerUp.selected,
+                quantity = available
+            });
+        }
+
+        return budget;
     }
 
     private bool _isGameOver;
