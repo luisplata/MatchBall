@@ -177,13 +177,18 @@ jobs:
       # El artifact se sube antes de publicar: si butler falla, el APK
       # igual queda descargable desde el summary del run.
       - name: Publish to itch.io
-        uses: yeslayla/butler-publish-itchio-action@master
         env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-          CHANNEL: android
-          ITCH_USER: peryloth
-          ITCH_GAME: matchballance
-          PACKAGE: dist/MatchBall-${{ needs.validate.outputs.version }}-debug.apk
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q -o /tmp/butler.zip -d /tmp/butler
+          chmod +x /tmp/butler/butler
+          /tmp/butler/butler version
+          /tmp/butler/butler push \
+            "dist/MatchBall-${{ needs.validate.outputs.version }}-debug.apk" \
+            "peryloth/matchballance:android" \
+            --userversion "${{ needs.validate.outputs.version }}"
 
   # ── Release AAB: firmado, va adjunto al GitHub Release ──────────────────
   build-aab:
