@@ -98,10 +98,17 @@ public class Path : MonoBehaviour, IPointerClickHandler
 
     async UniTask DoSomethingWhileWaiting(IEnumerable<UniTask> tasks, Action callback = null)
     {
+        // The owner may already be gone when a continuation resumes after teardown;
+        // in that case the destroy token itself throws, so exit before touching it.
+        if (this == null) return;
+
         var combined = UniTask.WhenAll(tasks);
+        var destroyToken = this.GetCancellationTokenOnDestroy();
 
         while (!combined.Status.IsCompleted())
         {
+            if (destroyToken.IsCancellationRequested) return;
+
             callback?.Invoke();
             await UniTask.Yield();
         }
