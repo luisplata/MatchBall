@@ -41,6 +41,11 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void Awake()
     {
+        //hide result panels before any fallible boot code runs
+        gameOverPanel.SetActive(false);
+        youWinPanel.SetActive(false);
+        HideMessage();
+
         //set FPS to 60
         Application.targetFrameRate = 60;
         //lock to portrait mode
@@ -63,9 +68,6 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         Player1.Configure(this, ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps());
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
 
-        gameOverPanel.SetActive(false);
-        youWinPanel.SetActive(false);
-        HideMessage();
         _isGameOver = false;
 
         //load win condition from random wincondition and inject context
