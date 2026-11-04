@@ -121,9 +121,9 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
         _ballZone.Configure(this, _gameManager, powerUps);
     }
 
-    public void AddPoints()
+    public void AddPoints(int points)
     {
-        _coins++;
+        _coins += points;
         var scoreText = _otherPlayer.ScoreText;
         if (scoreText != null)
         {

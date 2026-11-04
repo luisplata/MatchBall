@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
+using Domain.Services;
 using UnityEngine;
 #if UNITY_EDITOR || UNITY_STANDALONE
 using UnityEngine.InputSystem;
@@ -18,6 +19,8 @@ public class Balance : MonoBehaviour, IBalance
     private List<BallanceControllerArt> ballancesControllerArt = new();
     private IMediatorBalance _player;
     private int _countOfColumns = 36;
+    private int _multiplier = 1;
+    private float _lastAwardAt;
 
     public void Configure(IMediatorBalance player)
     {
@@ -277,9 +280,15 @@ public class Balance : MonoBehaviour, IBalance
         await UniTask.WhenAll(leftPath.MoveBallsUpByIndex(diff), rightPath.MoveBallsUpByIndex(diff));
     }
 
-    public void AddPoints()
+    public void AwardMatchPoints(int ballsCleared)
     {
-        _player.AddPoints();
+        var award = ScorePolicy.Award(ballsCleared, Time.time, _lastAwardAt, _multiplier);
+        if (!award.Applied) return;
+
+        _multiplier = award.NextMultiplier;
+        _lastAwardAt = award.NextAwardSeconds;
+
+        _player.AddPoints(award.Points);
         OnGetPoints?.Invoke();
     }
 
@@ -302,7 +311,7 @@ public interface IBalance
     int CountOfColumns();
     UniTask MoveBallsDownByIndex(int diff, int i = 0);
     UniTask MoveBallsUpByIndex(int diff, int i = 0);
-    void AddPoints();
+    void AwardMatchPoints(int ballsCleared);
     UniTask TryBall(Ball currentBall, PathType sidePathType);
     IPlayer GetPlayer();
     string GetTheColorOfLargestNumberOfBalls();

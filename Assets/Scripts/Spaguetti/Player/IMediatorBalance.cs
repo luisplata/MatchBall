@@ -1,6 +1,6 @@
 ﻿public interface IMediatorBalance
 {
-    void AddPoints();
+    void AddPoints(int points);
     void GameOver();
     IPlayer GetPlayer();
 }

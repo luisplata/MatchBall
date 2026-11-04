@@ -17,7 +17,7 @@ namespace Spaguetti.Balance.Rules
     /// - Las posiciones verticales están separadas por un "step" de 2 (consistente con otras reglas).
     /// - El chequeo se realiza respecto al índice provisto por el iterador de reglas; casos que no incluyan
     ///   ese índice serán evaluados cuando el iterador llame con otro índice.
-    /// - Se otorga un único AddPoints() por aplicación de regla (igual que otras reglas existentes).
+    /// - Se otorga un único AwardMatchPoints() por aplicación de regla (igual que otras reglas existentes).
     /// </summary>
     public class LOrNRule : ICombinationRule
     {
@@ -154,7 +154,7 @@ namespace Spaguetti.Balance.Rules
                 otherPath.MoveBallsDownByIndexAsc(otherDiff, otherMinIndex));
 
             await _delay.DelaySeconds(.5f);
-            balance.AddPoints();
+            balance.AwardMatchPoints(verticalCount + otherCount);
             return true;
         }
     }

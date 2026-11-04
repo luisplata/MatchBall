@@ -25,7 +25,7 @@ namespace Spaguetti.Balance.Rules
                     _music?.PlaySfx("pop");
                     await leftPath.MoveBallsDownByIndexAsc(1, index);
                     await _delay.DelaySeconds(.5f);
-                    balance.AddPoints();
+                    balance.AwardMatchPoints(1);
                     return true;
                 }
             }
@@ -40,7 +40,7 @@ namespace Spaguetti.Balance.Rules
                     _music?.PlaySfx("pop");
                     await rightPath.MoveBallsDownByIndexAsc(1, index);
                     await _delay.DelaySeconds(.5f);
-                    balance.AddPoints();
+                    balance.AwardMatchPoints(1);
                     return true;
                 }
             }

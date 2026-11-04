@@ -113,9 +113,9 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
             .AddCommand(new TryBallInBalanceCommand(ballZone, sidePathType, balance), this);
     }
 
-    public void AddPoints()
+    public void AddPoints(int points)
     {
-        _coins++;
+        _coins += points;
         RefreshHud();
     }
 

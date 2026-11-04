@@ -30,7 +30,7 @@ namespace Spaguetti.Balance.Rules
                         _music?.PlaySfx("pop");
                         await path.MoveBallsDownByIndexAsc(2, index);
                         await _delay.DelaySeconds(.5f);
-                        balance.AddPoints();
+                        balance.AwardMatchPoints(2);
                         return true;
                     }
                 }
