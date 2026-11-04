@@ -10,6 +10,10 @@ internal class VfxManagerGame : MonoBehaviour
 
     public async UniTask StartVfx()
     {
+        //Teardown destroys the ball, its VFX point and this manager mid-move;
+        //a late StartVfx must not touch the destroyed transform.
+        if (this == null || vfxPointToInstantiate == null) return;
+
         var vfx = Instantiate(vfxCollision, vfxPointToInstantiate.transform.position, Quaternion.identity,
             vfxPointToInstantiate.transform);
         var particleSystem = vfx.GetComponent<ParticleSystem>();
