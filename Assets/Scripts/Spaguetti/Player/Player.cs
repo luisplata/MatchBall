@@ -64,7 +64,9 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     {
         RefreshHud();
 
+        balance.OnBalanceClicked -= OnBalanceClicked;
         balance.OnBalanceClicked += OnBalanceClicked;
+        balance.OnGetPoints -= OnGetPoints;
         balance.OnGetPoints += OnGetPoints;
 
         _gameManager = gameManager;
@@ -178,6 +180,9 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     private void OnDestroy()
     {
+        balance.OnBalanceClicked -= OnBalanceClicked;
+        balance.OnGetPoints -= OnGetPoints;
+
         ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(this);
     }
 
