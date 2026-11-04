@@ -21,6 +21,7 @@ public class BallZone : MonoBehaviour, IBallZone
     [SerializeField] private SwitchBalls switchBalls;
     private int _overFlow = 1;
     private int _ballIndex = -1;
+    private Coroutine _fillRoutine;
 
     private IMediatorBallZone _player;
     private IGameManager _gameManager;
@@ -30,7 +31,7 @@ public class BallZone : MonoBehaviour, IBallZone
         _player = player;
         _gameManager = gameManager;
         ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Feed3Balls");
-        StartCoroutine(FillQueueCoroutine());
+        StartFill();
         switchBalls.OnSwitchClicked += OnSwitchClicked;
         powerUpFactory.Configure(powerUps, _player.GetPlayer());
     }
@@ -72,6 +73,19 @@ public class BallZone : MonoBehaviour, IBallZone
             FillQueue();
             yield return new WaitForSeconds(_speedToFeedBallZone);
         }
+
+        _fillRoutine = null;
+    }
+
+    private void StartFill()
+    {
+        if (_fillRoutine != null)
+        {
+            StopCoroutine(_fillRoutine);
+            _fillRoutine = null;
+        }
+
+        _fillRoutine = StartCoroutine(FillQueueCoroutine());
     }
 
     private bool IsNeedFillBallQueue()
@@ -86,7 +100,7 @@ public class BallZone : MonoBehaviour, IBallZone
         MoveBallsIndex();
         _ballIndex--;
         ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("FeedOneBall");
-        StartCoroutine(FillQueueCoroutine());
+        StartFill();
         if (ball.IsPowerUp())
         {
             IncrementOverFlow();

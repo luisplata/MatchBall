@@ -41,6 +41,11 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void Awake()
     {
+        //hide result panels before any fallible boot code runs
+        gameOverPanel.SetActive(false);
+        youWinPanel.SetActive(false);
+        HideMessage();
+
         //set FPS to 60
         Application.targetFrameRate = 60;
         //lock to portrait mode
@@ -63,9 +68,6 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         Player1.Configure(this, ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps());
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
 
-        gameOverPanel.SetActive(false);
-        youWinPanel.SetActive(false);
-        HideMessage();
         _isGameOver = false;
 
         //load win condition from random wincondition and inject context
@@ -105,12 +107,17 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         });
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
-        if (!PlayerRef1.IsReadyToPlay() || !player2.ReadyToPlay()) return;
+        if (!ArePlayersReady() || _isGameOver) return;
 
         // Track elapsed game time for time-based win conditions
         _elapsedGameTime += Time.deltaTime;
+    }
+
+    private void FixedUpdate()
+    {
+        if (!PlayerRef1.IsReadyToPlay() || !player2.ReadyToPlay()) return;
 
         // Update win condition (e.g., accumulate timer)
         _winCondition.OnFrameUpdate();
@@ -157,11 +164,6 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     }
 
     #region IGameWinConditionContext Implementation
-
-    public float GetDeltaTime()
-    {
-        return Time.deltaTime;
-    }
 
     public float GetElapsedGameTime()
     {

@@ -124,7 +124,15 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     public void AddPoints()
     {
         _coins++;
-        //scoreText.text = $"{_coins}";
+        var scoreText = _otherPlayer.ScoreText;
+        if (scoreText != null)
+        {
+            scoreText.text = $"{_coins}";
+        }
+        else
+        {
+            Debug.LogWarning($"[MachinePlayer] ScoreText is not wired; P2 points are {_coins}.");
+        }
     }
 
     public void GameOver()

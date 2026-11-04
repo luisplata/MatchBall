@@ -27,14 +27,11 @@ public class Path : MonoBehaviour, IPointerClickHandler
 
     public async UniTask TryBall(Ball ball, Action callback = null)
     {
-        var indexToWhile = levelOfPath + _counterBalance;
-        for (int i = ballQueue.Length - 1; i >= 0; i--)
+        var indexToWhile = GetNextFreeIndex();
+        if (indexToWhile < 0 || indexToWhile >= ballQueue.Length)
         {
-            if (ballQueue[i] != null)
-            {
-                indexToWhile = i + 2;
-                break;
-            }
+            Debug.LogWarning($"[Path] Cannot place ball: index {indexToWhile} is out of range (0..{ballQueue.Length - 1}).");
+            return;
         }
 
         ballQueue[indexToWhile] = ball;
@@ -348,7 +345,20 @@ public class Path : MonoBehaviour, IPointerClickHandler
 
     public bool HaveSpace()
     {
-        return ballQueue.Length / 2 < 36;
+        return GetNextFreeIndex() < ballQueue.Length;
+    }
+
+    private int GetNextFreeIndex()
+    {
+        for (int i = ballQueue.Length - 1; i >= 0; i--)
+        {
+            if (ballQueue[i] != null)
+            {
+                return i + 2;
+            }
+        }
+
+        return levelOfPath + _counterBalance;
     }
 
     public Transform GetBasePosition()

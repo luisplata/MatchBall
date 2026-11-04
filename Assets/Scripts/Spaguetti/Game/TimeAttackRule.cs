@@ -10,7 +10,6 @@
     public class TimeAttackRule : IWinCondition
     {
         private readonly float _matchDurationSeconds = 60f; // 30 seconds for quick testing, can be set to 180f for 3 minutes
-        private float _elapsedTime = 0f;
         private IGameWinConditionContext _context;
 
         public string GetDescription()
@@ -24,21 +23,16 @@
         }
 
         /// <summary>
-        /// Called every frame before CheckWinCondition to accumulate elapsed time.
+        /// Elapsed time is owned by the game context (IGameWinConditionContext.GetElapsedGameTime()).
         /// </summary>
         public void OnFrameUpdate()
         {
-            if (_context != null)
-            {
-                _elapsedTime += _context.GetDeltaTime();
-            }
         }
 
         public WinResult CheckWinCondition(IPlayer player1, IPlayer player2)
         {
             // Time's up?
-            Debug.Log($"[TimeAttackRule] Elapsed Time: {_elapsedTime:F2} seconds");
-            if (_elapsedTime >= _matchDurationSeconds)
+            if (_context.GetElapsedGameTime() >= _matchDurationSeconds)
             {
                 // Time expired - whoever has more points wins
                 int player1Coins = player1.GetCoins();
@@ -64,17 +58,12 @@
 
         public float GetRemainingTime()
         {
-            return Mathf.Max(0f, _matchDurationSeconds - _elapsedTime);
+            return Mathf.Max(0f, _matchDurationSeconds - _context.GetElapsedGameTime());
         }
 
         public bool IsTimeExpired()
         {
-            return _elapsedTime >= _matchDurationSeconds;
-        }
-
-        public void ResetTimer()
-        {
-            _elapsedTime = 0f;
+            return _context.GetElapsedGameTime() >= _matchDurationSeconds;
         }
     }
 }

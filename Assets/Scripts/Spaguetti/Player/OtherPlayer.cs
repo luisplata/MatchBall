@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Commander;
+using TMPro;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -24,6 +25,9 @@ public class OtherPlayer : MonoBehaviour
 
 
     [SerializeField] private FreezePlayerMono freezePlayerMono;
+    [SerializeField] private TextMeshProUGUI scoreText;
+
+    public TextMeshProUGUI ScoreText => scoreText;
 
 
     public void Configure(IGameManager gameManager, float timeToWait, IReadOnlyList<PowerUpData> powerUps)
