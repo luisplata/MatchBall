@@ -65,7 +65,6 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void Start()
     {
-        Player1.Configure(this, ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps());
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
 
         _isGameOver = false;
