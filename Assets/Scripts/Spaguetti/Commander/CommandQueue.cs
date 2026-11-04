@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
 using System.Threading;
 using Commander.Commands;
+using UnityEngine;
 
 namespace Commander
 {
@@ -37,15 +39,31 @@ namespace Commander
 
             _cancellationTokenSource = new CancellationTokenSource();
             IsCancelled = false;
+            _isCommandExecuting = true;
 
-            while (_commands.Count > 0)
+            try
             {
-                _isCommandExecuting = true;
-                var command = _commands.Dequeue();
-                await command.Execute().AttachExternalCancellation(_cancellationTokenSource.Token);
+                while (_commands.Count > 0)
+                {
+                    var command = _commands.Dequeue();
+                    try
+                    {
+                        await command.Execute().AttachExternalCancellation(_cancellationTokenSource.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        IsCancelled = true;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[CommandQueue] {command.GetType().Name}: {e}");
+                    }
+                }
             }
-
-            _isCommandExecuting = false;
+            finally
+            {
+                _isCommandExecuting = false;
+            }
         }
     }
 }
