@@ -6572,6 +6572,7 @@ MonoBehaviour:
   balance: {fileID: 1229436175}
   ballzone: {fileID: 74485331}
   freezePlayerMono: {fileID: 711200424}
+  scoreText: {fileID: 1976662514}
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
