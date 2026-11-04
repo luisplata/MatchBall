@@ -53,6 +53,8 @@ namespace Spaguetti.Balance.Rules
             if (!verticalPath.TryGetBallInPosition(index, out var baseBall))
                 return false;
 
+            // Limite del array de bolas: una expansión que lo exceda significa "no hay más coincidencias"
+            var columns = balance.CountOfColumns();
             var id = baseBall.GetId();
 
             // Construir la cadena vertical que contenga el índice: hacia arriba (+step) y hacia abajo (-step)
@@ -60,7 +62,9 @@ namespace Spaguetti.Balance.Rules
 
             // Hacia arriba
             var cur = index;
-            while (verticalPath.TryGetBallInPosition(cur + VerticalStep, out var upBall) && MatchHelper.Matches(upBall.GetId(), id))
+            while (cur + VerticalStep < columns &&
+                   verticalPath.TryGetBallInPosition(cur + VerticalStep, out var upBall) &&
+                   MatchHelper.Matches(upBall.GetId(), id))
             {
                 cur += VerticalStep;
                 indices.Add(cur);
@@ -68,7 +72,9 @@ namespace Spaguetti.Balance.Rules
 
             // Hacia abajo
             cur = index;
-            while (verticalPath.TryGetBallInPosition(cur - VerticalStep, out var downBall) && MatchHelper.Matches(downBall.GetId(), id))
+            while (cur - VerticalStep >= 0 &&
+                   verticalPath.TryGetBallInPosition(cur - VerticalStep, out var downBall) &&
+                   MatchHelper.Matches(downBall.GetId(), id))
             {
                 cur -= VerticalStep;
                 indices.Insert(0, cur);
@@ -99,7 +105,9 @@ namespace Spaguetti.Balance.Rules
             {
                 // Hacia arriba en otherPath
                 var curO = start;
-                while (otherPath.TryGetBallInPosition(curO + VerticalStep, out var upOb) && MatchHelper.Matches(upOb.GetId(), id))
+                while (curO + VerticalStep < columns &&
+                       otherPath.TryGetBallInPosition(curO + VerticalStep, out var upOb) &&
+                       MatchHelper.Matches(upOb.GetId(), id))
                 {
                     curO += VerticalStep;
                     otherSet.Add(curO);
@@ -107,7 +115,9 @@ namespace Spaguetti.Balance.Rules
 
                 // Hacia abajo en otherPath
                 curO = start;
-                while (otherPath.TryGetBallInPosition(curO - VerticalStep, out var downOb) && MatchHelper.Matches(downOb.GetId(), id))
+                while (curO - VerticalStep >= 0 &&
+                       otherPath.TryGetBallInPosition(curO - VerticalStep, out var downOb) &&
+                       MatchHelper.Matches(downOb.GetId(), id))
                 {
                     curO -= VerticalStep;
                     otherSet.Add(curO);
