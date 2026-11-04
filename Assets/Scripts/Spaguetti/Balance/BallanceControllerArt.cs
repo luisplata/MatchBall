@@ -15,6 +15,10 @@ public class BallanceControllerArt : MonoBehaviour
     // Update is called once per frame
     public void UpdatePositions()
     {
+        //Scene teardown destroys this controller together with the paths; a late
+        //callback must not touch path points, balls or anchors.
+        if (this == null) return;
+
         //Quiero que los dos puntos del linerender coinsidan con los anchorLeft y anchorRight
         //left path
         if (balance.GetLeftPath().GetLastIndexBall() < 0)

@@ -37,6 +37,10 @@ public class Path : MonoBehaviour, IPointerClickHandler
         ballQueue[indexToWhile] = ball;
         ball.OnStartMove();
         await ball.MoveBall(ball.transform.position, pointToTransition.transform.position);
+
+        //Teardown destroys the ball with the scene; never resume the move into it.
+        if (this == null || ball == null) return;
+
         await ball.MoveBall(ball.transform.position, pathPoints[indexToWhile].transform.position, ball.ShootVfx);
         ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("CollisionBalls");
         callback?.Invoke();
