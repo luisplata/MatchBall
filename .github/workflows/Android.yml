@@ -351,7 +351,9 @@ jobs:
   publish:
     name: Publish signed release
     needs: [validate, build-aab]
-    if: github.event.inputs.target == 'aab' || github.event.inputs.target == 'all'
+    if: |
+      always() && (github.event.inputs.target == 'aab' || github.event.inputs.target == 'all')
+      && needs.build-aab.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
