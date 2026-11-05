@@ -8,6 +8,7 @@ using UnityEngine.UI;
 public class MainMenuRules : MonoBehaviour
 {
     [SerializeField] private Button storeButton, homeButton, ballPass, settingsButton;
+    [SerializeField] private Button tutorialButton;
     [SerializeField] private GameObject helpPanel;
     
     [SerializeField, InterfaceType(typeof(IWaitToLoadInfo))]
@@ -22,6 +23,7 @@ public class MainMenuRules : MonoBehaviour
         homeButton.onClick.AddListener(OpenHome);
         ballPass.onClick.AddListener(OpenBallPass);
         settingsButton.onClick.AddListener(Settings);
+        if (tutorialButton != null) tutorialButton.onClick.AddListener(StartTutorial);
         
         foreach (var waitToLoadObject in waitToLoadObjects)
         {
@@ -39,6 +41,21 @@ public class MainMenuRules : MonoBehaviour
     private void Settings()
     {
         //Debug.Log("Settings");
+    }
+
+    /// <summary>
+    /// Replayable tutorial entry from Instruccions. Writes only the transient mode flag; the durable
+    /// completed flag is never touched, so replaying and skipping leaves the account where it was.
+    /// </summary>
+    public void StartTutorial()
+    {
+        ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(() =>
+        {
+            Presentation.Tutorial.TutorialResume.Clear();
+            ServiceLocator.Instance.GetService<IStorageData>().SaveDataGlobal(GlobalData.TutorialMode, "1");
+            Debug.Log("[Tutorial] replay requested from Instruccions -> Game in tutorial mode.");
+            SceneManager.LoadScene("Game");
+        });
     }
 
     private void OpenBallPass()
