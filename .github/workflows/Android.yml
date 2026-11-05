@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: What to build
+        description: What to build — dev = apk + webgl, sequential
         required: true
         type: choice
         default: apk
         options:
           - apk
-          - aab
           - webgl
+          - dev
+          - aab
           - all
       bump:
         description: SemVer bump for the next release (ignored unless aab or all)
@@ -108,7 +109,7 @@ jobs:
   build-apk:
     name: Debug APK
     needs: validate
-    if: github.event.inputs.target == 'apk' || github.event.inputs.target == 'all'
+    if: github.event.inputs.target == 'apk' || github.event.inputs.target == 'dev' || github.event.inputs.target == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -194,8 +195,10 @@ jobs:
   # ── WebGL: artifact del run (1 día) + itch canal html5 ──────────────────
   build-webgl:
     name: WebGL
-    needs: validate
-    if: github.event.inputs.target == 'webgl' || github.event.inputs.target == 'all'
+    needs: [validate, build-aab]
+    if: |
+      always() && (github.event.inputs.target == 'webgl' || github.event.inputs.target == 'dev' || github.event.inputs.target == 'all')
+      && (needs.build-aab.result == 'success' || needs.build-aab.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -231,16 +234,29 @@ jobs:
           versioning: Custom
           version: ${{ needs.validate.outputs.version }}
 
+      # Seguro: si el empaquetado falla, el build crudo queda disponible
+      # y no hay que reconstruir para probar la lógica de zip/push.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MatchBall-webgl-raw
+          path: build
+          retention-days: 1
+
       - name: Package WebGL
         run: |
           set -euo pipefail
-          if [ ! -f build/WebGL/index.html ]; then
-            echo "::error::WebGL build is missing index.html"
-            find build -maxdepth 2 -type d | head -20
+          # game-ci anida el output en build/WebGL/<buildName>, así que
+          # buscamos el index.html en vez de asumir la ruta.
+          INDEX=$(find build -name index.html -print -quit)
+          if [ -z "$INDEX" ]; then
+            echo "::error::WebGL build produced no index.html"
+            find build -maxdepth 3 -type d | head -20
             exit 1
           fi
+          ROOT_DIR=$(dirname "$INDEX")
+          echo "WebGL root: $ROOT_DIR"
           mkdir -p dist
-          (cd build/WebGL && zip -qr "../../dist/MatchBall-${{ needs.validate.outputs.version }}-webgl.zip" .)
+          (cd "$ROOT_DIR" && zip -qr "$GITHUB_WORKSPACE/dist/MatchBall-${{ needs.validate.outputs.version }}-webgl.zip" .)
           ls -la dist
 
       - uses: actions/upload-artifact@v4
@@ -266,8 +282,10 @@ jobs:
   # ── Release AAB: firmado, va adjunto al GitHub Release ──────────────────
   build-aab:
     name: Release AAB
-    needs: validate
-    if: github.event.inputs.target == 'aab' || github.event.inputs.target == 'all'
+    needs: [validate, build-apk]
+    if: |
+      always() && (github.event.inputs.target == 'aab' || github.event.inputs.target == 'all')
+      && (needs.build-apk.result == 'success' || needs.build-apk.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
