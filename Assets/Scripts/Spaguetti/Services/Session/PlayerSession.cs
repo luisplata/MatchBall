@@ -131,6 +131,15 @@ public class PlayerSession : MonoBehaviour, IPlayerSessionService, IStorageData,
         return PlayerPrefs.GetString(key.ToString());
     }
 
+    /// <summary>
+    /// Persists what <see cref="SaveDataGlobal"/> staged. <c>PlayerPrefs.SetString</c> alone only
+    /// touches memory, so a durable flag survives a force-kill only after this call.
+    /// </summary>
+    public void FlushGlobal()
+    {
+        PlayerPrefs.Save();
+    }
+
     public UniTask Logout()
     {
         AuthenticationService.Instance.SignOut();
@@ -450,11 +459,20 @@ public interface IStorageData
     void SaveDataGlobal(GlobalData key, string value);
 
     string LoadDataGlobal(GlobalData key);
+
+    /// <summary>Persists the staged global values (SaveDataGlobal does not write to disk by itself).</summary>
+    void FlushGlobal();
 }
 
 public enum GlobalData
 {
-    GameMode
+    GameMode,
+
+    /// <summary>Transient: set to "1" right before loading Game, consumed on read by GameManager.</summary>
+    TutorialMode,
+
+    /// <summary>Durable: set to "true" only when the tutorial is completed or skipped.</summary>
+    TutorialCompleted
 }
 
 public enum GameMode
