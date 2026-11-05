@@ -111,7 +111,7 @@ jobs:
     needs: validate
     if: github.event.inputs.target == 'apk' || github.event.inputs.target == 'dev' || github.event.inputs.target == 'all'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
     steps:
@@ -200,7 +200,7 @@ jobs:
       always() && (github.event.inputs.target == 'webgl' || github.event.inputs.target == 'dev' || github.event.inputs.target == 'all')
       && (needs.build-aab.result == 'success' || needs.build-aab.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
     steps:
@@ -287,7 +287,7 @@ jobs:
       always() && (github.event.inputs.target == 'aab' || github.event.inputs.target == 'all')
       && (needs.build-apk.result == 'success' || needs.build-apk.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     permissions:
       contents: read
     steps:
