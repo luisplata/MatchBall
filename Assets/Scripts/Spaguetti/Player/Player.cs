@@ -128,6 +128,11 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     private void OnGetPoints()
     {
+        // Tutorial matches never award power-ups. The orb factory reads the live inventory
+        // (PowerUpsFactory.Create calls _player.GetPowerUps()), so the empty budget handed to
+        // Configure is not enough to keep one off the lesson board — this is the award choke point.
+        if (_gameManager != null && _gameManager.IsTutorialMode()) return;
+
         _countOfPoints++;
         if (
             _countOfPoints < ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()

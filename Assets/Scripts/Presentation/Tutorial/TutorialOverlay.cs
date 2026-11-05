@@ -47,6 +47,7 @@ namespace Presentation.Tutorial
         {
             retryPanel.SetActive(false);
             card.SetActive(true);
+            skipButton.gameObject.SetActive(true);
             dim.gameObject.SetActive(step == TutorialStep.Close);
 
             dropGroup.SetActive(step == TutorialStep.Drop);
@@ -63,15 +64,22 @@ namespace Presentation.Tutorial
         {
             card.SetActive(false);
             retryPanel.SetActive(true);
+            skipButton.gameObject.SetActive(true);
             dim.gameObject.SetActive(true);
             hintLeft.SetActive(false);
             hintRight.SetActive(false);
         }
 
+        /// <summary>
+        /// Removes every overlay affordance. Skip is part of this list on purpose: it is a
+        /// root-level sibling of the modal layer, so leaving it out leaks a dead 180x80 button
+        /// (and its raycast) into every normal match that shares the scene with this prefab.
+        /// </summary>
         public void Hide()
         {
             card.SetActive(false);
             retryPanel.SetActive(false);
+            skipButton.gameObject.SetActive(false);
             dim.gameObject.SetActive(false);
             hintLeft.SetActive(false);
             hintRight.SetActive(false);
