@@ -2,8 +2,10 @@
 using App.UseCase;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PowerUps;
+using Bootstrap;
 using Commander;
 using Cysharp.Threading.Tasks;
+using Presentation.Tutorial;
 using Spaguetti.Game;
 using TMPro;
 using UnityEngine;
@@ -30,6 +32,13 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     [SerializeField] private PlayableDirector director;
     private bool _isGameOver;
     private int _multiplier = 1;
+    private bool _isTutorialMode;
+
+    /// <summary>Fixed feed for the first-run lesson: drop, then build the 3+ match on tap six.</summary>
+    private static readonly string[] TutorialBallOrder =
+    {
+        "blue", "red", "blue", "red", "blue", "blue"
+    };
 
     private readonly FullBalanceCondition _fullBalanceCondition = new();
     private readonly FirstTo100PointsRule _firstTo100PointsRule = new();
@@ -56,6 +65,34 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         Application.runInBackground = true;
         _winConditions.Add(_firstTo100PointsRule);
         _winConditions.Add(_timeAttackRule);
+
+        ConsumeTutorialMode();
+    }
+
+    /// <summary>
+    /// Reads the transient tutorial flag and consumes it immediately, so it can never reach a second
+    /// match. In tutorial mode the AI player is switched off before its Awake/Configure chain can run
+    /// and the human factory is reseeded with the lesson script.
+    /// </summary>
+    private void ConsumeTutorialMode()
+    {
+        var storage = ServiceLocator.Instance.GetService<IStorageData>();
+        _isTutorialMode = storage.LoadDataGlobal(GlobalData.TutorialMode) == "1";
+
+        if (!_isTutorialMode)
+        {
+            TutorialResume.Clear();
+            return;
+        }
+
+        storage.SaveDataGlobal(GlobalData.TutorialMode, string.Empty);
+
+        if (player2 != null) player2.gameObject.SetActive(false);
+        if (gameMode != null) gameMode.gameObject.SetActive(false);
+
+        var ballFactory = Player1.GetBallZone()?.GetBallFactory();
+        ballFactory?.SetConsumptionOrder(TutorialBallOrder);
+        Debug.Log("[Tutorial] tutorial mode active: random win condition, AI, XP, gold and power-up spend suppressed.");
     }
 
     public void DuplcateCoins()
@@ -68,6 +105,12 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
 
         _isGameOver = false;
+
+        if (_isTutorialMode)
+        {
+            StartTutorialMatch();
+            return;
+        }
 
         //load win condition from random wincondition and inject context
         _winCondition = _winConditions[Random.Range(0, _winConditions.Count)];
@@ -106,8 +149,24 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         });
     }
 
+    /// <summary>
+    /// Boots the human player alone: no win condition, no AI in the command queue, and an empty
+    /// power-up budget so nothing can spawn or be spent while the lesson runs.
+    /// </summary>
+    private void StartTutorialMatch()
+    {
+        ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player1);
+
+        ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
+        {
+            PlayerRef1.Configure(this, System.Array.Empty<PowerUpData>());
+            Debug.Log("[Tutorial] human player configured without power-ups; AI skipped.");
+        });
+    }
+
     private void Update()
     {
+        if (_isTutorialMode) return;
         if (!ArePlayersReady() || _isGameOver) return;
 
         // Track elapsed game time for time-based win conditions
@@ -116,6 +175,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void FixedUpdate()
     {
+        if (_isTutorialMode) return;
         if (!PlayerRef1.IsReadyToPlay() || !player2.ReadyToPlay()) return;
 
         // Update win condition (e.g., accumulate timer)
@@ -141,6 +201,9 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void ResolveGameOver(WinResult result)
     {
+        // The tutorial treats an overflow as a retry: never a real game over, never XP.
+        if (_isTutorialMode) return;
+
         Player1.DisableControls();
         _isGameOver = true;
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
@@ -171,6 +234,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     public bool ArePlayersReady()
     {
+        if (_isTutorialMode) return false;
         return PlayerRef1.IsReadyToPlay() && player2.ReadyToPlay();
     }
 
@@ -178,10 +242,18 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void OnDestroy()
     {
-        ServiceLocator.Instance.GetService<ICommandQueue>().ClearCommands(Player1);
-        ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(Player1);
-        ServiceLocator.Instance.GetService<ICommandQueue>().ClearCommands(player2.GetPlayer());
-        ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(player2.GetPlayer());
+        // The tutorial never creates the AI player, so its commands were never queued.
+        if (player2 != null && player2.GetPlayer() != null)
+        {
+            ServiceLocator.Instance.GetService<ICommandQueue>().ClearCommands(player2.GetPlayer());
+            ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(player2.GetPlayer());
+        }
+
+        // The queue may already be gone while the editor tears Play mode down.
+        if (!ServiceLocator.Instance.TryGetService<ICommandQueue>(out var queue) || queue == null) return;
+
+        queue.ClearCommands(Player1);
+        queue.RemovePlayer(Player1);
     }
 
     public void RestartApplication()
@@ -227,6 +299,12 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         return _isGameOver;
     }
 
+    /// <summary>True only while this match was booted by the transient tutorial flag.</summary>
+    public bool IsTutorialMode()
+    {
+        return _isTutorialMode;
+    }
+
     public IPlayer GetOtherPlayer(IPlayer player)
     {
         return player is MachinePlayer ? Player1 : player2.GetPlayer();
@@ -241,5 +319,6 @@ public interface IGameManager
     string GetMusic();
     IPlayer GetFirstPlayer();
     bool IsGameOver();
+    bool IsTutorialMode();
     IPlayer GetOtherPlayer(IPlayer player);
 }
