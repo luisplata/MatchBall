@@ -1,24 +1,22 @@
-using System;
 using Domain.Services;
 using UnityEngine;
 
 namespace Presentation.Game
 {
     /// <summary>
-    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and
-    /// <see cref="PlacementDeadlineController.CurrentRisk"/>, pulses a brief frame shake at
-    /// <c>max(boardRisk, deadlineRisk)</c> while the board is one or two moves from a loss or its
-    /// deadline is running out. This view is the sole writer of the board-root transform. The AI
-    /// board never shakes; the pulse stops and the authored pose is restored the moment the risk
-    /// clears, the match ends, or the view is disabled/destroyed. Visual only: no audio, no
-    /// haptics, and nothing that changes placement, scoring, outcome or save data.
+    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and pulses a brief frame
+    /// shake while the board is one or two moves from a loss. This view is the sole writer of the
+    /// board-root transform; deadline pressure is shown by
+    /// <see cref="PendingBallsDeadlineShakeView"/> on the queue row, not here. The AI board never
+    /// shakes; the pulse stops and the authored pose is restored the moment the risk clears, the
+    /// match ends, or the view is disabled/destroyed. Visual only: no audio, no haptics, and
+    /// nothing that changes placement, scoring, outcome or save data.
     /// </summary>
     public sealed class BalanceDangerShakeView : MonoBehaviour
     {
         [SerializeField] private Balance balance;
         [Tooltip("Optional. Defaults to this transform (the board root). Leave empty.")]
         [SerializeField] private Transform shakeTarget;
-        [SerializeField] private PlacementDeadlineController deadline;
 
         private const float MildAmplitude = 0.03f;
         private const float MildTiltDegrees = 0.6f;
@@ -115,15 +113,7 @@ namespace Presentation.Game
 
         private void LateUpdate()
         {
-            var effective = BalanceRisk.Safe;
-            if (IsHumanBoard() && !IsGameOver())
-            {
-                // The deadline never adds a writer: it only feeds a second risk input, and this
-                // view stays the sole transform writer. A null deadline preserves pre-change
-                // behavior (board risk only).
-                var deadlineRisk = deadline != null ? deadline.CurrentRisk : BalanceRisk.Safe;
-                effective = (BalanceRisk)Math.Max((int)_boardRisk, (int)deadlineRisk);
-            }
+            var effective = IsHumanBoard() && !IsGameOver() ? _boardRisk : BalanceRisk.Safe;
 
             if (effective == BalanceRisk.Safe)
             {

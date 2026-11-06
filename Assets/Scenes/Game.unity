@@ -6632,6 +6632,7 @@ GameObject:
   - component: {fileID: 413823418}
   - component: {fileID: 413823419}
   - component: {fileID: 1987654322}
+  - component: {fileID: 9000000002}
   m_Layer: 0
   m_Name: Player (2)
   m_TagString: Untagged
@@ -6709,7 +6710,6 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   balance: {fileID: 1229436175}
   shakeTarget: {fileID: 0}
-  deadline: {fileID: 1987654322}
 --- !u!114 &1987654322
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6725,6 +6725,25 @@ MonoBehaviour:
   balance: {fileID: 1229436175}
   ballZone: {fileID: 74485331}
   limitSeconds: 10
+--- !u!114 &9000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 413823414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 144d06acd9326ee3f8a48501d8b3faa5, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  ballZone: {fileID: 74485331}
+  deadline: {fileID: 1987654322}
+  mildAmplitude: 0.1
+  strongAmplitude: 0.18
+  mildInterval: 2
+  strongInterval: 1.1
+  pulseDuration: 0.18
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
@@ -20432,6 +20451,7 @@ GameObject:
   - component: {fileID: 1594678065}
   - component: {fileID: 1594678066}
   - component: {fileID: 1987654321}
+  - component: {fileID: 9000000001}
   m_Layer: 0
   m_Name: Player (1)
   m_TagString: Untagged
@@ -20495,7 +20515,6 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   balance: {fileID: 1049846897}
   shakeTarget: {fileID: 0}
-  deadline: {fileID: 1987654321}
 --- !u!114 &1987654321
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -20511,6 +20530,25 @@ MonoBehaviour:
   balance: {fileID: 1049846897}
   ballZone: {fileID: 1479719646}
   limitSeconds: 10
+--- !u!114 &9000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594678063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 144d06acd9326ee3f8a48501d8b3faa5, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  ballZone: {fileID: 1479719646}
+  deadline: {fileID: 1987654321}
+  mildAmplitude: 0.1
+  strongAmplitude: 0.18
+  mildInterval: 2
+  strongInterval: 1.1
+  pulseDuration: 0.18
 --- !u!1 &1602182341
 GameObject:
   m_ObjectHideFlags: 0

@@ -134,6 +134,13 @@ public class BallZone : MonoBehaviour, IBallZone
         return _balls.Length - _overFlow - 1;
     }
 
+    /// <summary>
+    /// Total number of queue slots in the backing array. Read-only, for anything that needs to
+    /// walk the whole slot array (e.g. the pending-row shake) rather than the visible ball count
+    /// reported by <see cref="GetCountOfBalls"/> (which undercounts while an overflow is active).
+    /// </summary>
+    public int SlotCount => _balls.Length;
+
     public GameObject GetBallPositionGameObject(int i)
     {
         return ballPoints[i];
