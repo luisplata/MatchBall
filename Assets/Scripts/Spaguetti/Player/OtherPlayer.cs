@@ -32,12 +32,13 @@ public class OtherPlayer : MonoBehaviour
     public TextMeshProUGUI NameText => nameText;
 
 
-    public void Configure(IGameManager gameManager, float timeToWait, IReadOnlyList<PowerUpData> powerUps)
+    public void Configure(IGameManager gameManager, float timeToWait, IReadOnlyList<PowerUpData> powerUps,
+        string displayName = "AI")
     {
         if (scoreText != null) scoreText.text = "0";
         else Debug.LogWarning("[OtherPlayer] scoreText is not wired.");
 
-        if (nameText != null) nameText.text = "AI";
+        if (nameText != null) nameText.text = displayName;
         else Debug.LogWarning("[OtherPlayer] nameText is not wired.");
 
         Player2.Configure(gameManager, powerUps);
@@ -59,9 +60,28 @@ public class OtherPlayer : MonoBehaviour
         return Player2.IsReadyToPlay();
     }
 
-    public void AddPlayerInQueue(IGameManager gameManager, int randomToUsePowerUp)
+    /// <summary>
+    /// Seeds P2 with the mediator this match needs. The default keeps the AI path byte-identical;
+    /// local PvP passes isHuman and gets the human mediator instead.
+    /// </summary>
+    public void AddPlayerInQueue(IGameManager gameManager, int randomToUsePowerUp, bool isHuman = false)
     {
-        Player2 = new MachinePlayer(this, gameManager, freezePlayerMono, randomToUsePowerUp);
+        if (isHuman)
+        {
+            var humanBallZone = ballzone as BallZone;
+            if (humanBallZone == null)
+            {
+                // Fail closed: without the concrete zone P2 can neither play nor spawn orbs.
+                Debug.LogError("[OtherPlayer] local PvP needs a concrete BallZone on P2; P2 will not play.");
+            }
+
+            Player2 = new HumanP2Player(this, gameManager, freezePlayerMono, humanBallZone);
+        }
+        else
+        {
+            Player2 = new MachinePlayer(this, gameManager, freezePlayerMono, randomToUsePowerUp);
+        }
+
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);
     }
 
