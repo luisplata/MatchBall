@@ -13,7 +13,10 @@ public class FreezePlayerMono : MonoBehaviour
             transform =
             {
                 position = zone.transform.position,
-                localScale = zone.transform.localScale
+                localScale = zone.transform.localScale,
+                // The zone is a child of its board: after the P2 flip its up axis is the board's,
+                // so the overlay must inherit the rotation or it renders upside down.
+                rotation = zone.transform.rotation
             }
         };
         var spriteRenderer = _freezeZone.AddComponent<SpriteRenderer>();

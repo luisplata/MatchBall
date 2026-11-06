@@ -6691,7 +6691,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   balance: {fileID: 1229436175}
   hudCluster: {fileID: 0}
-  screenSpaceStragglers: []
+  screenSpaceStragglers:
+  - {fileID: 1393882834}
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
