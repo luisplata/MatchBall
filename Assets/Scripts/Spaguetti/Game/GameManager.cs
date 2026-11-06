@@ -35,19 +35,6 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     private bool _isTutorialMode;
     private bool _isLocalPvP;
 
-    /// <summary>Local PvP alternation state. Owned here because this is where both players, the
-    /// win loop and the mode flags already live. Never leaves Off outside local PvP.</summary>
-    private enum TurnPhase
-    {
-        Off,
-        WaitingForAction,
-        Acting,
-        Over
-    }
-
-    private TurnPhase _turnPhase = TurnPhase.Off;
-    private IPlayer _activePlayer;
-
     /// <summary>Fixed feed for the first-run lesson: drop, then build the 3+ match on tap six.</summary>
     private static readonly string[] TutorialBallOrder =
     {
@@ -212,100 +199,11 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private void Update()
     {
-        UpdateTurnMachine();
-
         if (_isTutorialMode) return;
         if (!ArePlayersReady() || _isGameOver) return;
 
         // Track elapsed game time for time-based win conditions
         _elapsedGameTime += Time.deltaTime;
-    }
-
-    /// <summary>
-    /// Local PvP alternation: exactly one board accepts input at a time.
-    ///
-    /// "Acting" is only ever entered by an accepted action (NotifyPlayerActed), never inferred from
-    /// animation or timing, and it ends only when BOTH queues are idle. Both, because ICE adds its
-    /// FreezeBall to the opponent's queue and RAY adds no command at all: polling the actor's queue
-    /// alone would hand the turn over before the effect had run.
-    ///
-    /// Consequence of that rule, accepted on purpose: an ICE freeze DELAYS the hand-off for as long
-    /// as the freeze lasts; it does not deny the frozen player their turn. The actor therefore keeps
-    /// the turn, and their board stays enabled, until the freeze expires. Denying the turn instead
-    /// would be a rules change (see the design's known limitations).
-    ///
-    /// Outside local PvP this method is a no-op and the phase stays Off forever.
-    /// </summary>
-    private void UpdateTurnMachine()
-    {
-        if (!_isLocalPvP) return;
-
-        if (_isGameOver)
-        {
-            if (_turnPhase == TurnPhase.Over) return;
-            _turnPhase = TurnPhase.Over;
-            Player1.DisableControls();
-            player2.GetPlayer()?.DisableControls();
-            Debug.Log("[PvP] turn -> Over: both boards disabled.");
-            return;
-        }
-
-        switch (_turnPhase)
-        {
-            case TurnPhase.Off:
-                if (!ArePlayersReady()) return;
-                _activePlayer = Player1;
-                _turnPhase = TurnPhase.WaitingForAction;
-                _activePlayer.EnableControls();
-                player2.GetPlayer()?.DisableControls();
-                Debug.Log($"[PvP] turn -> WaitingForAction: '{_activePlayer.Id}' starts.");
-                break;
-
-            case TurnPhase.Acting:
-                var inactive = GetInactivePlayer();
-                if (IsQueueBusy(_activePlayer) || IsQueueBusy(inactive)) return;
-                BeginTurn(inactive);
-                break;
-        }
-    }
-
-    /// <summary>Hands the turn to <paramref name="next"/>: new active enabled, previous disabled.</summary>
-    private void BeginTurn(IPlayer next)
-    {
-        if (next == null) return;
-
-        var previous = _activePlayer;
-        _activePlayer = next;
-        _turnPhase = TurnPhase.WaitingForAction;
-        next.EnableControls();
-        if (previous != null && !ReferenceEquals(previous, next)) previous.DisableControls();
-        Debug.Log($"[PvP] turn -> WaitingForAction: '{next.Id}' is active.");
-    }
-
-    private IPlayer GetInactivePlayer()
-    {
-        return ReferenceEquals(_activePlayer, Player1) ? player2.GetPlayer() : Player1;
-    }
-
-    private static bool IsQueueBusy(IPlayer player)
-    {
-        if (player == null) return false;
-        return ServiceLocator.Instance.GetService<ICommandQueue>().IsBusy(player);
-    }
-
-    /// <summary>
-    /// The single "this player acted" signal, raised by the four accepted-action funnels (path tap on
-    /// either mediator, switch press, orb use). A rejected input never reaches this method, so it can
-    /// never pass the turn; a second call while Acting is ignored.
-    /// </summary>
-    public void NotifyPlayerActed(IPlayer player)
-    {
-        if (!_isLocalPvP || _isGameOver) return;
-        if (_turnPhase != TurnPhase.WaitingForAction) return;
-        if (!ReferenceEquals(player, _activePlayer)) return;
-
-        _turnPhase = TurnPhase.Acting;
-        Debug.Log($"[PvP] turn -> Acting: '{player.Id}'.");
     }
 
     private void FixedUpdate()
@@ -479,5 +377,4 @@ public interface IGameManager
     bool IsTutorialMode();
     bool IsLocalPvP();
     IPlayer GetOtherPlayer(IPlayer player);
-    void NotifyPlayerActed(IPlayer player);
 }

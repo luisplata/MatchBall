@@ -23,8 +23,8 @@ public class BallZone : MonoBehaviour, IBallZone
     private int _ballIndex = -1;
     private Coroutine _fillRoutine;
 
-    // Input ownership gate. It only means anything in local PvP: outside it IsInputEnabled() is
-    // always true, so PvE and the tutorial keep today's semantics exactly.
+    // Controls gate: a board that has been closed (game over) stops accepting taps. Outside local
+    // PvP IsInputEnabled() is always true, so PvE and the tutorial keep today's semantics exactly.
     private bool _inputEnabled = true;
 
     private IMediatorBallZone _player;
@@ -71,7 +71,6 @@ public class BallZone : MonoBehaviour, IBallZone
         var player = _player.GetPlayer();
         ServiceLocator.Instance.GetService<ICommandQueue>()
             .AddCommand(new SwitchBallsCommand(_balls, ballPoints), player);
-        _gameManager?.NotifyPlayerActed(player);
     }
 
     private IEnumerator FillQueueCoroutine()
