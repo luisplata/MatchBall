@@ -108,6 +108,10 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         _isLocalPvP = storage.LoadDataGlobal(GlobalData.LocalPvP) == "1";
         storage.SaveDataGlobal(GlobalData.LocalPvP, string.Empty);
 
+        // A stale flag left by an interrupted PvP route must never take over the lesson: the
+        // tutorial has one player and would end up with a flipped board for nobody.
+        if (_isTutorialMode) _isLocalPvP = false;
+
         if (!_isLocalPvP) return;
 
         Debug.Log("[PvP] local PvP mode active: P2 is human, no Matching, no ad, no Lobby.");

@@ -46,7 +46,7 @@ public sealed class PlayerBoardView : MonoBehaviour
         transform.SetPositionAndRotation(targetPosition, Quaternion.Euler(0f, 0f, 180f));
 
         // Rotate each block about its own centre, NOT the cluster container. The blocks are
-        // edge-anchored (score pinned to the cluster's top edge, name to its bottom), so rotating
+        // edge-anchored (name pinned to the cluster's top edge, score to its bottom), so rotating
         // the container leaves its box in place but swaps the blocks inside it.
         //
         // Then move the whole cluster to the opposite screen edge: P1's sits above its ball queue
