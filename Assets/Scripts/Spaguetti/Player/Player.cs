@@ -150,10 +150,14 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     private void OnBalanceClicked(PathType sidePathType)
     {
+        // The editor A/D shortcut raises this on BOTH boards; this gate is what keeps it from
+        // driving the inactive one (and from passing the turn twice). True outside PvP.
+        if (ballZone != null && !ballZone.IsInputEnabled()) return;
         var result = ServiceLocator.Instance.GetService<ICommandQueue>().IsBusy(this);
         if (result) return;
         ServiceLocator.Instance.GetService<ICommandQueue>()
             .AddCommand(new TryBallInBalanceCommand(ballZone, sidePathType, balance), this);
+        _gameManager?.NotifyPlayerActed(this);
     }
 
     public void AddPoints(int points)

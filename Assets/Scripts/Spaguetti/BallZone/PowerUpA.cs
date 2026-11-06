@@ -12,9 +12,14 @@ public abstract class PowerUpA : Ball, IPowerUp
     protected override void OnDragFunction()
     {
         base.OnDragFunction();
+        // The inactive board's orbs are dead to the touch: no effect, no command, no turn pass.
+        if (_ballZone == null || !_ballZone.IsInputEnabled()) return;
         if (_ballZone.CanUsePowerUp() && _ballZone.UsePowerUp(this))
         {
             OnActionWithClick();
+            // Only inside the success branch: RAY adds no command of its own and a rejected drag
+            // must not hand the move to the opponent.
+            _player?.GetGameManager()?.NotifyPlayerActed(_player);
         }
     }
 

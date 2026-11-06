@@ -23,6 +23,10 @@ public class BallZone : MonoBehaviour, IBallZone
     private int _ballIndex = -1;
     private Coroutine _fillRoutine;
 
+    // Input ownership gate. It only means anything in local PvP: outside it IsInputEnabled() is
+    // always true, so PvE and the tutorial keep today's semantics exactly.
+    private bool _inputEnabled = true;
+
     private IMediatorBallZone _player;
     private IGameManager _gameManager;
 
@@ -53,6 +57,7 @@ public class BallZone : MonoBehaviour, IBallZone
 
     public void EnableControls()
     {
+        _inputEnabled = true;
     }
 
     public BallFactory GetBallFactory()
@@ -62,8 +67,11 @@ public class BallZone : MonoBehaviour, IBallZone
 
     private void OnSwitchClicked()
     {
+        if (!IsInputEnabled()) return;
+        var player = _player.GetPlayer();
         ServiceLocator.Instance.GetService<ICommandQueue>()
-            .AddCommand(new SwitchBallsCommand(_balls, ballPoints), _player.GetPlayer());
+            .AddCommand(new SwitchBallsCommand(_balls, ballPoints), player);
+        _gameManager?.NotifyPlayerActed(player);
     }
 
     private IEnumerator FillQueueCoroutine()
@@ -181,6 +189,18 @@ public class BallZone : MonoBehaviour, IBallZone
 
     public void DisableControls()
     {
+        _inputEnabled = false;
+    }
+
+    /// <summary>
+    /// Single input gate consulted by the switch handler and by the two mediators' path funnels
+    /// (the orb handler reads it too). Outside local PvP every read is true on purpose: without the
+    /// two escape clauses the flag would silently harden ICE's freeze in PvE (it would freeze the
+    /// orbs and the switch as well as the paths) and nothing would catch it.
+    /// </summary>
+    public bool IsInputEnabled()
+    {
+        return _inputEnabled || _gameManager == null || !_gameManager.IsLocalPvP();
     }
 
     public void CreatePowerUp()
@@ -300,6 +320,7 @@ public interface IBallZone
     void SetLastBall(Ball o);
     void DisableControls();
     void Configure(IMediatorBallZone player, IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
+    bool IsInputEnabled();
     IPlayer GetPlayer();
     IMediatorBallZone GetBallZone();
     GameObject GetBallPointToSpawn();

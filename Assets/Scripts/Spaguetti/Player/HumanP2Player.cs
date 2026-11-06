@@ -179,9 +179,11 @@ public sealed class HumanP2Player : IPlayer, IMediatorBalance, IMediatorBallZone
     {
         if (_isGameOver) return;
         if (_ballZone == null) return;
+        if (!_ballZone.IsInputEnabled()) return;
         if (ServiceLocator.Instance.GetService<ICommandQueue>().IsBusy(this)) return;
         ServiceLocator.Instance.GetService<ICommandQueue>()
             .AddCommand(new TryBallInBalanceCommand(_ballZone, sidePathType, _balance), this);
+        _gameManager?.NotifyPlayerActed(this);
     }
 
     private void OnGetPoints()
