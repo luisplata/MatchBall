@@ -17,6 +17,7 @@ public class Reward : MonoBehaviour
     [SerializeField] private Image rewardIcon;
     [SerializeField] private TextMeshProUGUI rewardText;
     private RewardData _rewardData;
+    private bool _isClaiming;
 
     public async UniTask Configure(RewardData reward)
     {
@@ -38,24 +39,33 @@ public class Reward : MonoBehaviour
 
     private async void CallRewarded()
     {
-        //Debug.Log("Reward button clicked to be rewarded");
+        if (_isClaiming) return;
+
+        _isClaiming = true;
+        rewardButton.interactable = false;
         //reiniciar los eventos del boton
         rewardButton.onClick.RemoveAllListeners();
+
         try
         {
+            var reward = await ServiceLocator.Instance.GetService<IClaimRewardService>().ClaimReward(_rewardData);
+            // Persist the claim only after the reward was granted, so a failed grant stays claimable.
             await ServiceLocator.Instance.GetService<ILoginUseCase>().ClaimReward(_rewardData.Level);
-            var regard = await ServiceLocator.Instance.GetService<IClaimRewardService>().ClaimReward(_rewardData);
-            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Reward {regard.type} claimed", 3)
+
+            claimed.SetActive(true);
+            ServiceLocator.Instance.GetService<IMessageService>().ShowMessage($"Reward {reward.type} claimed", 3)
                 .Forget();
         }
         catch (Exception e)
         {
-            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage(e.Message, 3).Forget();
+            rewardButton.interactable = true;
             rewardButton.onClick.AddListener(CallRewarded);
+            ServiceLocator.Instance.GetService<IMessageService>().ErrorMessage(e.Message, 3).Forget();
         }
-
-        claimed.SetActive(true);
-        //Debug.Log("Reward claimed");
+        finally
+        {
+            _isClaiming = false;
+        }
     }
 
     public async UniTask AnimToReceived(float duration)
