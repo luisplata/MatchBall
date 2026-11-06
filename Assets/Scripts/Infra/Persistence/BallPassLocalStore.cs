@@ -96,6 +96,39 @@ namespace Infra.Persistence
             return false;
         }
 
+        /// <summary>
+        /// Clears local pass progress only: level, experience and every claimed flag. The stored key
+        /// is deleted and immediately rewritten with a fresh zero state; GOLD, the inventory and every
+        /// other PlayerPrefs key are untouched. Idempotent.
+        /// </summary>
+        public static void ResetProgress()
+        {
+            PlayerPrefs.DeleteKey(Key);
+            Save(null);
+        }
+
+        /// <summary>
+        /// Read-only snapshot of the stored pass for logging: level, experience, claimed rows out of the
+        /// shipped rows, and the PlayerPrefs key. Reads through <see cref="Load" /> and never writes, so a
+        /// missing or legacy document reports the normalized zero state instead of throwing.
+        /// </summary>
+        public static string DescribeCurrentState()
+        {
+            var document = Load();
+            var rows = document.data.rewards;
+            var claimed = 0;
+            if (rows != null)
+            {
+                foreach (var row in rows)
+                {
+                    if (row != null && row.claimed == 1) claimed++;
+                }
+            }
+
+            return $"level {document.data.battlePass.level}, experience {document.data.battlePass.experience}, " +
+                   $"claimed {claimed}/{rows?.Count ?? 0}, key '{Key}'";
+        }
+
         private static PlayerPassBallResponseDto CreateZeroState()
         {
             var timestamp = DateTime.UtcNow.ToString(TimestampFormat, CultureInfo.InvariantCulture);
