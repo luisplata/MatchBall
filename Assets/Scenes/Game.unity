@@ -6631,6 +6631,7 @@ GameObject:
   - component: {fileID: 413823417}
   - component: {fileID: 413823418}
   - component: {fileID: 413823419}
+  - component: {fileID: 1987654322}
   m_Layer: 0
   m_Name: Player (2)
   m_TagString: Untagged
@@ -6708,6 +6709,22 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   balance: {fileID: 1229436175}
   shakeTarget: {fileID: 0}
+  deadline: {fileID: 1987654322}
+--- !u!114 &1987654322
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 413823414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4f7a9b2c1d05e6f8a3b7c9d1e2f4056, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  balance: {fileID: 1229436175}
+  ballZone: {fileID: 74485331}
+  limitSeconds: 10
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
@@ -20414,6 +20431,7 @@ GameObject:
   - component: {fileID: 1594678064}
   - component: {fileID: 1594678065}
   - component: {fileID: 1594678066}
+  - component: {fileID: 1987654321}
   m_Layer: 0
   m_Name: Player (1)
   m_TagString: Untagged
@@ -20477,6 +20495,22 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   balance: {fileID: 1049846897}
   shakeTarget: {fileID: 0}
+  deadline: {fileID: 1987654321}
+--- !u!114 &1987654321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594678063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4f7a9b2c1d05e6f8a3b7c9d1e2f4056, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  balance: {fileID: 1049846897}
+  ballZone: {fileID: 1479719646}
+  limitSeconds: 10
 --- !u!1 &1602182341
 GameObject:
   m_ObjectHideFlags: 0

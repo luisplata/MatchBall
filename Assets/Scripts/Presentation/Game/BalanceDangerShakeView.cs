@@ -5,17 +5,20 @@ using UnityEngine;
 namespace Presentation.Game
 {
     /// <summary>
-    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and pulses a brief
-    /// frame shake while the board is one or two moves from a loss. The AI board never
-    /// shakes; the pulse stops and the authored pose is restored the moment the risk clears,
-    /// the match ends, or the view is disabled/destroyed. Visual only: no audio, no haptics,
-    /// and nothing that changes placement, scoring, outcome or save data.
+    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and
+    /// <see cref="PlacementDeadlineController.CurrentRisk"/>, pulses a brief frame shake at
+    /// <c>max(boardRisk, deadlineRisk)</c> while the board is one or two moves from a loss or its
+    /// deadline is running out. This view is the sole writer of the board-root transform. The AI
+    /// board never shakes; the pulse stops and the authored pose is restored the moment the risk
+    /// clears, the match ends, or the view is disabled/destroyed. Visual only: no audio, no
+    /// haptics, and nothing that changes placement, scoring, outcome or save data.
     /// </summary>
     public sealed class BalanceDangerShakeView : MonoBehaviour
     {
         [SerializeField] private Balance balance;
         [Tooltip("Optional. Defaults to this transform (the board root). Leave empty.")]
         [SerializeField] private Transform shakeTarget;
+        [SerializeField] private PlacementDeadlineController deadline;
 
         private const float MildAmplitude = 0.03f;
         private const float MildTiltDegrees = 0.6f;
@@ -30,7 +33,8 @@ namespace Presentation.Game
         private Vector3 _baseLocalPosition;
         private Quaternion _baseLocalRotation;
         private bool _hasBase;
-        private BalanceRisk _activeRisk = BalanceRisk.Safe;
+        private BalanceRisk _boardRisk = BalanceRisk.Safe;
+        private BalanceRisk _effectiveRisk = BalanceRisk.Safe;
         private float _phaseStart;
 
         private void OnEnable()
@@ -44,7 +48,7 @@ namespace Presentation.Game
             }
 
             balance.RiskChanged += OnRiskChanged;
-            ApplyRisk(balance.CurrentRisk);
+            _boardRisk = balance.CurrentRisk;
         }
 
         private void OnDisable()
@@ -52,7 +56,7 @@ namespace Presentation.Game
             if (balance != null) balance.RiskChanged -= OnRiskChanged;
             RestoreBase();
             _hasBase = false;
-            _activeRisk = BalanceRisk.Safe;
+            _effectiveRisk = BalanceRisk.Safe;
         }
 
         private void OnDestroy()
@@ -63,32 +67,7 @@ namespace Presentation.Game
 
         private void OnRiskChanged(BalanceRisk risk)
         {
-            ApplyRisk(risk);
-        }
-
-        private void ApplyRisk(BalanceRisk risk)
-        {
-            // Safe needs no player lookup: it must also short-circuit the unconfigured
-            // window at OnEnable, where Balance._player is still null and GetPlayer()
-            // would dereference it.
-            if (risk == BalanceRisk.Safe)
-            {
-                StopPulse();
-                return;
-            }
-
-            // The AI board must never shake: only the first human, or any board in local PvP.
-            if (!IsHumanBoard() || IsGameOver())
-            {
-                StopPulse();
-                return;
-            }
-
-            // Capture the base pose only now, never in OnEnable, where the board's
-            // orientation may not have been applied yet.
-            CaptureBase();
-            _activeRisk = risk;
-            _phaseStart = Time.unscaledTime;
+            _boardRisk = risk;
         }
 
         private bool IsHumanBoard()
@@ -124,7 +103,7 @@ namespace Presentation.Game
         {
             RestoreBase();
             _hasBase = false;
-            _activeRisk = BalanceRisk.Safe;
+            _effectiveRisk = BalanceRisk.Safe;
         }
 
         private void RestoreBase()
@@ -136,15 +115,35 @@ namespace Presentation.Game
 
         private void LateUpdate()
         {
-            if (_activeRisk == BalanceRisk.Safe || !_hasBase || _target == null) return;
+            var effective = BalanceRisk.Safe;
+            if (IsHumanBoard() && !IsGameOver())
+            {
+                // The deadline never adds a writer: it only feeds a second risk input, and this
+                // view stays the sole transform writer. A null deadline preserves pre-change
+                // behavior (board risk only).
+                var deadlineRisk = deadline != null ? deadline.CurrentRisk : BalanceRisk.Safe;
+                effective = (BalanceRisk)Math.Max((int)_boardRisk, (int)deadlineRisk);
+            }
 
-            if (IsGameOver())
+            if (effective == BalanceRisk.Safe)
             {
                 StopPulse();
                 return;
             }
 
-            var (amplitude, tilt, interval) = Tuning(_activeRisk);
+            if (effective != _effectiveRisk)
+            {
+                // Capture the base pose only now, never in OnEnable, where the board's
+                // orientation may not have been applied yet. A level change restarts the phase
+                // without re-capturing (so a mid-pulse pose is never frozen as the base).
+                CaptureBase();
+                _effectiveRisk = effective;
+                _phaseStart = Time.unscaledTime;
+            }
+
+            if (!_hasBase || _target == null) return;
+
+            var (amplitude, tilt, interval) = Tuning(_effectiveRisk);
             var phase = (Time.unscaledTime - _phaseStart) % interval;
             if (phase >= PulseDuration)
             {

@@ -84,7 +84,9 @@ public class Balance : MonoBehaviour, IBalance
 
     public IPlayer GetPlayer()
     {
-        return _player.GetPlayer();
+        // Null-safe: _player is unset in the pre-`Configure` window (OnEnable runs before the
+        // mediator wires itself), so callers that poll per frame must never dereference a null.
+        return _player?.GetPlayer();
     }
 
     public string GetTheColorOfLargestNumberOfBalls()
