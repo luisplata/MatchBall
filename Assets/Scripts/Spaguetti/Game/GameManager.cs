@@ -461,7 +461,10 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     public IPlayer GetOtherPlayer(IPlayer player)
     {
-        return player is MachinePlayer ? Player1 : player2.GetPlayer();
+        // Identity, not type: a human P2 is not a MachinePlayer, and the type test answered with P2
+        // itself, so P2's orbs hit P2's own board. In PvE both directions map exactly as before
+        // (Player -> P2, MachinePlayer -> Player1).
+        return ReferenceEquals(player, Player1) ? player2.GetPlayer() : Player1;
     }
 }
 
