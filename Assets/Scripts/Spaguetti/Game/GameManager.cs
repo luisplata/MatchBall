@@ -238,23 +238,34 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         if (_isTutorialMode) return;
 
         Player1.DisableControls();
+        if (_isLocalPvP) player2.GetPlayer()?.DisableControls();
         _isGameOver = true;
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
         Debug.Log($"Game Over! Winner: {result.Winner.GetType().Name}, Loser: {result.Loser.GetType().Name}");
 
+        // The panel stays P1-framed on purpose (a P2 win shows the game-over panel); what matters
+        // for local PvP is that a result resolves in both directions and no account is credited.
         bool playerWon = result.Winner == Player1;
 
         if (playerWon)
         {
             youWinPanel.SetActive(true);
             ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Win");
-            ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
+            if (!_isLocalPvP) ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
         }
         else
         {
             gameOverPanel.SetActive(true);
             ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Lose");
-            ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
+            if (!_isLocalPvP) ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
+        }
+
+        if (_isLocalPvP)
+        {
+            // Both boards are dead for either outcome. GameOver also makes a queued FreezeBall's
+            // EnableControls a no-op, so a straggler command cannot revive a finished board.
+            Player1.GameOver();
+            player2.GetPlayer()?.GameOver();
         }
     }
 
@@ -296,7 +307,9 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private async void AddCoinsAndLoadScene()
     {
-        await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddMatchGold(Player1.GetCoins() * _multiplier);
+        // Local PvP leaves the wallet exactly as it was: the match scores are not currency.
+        if (!_isLocalPvP)
+            await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddMatchGold(Player1.GetCoins() * _multiplier);
         SceneManager.LoadScene("BallPass");
     }
 

@@ -40,6 +40,8 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     public void EnableControls()
     {
+        // A FreezeBall in flight must not revive a board that already won or lost.
+        if (_isGameOver) return;
         balance.EnableControls();
         ballZone.EnableControls();
     }
