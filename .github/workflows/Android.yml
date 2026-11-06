@@ -51,10 +51,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard — main branch only
-        if: github.ref != 'refs/heads/main'
+      # Solo los targets de release (aab/all) crean tag y publican en Play Store.
+      # apk/webgl/dev son builds de prueba: se permiten desde cualquier rama.
+      - name: Guard — release builds must run from main
+        if: |
+          github.ref != 'refs/heads/main' &&
+          (github.event.inputs.target == 'aab' || github.event.inputs.target == 'all')
         run: |
-          echo "::error::This workflow must run from main (current: ${{ github.ref }})."
+          echo "::error::Release builds (aab/all) must run from main (current: ${{ github.ref }})."
           exit 1
 
       - name: Compute next SemVer tag
