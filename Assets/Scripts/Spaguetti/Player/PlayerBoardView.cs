@@ -12,7 +12,7 @@ public sealed class PlayerBoardView : MonoBehaviour
     [SerializeField] private Balance balance;
 
     // The cluster lives in Canvas_UI_In_Game, not under the board, so it is a reference and not a
-    // child: rotating it in place is the whole counter-fix (the band is already the top strip).
+    // child. Its blocks are rotated individually; rotating the container would swap them.
     [SerializeField] private RectTransform hudCluster;
 
     // Elements positioned in board coordinates whose validity depends on the screen frame:
@@ -45,15 +45,23 @@ public sealed class PlayerBoardView : MonoBehaviour
         var targetPosition = new Vector3(targetX, transform.position.y, transform.position.z);
         transform.SetPositionAndRotation(targetPosition, Quaternion.Euler(0f, 0f, 180f));
 
-        // The cluster is a screen-space rect: rotate it about its own pivot (0.5/0.5) so the
-        // bounding box stays identical. Moving it would be a second layout to maintain.
-        if (hudCluster != null)
+        // Rotate each block about its own centre, NOT the cluster container. The blocks are
+        // edge-anchored (score pinned to the cluster's top edge, name to its bottom), so rotating
+        // the container leaves its box in place but swaps the blocks inside it: P2's info drops
+        // below P1's instead of sitting beside it.
+        if (hudCluster != null && hudCluster.childCount > 0)
         {
-            hudCluster.localRotation = Quaternion.Euler(0f, 0f, 180f);
+            for (var i = 0; i < hudCluster.childCount; i++)
+            {
+                if (hudCluster.GetChild(i) is RectTransform block)
+                {
+                    block.localRotation = Quaternion.Euler(0f, 0f, 180f);
+                }
+            }
         }
         else
         {
-            Debug.LogError("[PlayerBoardView] P2 HUD cluster is not wired; it will read upside down for its owner.");
+            Debug.LogError("[PlayerBoardView] P2 HUD cluster has no blocks to rotate; it will read upside down for its owner.");
         }
 
         if (screenSpaceStragglers != null)
