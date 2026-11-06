@@ -9,6 +9,7 @@ public interface IPlayer
     void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps);
     int GetCoins();
     bool IsGameOver();
+    void GameOver();
     void DisableControls();
     void ConfigureBallZone(IReadOnlyList<PowerUpData> powerUps);
     IBalance GetBalance();

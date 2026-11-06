@@ -12,6 +12,8 @@ public abstract class PowerUpA : Ball, IPowerUp
     protected override void OnDragFunction()
     {
         base.OnDragFunction();
+        // A board whose controls are off ignores its orbs entirely.
+        if (_ballZone == null || !_ballZone.IsInputEnabled()) return;
         if (_ballZone.CanUsePowerUp() && _ballZone.UsePowerUp(this))
         {
             OnActionWithClick();

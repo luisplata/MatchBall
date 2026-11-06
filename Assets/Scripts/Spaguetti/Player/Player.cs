@@ -4,6 +4,7 @@ using App.UseCase.PowerUps;
 using Commander;
 using Commander.Commands;
 using Cysharp.Threading.Tasks;
+using Spaguetti.Game;
 using TMPro;
 using UnityEngine;
 
@@ -40,12 +41,23 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     public void EnableControls()
     {
+        // A FreezeBall in flight must not revive a board that already won or lost.
+        if (_isGameOver) return;
         balance.EnableControls();
         ballZone.EnableControls();
     }
 
     public void ConsumePowerUp(string prefabID)
     {
+        // In local PvP the orb is paid from this player's match budget: memory only. The use case is
+        // the only writer of the account inventory, so returning here is the whole no-persistence
+        // guarantee for power-ups.
+        if (_budget != null)
+        {
+            _budget.Consume(prefabID);
+            return;
+        }
+
         ConsumePowerUpAsync(prefabID).Forget();
     }
 
@@ -68,9 +80,16 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     /// the orbs of that type already on the board. Types with no budget are dropped, so the random
     /// spawn pool is filtered per type: an aggregate count would let an exhausted type spawn a
     /// budgetless orb.
+    ///
+    /// In local PvP the owned quantity comes from this player's private match budget instead of the
+    /// account inventory; the reservation half of the formula is unchanged and stays local to the
+    /// board that asked.
     /// </summary>
     public IReadOnlyList<PowerUpData> GetPowerUps()
     {
+        if (_budget != null && ballZone != null)
+            return _budget.Available(ballZone.CountReservedPowerUps);
+
         var selectedPowerUps = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps();
         if (ballZone == null) return selectedPowerUps;
 
@@ -94,6 +113,10 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
     private IGameManager _gameManager;
     private int _countOfPoints = 0;
 
+    // Non-null iff this match is local PvP. That equivalence is the discriminator every economy
+    // path reads: null means "behave exactly as before this change".
+    private MatchPowerUpBudget _budget;
+
     public void Configure(IGameManager gameManager, IReadOnlyList<PowerUpData> powerUps)
     {
         RefreshHud();
@@ -104,6 +127,11 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
         balance.OnGetPoints += OnGetPoints;
 
         _gameManager = gameManager;
+        _budget = gameManager != null && gameManager.IsLocalPvP()
+            ? new MatchPowerUpBudget(powerUps, $"P1/{Id}")
+            : null;
+        if (_budget != null)
+            Debug.Log($"[PvP] P1 budget for match: {_budget.Describe()}.");
 
 
         ServiceLocator.Instance.GetService<ICommandQueue>()
@@ -148,6 +176,8 @@ public class Player : MonoBehaviour, IMediatorBalance, IMediatorBallZone, IPlaye
 
     private void OnBalanceClicked(PathType sidePathType)
     {
+        // A board whose controls are off makes its paths inert. True outside local PvP.
+        if (ballZone != null && !ballZone.IsInputEnabled()) return;
         var result = ServiceLocator.Instance.GetService<ICommandQueue>().IsBusy(this);
         if (result) return;
         ServiceLocator.Instance.GetService<ICommandQueue>()

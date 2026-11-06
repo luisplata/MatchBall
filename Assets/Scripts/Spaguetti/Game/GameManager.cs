@@ -99,7 +99,8 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     /// <summary>
     /// Reads the transient local-PvP flag and consumes it immediately, so a second boot is a normal
-    /// match. Only the mode is decided here; presentation lives in later slices.
+    /// match. In PvP it also flips the second board so it reads upright from the opposite seat; in
+    /// PvE and the tutorial nothing here runs and the board keeps its authored transform.
     /// </summary>
     private void ConsumeLocalPvP()
     {
@@ -107,9 +108,24 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         _isLocalPvP = storage.LoadDataGlobal(GlobalData.LocalPvP) == "1";
         storage.SaveDataGlobal(GlobalData.LocalPvP, string.Empty);
 
+        // A stale flag left by an interrupted PvP route must never take over the lesson: the
+        // tutorial has one player and would end up with a flipped board for nobody.
+        if (_isTutorialMode) _isLocalPvP = false;
+
         if (!_isLocalPvP) return;
 
         Debug.Log("[PvP] local PvP mode active: P2 is human, no Matching, no ad, no Lobby.");
+
+        // P2 sits opposite P1: mirror its board about its own columns and turn it 180 degrees.
+        // Runs in Awake, before the splash hides, so no unflipped frame is ever rendered.
+        var boardView = player2 != null ? player2.GetComponent<PlayerBoardView>() : null;
+        if (boardView == null)
+        {
+            Debug.LogError("[PvP] P2 has no PlayerBoardView; the board is left unflipped.");
+            return;
+        }
+
+        boardView.ApplyOrientation(true);
     }
 
     public void DuplcateCoins()
@@ -226,23 +242,34 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         if (_isTutorialMode) return;
 
         Player1.DisableControls();
+        if (_isLocalPvP) player2.GetPlayer()?.DisableControls();
         _isGameOver = true;
         ServiceLocator.Instance.GetService<IMusicController>().StopMusic();
         Debug.Log($"Game Over! Winner: {result.Winner.GetType().Name}, Loser: {result.Loser.GetType().Name}");
 
+        // The panel stays P1-framed on purpose (a P2 win shows the game-over panel); what matters
+        // for local PvP is that a result resolves in both directions and no account is credited.
         bool playerWon = result.Winner == Player1;
 
         if (playerWon)
         {
             youWinPanel.SetActive(true);
             ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Win");
-            ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
+            if (!_isLocalPvP) ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(true).Forget();
         }
         else
         {
             gameOverPanel.SetActive(true);
             ServiceLocator.Instance.GetService<IMusicController>().PlaySfx("Lose");
-            ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
+            if (!_isLocalPvP) ServiceLocator.Instance.GetService<ILoginUseCase>().AddExperience(false).Forget();
+        }
+
+        if (_isLocalPvP)
+        {
+            // Both boards are dead for either outcome. GameOver also makes a queued FreezeBall's
+            // EnableControls a no-op, so a straggler command cannot revive a finished board.
+            Player1.GameOver();
+            player2.GetPlayer()?.GameOver();
         }
     }
 
@@ -284,7 +311,9 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     private async void AddCoinsAndLoadScene()
     {
-        await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddMatchGold(Player1.GetCoins() * _multiplier);
+        // Local PvP leaves the wallet exactly as it was: the match scores are not currency.
+        if (!_isLocalPvP)
+            await ServiceLocator.Instance.GetService<IPlayerSessionService>().AddMatchGold(Player1.GetCoins() * _multiplier);
         SceneManager.LoadScene("BallPass");
     }
 
@@ -334,7 +363,10 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     public IPlayer GetOtherPlayer(IPlayer player)
     {
-        return player is MachinePlayer ? Player1 : player2.GetPlayer();
+        // Identity, not type: a human P2 is not a MachinePlayer, and the type test answered with P2
+        // itself, so P2's orbs hit P2's own board. In PvE both directions map exactly as before
+        // (Player -> P2, MachinePlayer -> Player1).
+        return ReferenceEquals(player, Player1) ? player2.GetPlayer() : Player1;
     }
 }
 

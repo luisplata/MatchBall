@@ -2,13 +2,14 @@ using System.Collections.Generic;
 using App.UseCase.GameConfiguration;
 using Commander;
 using Commander.Commands;
+using Spaguetti.Game;
 using UnityEngine;
 
 /// <summary>
 /// Second human on the local PvP board. Mirrors <see cref="MachinePlayer"/> minus the AI and minus
-/// the economy: its points live only in memory, and nothing it does touches the account. The
-/// match-local power-up budget lands in a later slice; for now the seed list handed by
-/// <see cref="GameManager"/> is used as-is.
+/// the economy: its points live only in memory, and nothing it does touches the account. Its
+/// power-ups come from a private <see cref="MatchPowerUpBudget"/> seeded at boot, so the orbs it
+/// spends are never taken from the inventory.
 /// </summary>
 public sealed class HumanP2Player : IPlayer, IMediatorBalance, IMediatorBallZone
 {
@@ -25,6 +26,10 @@ public sealed class HumanP2Player : IPlayer, IMediatorBalance, IMediatorBallZone
     private int _coins;
     private int _countOfPoints;
     private IReadOnlyList<PowerUpData> _powerUps = System.Array.Empty<PowerUpData>();
+
+    // Non-null iff this match is local PvP, which for this mediator is always: it only exists in
+    // that mode. A null budget is a bug and is reported as one.
+    private MatchPowerUpBudget _budget;
 
     public HumanP2Player(OtherPlayer otherPlayer, IGameManager gameManager, FreezePlayerMono freezePlayerMono,
         BallZone ballZone)
@@ -64,6 +69,13 @@ public sealed class HumanP2Player : IPlayer, IMediatorBalance, IMediatorBallZone
     {
         _gameManager = gameManager;
         _powerUps = powerUps;
+        _budget = gameManager != null && gameManager.IsLocalPvP()
+            ? new MatchPowerUpBudget(powerUps, $"P2/{Id}")
+            : null;
+        if (_budget != null)
+            Debug.Log($"[PvP] P2 budget for match: {_budget.Describe()}.");
+        else
+            Debug.LogError("[HumanP2Player] no match budget: P2 orbs would be free and unspent.");
         // Deliberately starts nothing: a human P2 has no AI to boot.
     }
 
@@ -95,12 +107,22 @@ public sealed class HumanP2Player : IPlayer, IMediatorBalance, IMediatorBallZone
 
     public void ConsumePowerUp(string prefabID)
     {
-        // Local PvP never spends the account inventory. The match-local budget replaces this in S4.
-        Debug.Log($"[HumanP2Player] power-up '{prefabID}' used; account inventory untouched.");
+        // Local PvP never spends the account inventory: the orb is paid from this match's budget.
+        if (_budget != null)
+        {
+            _budget.Consume(prefabID);
+            return;
+        }
+
+        // Unreachable while the mode flag is consumed before Configure; visible if that ever breaks.
+        Debug.LogError($"[HumanP2Player] no match budget; '{prefabID}' was not charged anywhere.");
     }
 
     public IReadOnlyList<PowerUpData> GetPowerUps()
     {
+        if (_budget != null && _ballZone != null)
+            return _budget.Available(_ballZone.CountReservedPowerUps);
+
         return _powerUps;
     }
 
@@ -179,6 +201,7 @@ public sealed class HumanP2Player : IPlayer, IMediatorBalance, IMediatorBallZone
     {
         if (_isGameOver) return;
         if (_ballZone == null) return;
+        if (!_ballZone.IsInputEnabled()) return;
         if (ServiceLocator.Instance.GetService<ICommandQueue>().IsBusy(this)) return;
         ServiceLocator.Instance.GetService<ICommandQueue>()
             .AddCommand(new TryBallInBalanceCommand(_ballZone, sidePathType, _balance), this);
