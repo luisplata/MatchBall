@@ -5604,7 +5604,7 @@ MonoBehaviour:
     m_PressedTrigger: Pressed
     m_SelectedTrigger: Selected
     m_DisabledTrigger: Disabled
-  m_Interactable: 0
+  m_Interactable: 1
   m_TargetGraphic: {fileID: 554628202}
   m_OnClick:
     m_PersistentCalls:
@@ -11309,6 +11309,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playSinglePlayerButton: {fileID: 697806332}
+  playLocalPvPButton: {fileID: 554628201}
   singlePlayerSceneIndex: 3
 --- !u!1 &1174561613
 GameObject:

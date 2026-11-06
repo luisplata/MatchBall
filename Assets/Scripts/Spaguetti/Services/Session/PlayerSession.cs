@@ -472,7 +472,10 @@ public enum GlobalData
     TutorialMode,
 
     /// <summary>Durable: set to "true" only when the tutorial is completed or skipped.</summary>
-    TutorialCompleted
+    TutorialCompleted,
+
+    /// <summary>Transient: set to "1" right before loading Game, consumed on read by GameManager.</summary>
+    LocalPvP
 }
 
 public enum GameMode

@@ -33,6 +33,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     private bool _isGameOver;
     private int _multiplier = 1;
     private bool _isTutorialMode;
+    private bool _isLocalPvP;
 
     /// <summary>Fixed feed for the first-run lesson: drop, then build the 3+ match on tap six.</summary>
     private static readonly string[] TutorialBallOrder =
@@ -67,6 +68,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         _winConditions.Add(_timeAttackRule);
 
         ConsumeTutorialMode();
+        ConsumeLocalPvP();
     }
 
     /// <summary>
@@ -95,6 +97,21 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         Debug.Log("[Tutorial] tutorial mode active: random win condition, AI, XP, gold and power-up spend suppressed.");
     }
 
+    /// <summary>
+    /// Reads the transient local-PvP flag and consumes it immediately, so a second boot is a normal
+    /// match. Only the mode is decided here; presentation lives in later slices.
+    /// </summary>
+    private void ConsumeLocalPvP()
+    {
+        var storage = ServiceLocator.Instance.GetService<IStorageData>();
+        _isLocalPvP = storage.LoadDataGlobal(GlobalData.LocalPvP) == "1";
+        storage.SaveDataGlobal(GlobalData.LocalPvP, string.Empty);
+
+        if (!_isLocalPvP) return;
+
+        Debug.Log("[PvP] local PvP mode active: P2 is human, no Matching, no ad, no Lobby.");
+    }
+
     public void DuplcateCoins()
     {
         ServiceLocator.Instance.GetService<IAdModUseCase>().ShowRewarded(d => { _multiplier = (int)d; });
@@ -121,7 +138,7 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player1);
         var randomToUsePowerUp = ServiceLocator.Instance.GetService<IGameConfigurationUseCase>().GetConfig()
             .random_to_use_power_up;
-        player2.AddPlayerInQueue(this, randomToUsePowerUp);
+        player2.AddPlayerInQueue(this, randomToUsePowerUp, _isLocalPvP);
 
         ServiceLocator.Instance.GetService<ITransitionService>().HideSplashScreen(() =>
         {
@@ -143,9 +160,13 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
                 //player2.Configure(this, (float)director.duration);
             }
 
-            player2.Configure(this, (float)director.duration, ServiceLocator.Instance
-                .GetService<IPlayerSessionService>().GetPlayerSessionData()
-                .GetPowerUpsDummy());
+            player2.Configure(this, (float)director.duration,
+                _isLocalPvP
+                    // A guest inherits the host's selection exactly; never the zero-quantity dummy.
+                    ? ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetSelectedPowerUps()
+                    : ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData()
+                        .GetPowerUpsDummy(),
+                _isLocalPvP ? "Player 2" : "AI");
         });
     }
 
@@ -305,6 +326,12 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         return _isTutorialMode;
     }
 
+    /// <summary>True only while this match was booted by the transient local-PvP flag.</summary>
+    public bool IsLocalPvP()
+    {
+        return _isLocalPvP;
+    }
+
     public IPlayer GetOtherPlayer(IPlayer player)
     {
         return player is MachinePlayer ? Player1 : player2.GetPlayer();
@@ -320,5 +347,6 @@ public interface IGameManager
     IPlayer GetFirstPlayer();
     bool IsGameOver();
     bool IsTutorialMode();
+    bool IsLocalPvP();
     IPlayer GetOtherPlayer(IPlayer player);
 }

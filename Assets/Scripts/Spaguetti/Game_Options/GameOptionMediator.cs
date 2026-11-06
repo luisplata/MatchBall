@@ -5,11 +5,13 @@ using UnityEngine.UI;
 public class GameOptionMediator : MonoBehaviour
 {
     [SerializeField] private Button playSinglePlayerButton;
+    [SerializeField] private Button playLocalPvPButton;
     [SerializeField] private int singlePlayerSceneIndex;
 
     private void Start()
     {
         playSinglePlayerButton.onClick.AddListener(PlaySinglePlayer);
+        playLocalPvPButton.onClick.AddListener(PlayLocalPvP);
     }
 
     /// <summary>
@@ -35,8 +37,28 @@ public class GameOptionMediator : MonoBehaviour
             }
 
             storage.SaveDataGlobal(GlobalData.TutorialMode, string.Empty);
+            storage.SaveDataGlobal(GlobalData.LocalPvP, string.Empty);
             storage.SaveDataGlobal(GlobalData.GameMode, GameMode.SinglePlayer.ToString());
             UnityEngine.SceneManagement.SceneManager.LoadScene(singlePlayerSceneIndex);
+        });
+    }
+
+    /// <summary>
+    /// Second local human instead of the AI: no Matching interstitial, no ad, no Lobby, exactly like
+    /// the tutorial route. The transient flag is written here and consumed by
+    /// <see cref="GameManager"/> on boot, so a second launch is a normal match.
+    /// </summary>
+    private void PlayLocalPvP()
+    {
+        Debug.Log("Play Local PvP");
+        ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(() =>
+        {
+            var storage = ServiceLocator.Instance.GetService<IStorageData>();
+            storage.SaveDataGlobal(GlobalData.TutorialMode, string.Empty);
+            storage.SaveDataGlobal(GlobalData.LocalPvP, "1");
+            TutorialResume.Clear();
+            Debug.Log("[LocalPvP] boot -> Game (Matching, ad and Lobby skipped).");
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Game");
         });
     }
 }
