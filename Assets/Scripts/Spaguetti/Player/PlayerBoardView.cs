@@ -47,8 +47,11 @@ public sealed class PlayerBoardView : MonoBehaviour
 
         // Rotate each block about its own centre, NOT the cluster container. The blocks are
         // edge-anchored (score pinned to the cluster's top edge, name to its bottom), so rotating
-        // the container leaves its box in place but swaps the blocks inside it: P2's info drops
-        // below P1's instead of sitting beside it.
+        // the container leaves its box in place but swaps the blocks inside it.
+        //
+        // Then move the whole cluster to the opposite screen edge: P1's sits above its ball queue
+        // at the top, while P2's queue ends up at the bottom after the flip, so its score has to
+        // follow it there. The margin is mirrored instead of hardcoded so it survives a re-layout.
         if (hudCluster != null && hudCluster.childCount > 0)
         {
             for (var i = 0; i < hudCluster.childCount; i++)
@@ -58,6 +61,8 @@ public sealed class PlayerBoardView : MonoBehaviour
                     block.localRotation = Quaternion.Euler(0f, 0f, 180f);
                 }
             }
+
+            MirrorToOppositeEdge(hudCluster);
         }
         else
         {
@@ -73,6 +78,34 @@ public sealed class PlayerBoardView : MonoBehaviour
         }
 
         Debug.Log($"[PlayerBoardView] flipped about its own columns: centre={center:F2} root x={targetX:F2}");
+    }
+
+    /// <summary>
+    /// Moves a screen-space rect to the opposite vertical edge of its canvas, keeping the same
+    /// margin it currently keeps from the near edge. The opponent's HUD uses it so the score sits
+    /// next to its own ball queue instead of on the other player's side.
+    /// </summary>
+    private static void MirrorToOppositeEdge(RectTransform rect)
+    {
+        var canvas = rect.GetComponentInParent<Canvas>();
+        var canvasRect = canvas != null ? canvas.rootCanvas.transform as RectTransform : null;
+        if (canvasRect == null)
+        {
+            Debug.LogError("[PlayerBoardView] HUD cluster has no canvas to mirror against; it stays where it was authored.");
+            return;
+        }
+
+        var canvasCorners = new Vector3[4];
+        canvasRect.GetWorldCorners(canvasCorners);
+
+        var clusterCorners = new Vector3[4];
+        rect.GetWorldCorners(clusterCorners);
+
+        // GetWorldCorners order: bottom-left, top-left, top-right, bottom-right.
+        var marginFromTop = canvasCorners[1].y - clusterCorners[1].y;
+        var targetBottom = canvasCorners[0].y + marginFromTop;
+
+        rect.position += new Vector3(0f, targetBottom - clusterCorners[0].y, 0f);
     }
 
     /// <summary>
