@@ -1,5 +1,6 @@
 using Bootstrap;
 using Commander;
+using Domain.Services;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -55,6 +56,7 @@ namespace Presentation.Tutorial
             _flow = new TutorialFlow(TutorialResume.Step);
             _balance.OnBalanceClicked += OnBalanceClicked;
             _balance.OnGetPoints += OnPointsAwarded;
+            _balance.RiskChanged += OnRiskChanged;
             overlay.Initialize(OnSkip, OnContinue, OnRetry);
 
             _settledBallCount = CountBalls();
@@ -117,6 +119,17 @@ namespace Presentation.Tutorial
             var cleared = _ballsBeforeTap + 1 - after;
             Debug.Log($"[Tutorial] clear detected: before={_ballsBeforeTap} after={after} cleared={cleared}");
             Handle(_flow.OnClear(cleared));
+        }
+
+        /// <summary>
+        /// Overflow risk is a retry cue, never a defeat: the board shakes and the overlay
+        /// shows the danger hint, but the overflow itself still routes through
+        /// <see cref="TutorialFlow.OnOverflow"/> to the retry prompt.
+        /// </summary>
+        private void OnRiskChanged(BalanceRisk risk)
+        {
+            if (!_active) return;
+            overlay.ShowDanger(risk != BalanceRisk.Safe);
         }
 
         private void OnSkip()
@@ -195,6 +208,7 @@ namespace Presentation.Tutorial
 
             _balance.OnBalanceClicked -= OnBalanceClicked;
             _balance.OnGetPoints -= OnPointsAwarded;
+            _balance.RiskChanged -= OnRiskChanged;
         }
     }
 }

@@ -27,6 +27,10 @@ namespace Presentation.Tutorial
         [SerializeField] private GameObject hintLeft;
         [SerializeField] private GameObject hintRight;
 
+        [Header("Danger")]
+        [Tooltip("Overflow-risk hint. Copy lives in the prefab; shown only while a path is 1-2 moves from loss.")]
+        [SerializeField] private GameObject dangerHint;
+
         [Header("Buttons")]
         [SerializeField] private Button skipButton;
         [SerializeField] private Button continueButton;
@@ -57,6 +61,7 @@ namespace Presentation.Tutorial
 
             hintLeft.SetActive(expectedSide == PathType.Left);
             hintRight.SetActive(expectedSide == PathType.Right);
+            dangerHint.SetActive(false);
         }
 
         /// <summary>Modal prompt: the board is blocked until the player retries.</summary>
@@ -68,6 +73,7 @@ namespace Presentation.Tutorial
             dim.gameObject.SetActive(true);
             hintLeft.SetActive(false);
             hintRight.SetActive(false);
+            dangerHint.SetActive(false);
         }
 
         /// <summary>
@@ -83,6 +89,16 @@ namespace Presentation.Tutorial
             dim.gameObject.SetActive(false);
             hintLeft.SetActive(false);
             hintRight.SetActive(false);
+            dangerHint.SetActive(false);
+        }
+
+        /// <summary>
+        /// Toggles the overflow-risk hint. Framed as an imminent retry, never a defeat:
+        /// the copy lives in the prefab and the retry flow stays intact.
+        /// </summary>
+        public void ShowDanger(bool visible)
+        {
+            if (dangerHint != null) dangerHint.SetActive(visible);
         }
     }
 }

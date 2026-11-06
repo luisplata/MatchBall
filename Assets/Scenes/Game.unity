@@ -6630,6 +6630,7 @@ GameObject:
   - component: {fileID: 413823416}
   - component: {fileID: 413823417}
   - component: {fileID: 413823418}
+  - component: {fileID: 413823419}
   m_Layer: 0
   m_Name: Player (2)
   m_TagString: Untagged
@@ -6693,6 +6694,20 @@ MonoBehaviour:
   hudCluster: {fileID: 1417645906}
   screenSpaceStragglers:
   - {fileID: 1393882834}
+--- !u!114 &413823419
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 413823414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d2c4f6a0b1e3d5c7f9a2b4c6d8e0f1a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  balance: {fileID: 1229436175}
+  shakeTarget: {fileID: 0}
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
@@ -20398,6 +20413,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1594678064}
   - component: {fileID: 1594678065}
+  - component: {fileID: 1594678066}
   m_Layer: 0
   m_Name: Player (1)
   m_TagString: Untagged
@@ -20447,6 +20463,20 @@ MonoBehaviour:
   countOfPointToGetPowerUp: 3
   id: 1
   freezePlayerMono: {fileID: 651360746}
+--- !u!114 &1594678066
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594678063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d2c4f6a0b1e3d5c7f9a2b4c6d8e0f1a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  balance: {fileID: 1049846897}
+  shakeTarget: {fileID: 0}
 --- !u!1 &1602182341
 GameObject:
   m_ObjectHideFlags: 0

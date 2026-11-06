@@ -1,0 +1,171 @@
+using System;
+using Domain.Services;
+using UnityEngine;
+
+namespace Presentation.Game
+{
+    /// <summary>
+    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and pulses a brief
+    /// frame shake while the board is one or two moves from a loss. The AI board never
+    /// shakes; the pulse stops and the authored pose is restored the moment the risk clears,
+    /// the match ends, or the view is disabled/destroyed. Visual only: no audio, no haptics,
+    /// and nothing that changes placement, scoring, outcome or save data.
+    /// </summary>
+    public sealed class BalanceDangerShakeView : MonoBehaviour
+    {
+        [SerializeField] private Balance balance;
+        [Tooltip("Optional. Defaults to this transform (the board root). Leave empty.")]
+        [SerializeField] private Transform shakeTarget;
+
+        private const float MildAmplitude = 0.03f;
+        private const float MildTiltDegrees = 0.6f;
+        private const float MildInterval = 2.0f;
+        private const float StrongAmplitude = 0.06f;
+        private const float StrongTiltDegrees = 1.2f;
+        private const float StrongInterval = 1.1f;
+        private const float PulseDuration = 0.18f;
+
+        private GameManager _gameManager;
+        private Transform _target;
+        private Vector3 _baseLocalPosition;
+        private Quaternion _baseLocalRotation;
+        private bool _hasBase;
+        private BalanceRisk _activeRisk = BalanceRisk.Safe;
+        private float _phaseStart;
+
+        private void OnEnable()
+        {
+            _gameManager = FindFirstObjectByType<GameManager>();
+            if (balance == null)
+            {
+                Debug.LogWarning($"[BalanceDangerShakeView] no balance reference on '{name}'.", this);
+                enabled = false;
+                return;
+            }
+
+            balance.RiskChanged += OnRiskChanged;
+            ApplyRisk(balance.CurrentRisk);
+        }
+
+        private void OnDisable()
+        {
+            if (balance != null) balance.RiskChanged -= OnRiskChanged;
+            RestoreBase();
+            _hasBase = false;
+            _activeRisk = BalanceRisk.Safe;
+        }
+
+        private void OnDestroy()
+        {
+            if (balance != null) balance.RiskChanged -= OnRiskChanged;
+            RestoreBase();
+        }
+
+        private void OnRiskChanged(BalanceRisk risk)
+        {
+            ApplyRisk(risk);
+        }
+
+        private void ApplyRisk(BalanceRisk risk)
+        {
+            // Safe needs no player lookup: it must also short-circuit the unconfigured
+            // window at OnEnable, where Balance._player is still null and GetPlayer()
+            // would dereference it.
+            if (risk == BalanceRisk.Safe)
+            {
+                StopPulse();
+                return;
+            }
+
+            // The AI board must never shake: only the first human, or any board in local PvP.
+            if (!IsHumanBoard() || IsGameOver())
+            {
+                StopPulse();
+                return;
+            }
+
+            // Capture the base pose only now, never in OnEnable, where the board's
+            // orientation may not have been applied yet.
+            CaptureBase();
+            _activeRisk = risk;
+            _phaseStart = Time.unscaledTime;
+        }
+
+        private bool IsHumanBoard()
+        {
+            if (_gameManager == null) return false;
+            var player = balance.GetPlayer();
+            if (player == null) return false;
+
+            // Identity, not type: a human P2 is not a MachinePlayer, so test who owns this
+            // board against the first player, and let every local-PvP board through.
+            return ReferenceEquals(player, _gameManager.GetFirstPlayer()) || _gameManager.IsLocalPvP();
+        }
+
+        private bool IsGameOver()
+        {
+            if (_gameManager != null && _gameManager.IsGameOver()) return true;
+            var player = balance.GetPlayer();
+            return player != null && player.IsGameOver();
+        }
+
+        private Transform Target => shakeTarget != null ? shakeTarget : transform;
+
+        private void CaptureBase()
+        {
+            if (_hasBase) return;
+            _target = Target;
+            _baseLocalPosition = _target.localPosition;
+            _baseLocalRotation = _target.localRotation;
+            _hasBase = true;
+        }
+
+        private void StopPulse()
+        {
+            RestoreBase();
+            _hasBase = false;
+            _activeRisk = BalanceRisk.Safe;
+        }
+
+        private void RestoreBase()
+        {
+            if (!_hasBase || _target == null) return;
+            _target.localPosition = _baseLocalPosition;
+            _target.localRotation = _baseLocalRotation;
+        }
+
+        private void LateUpdate()
+        {
+            if (_activeRisk == BalanceRisk.Safe || !_hasBase || _target == null) return;
+
+            if (IsGameOver())
+            {
+                StopPulse();
+                return;
+            }
+
+            var (amplitude, tilt, interval) = Tuning(_activeRisk);
+            var phase = (Time.unscaledTime - _phaseStart) % interval;
+            if (phase >= PulseDuration)
+            {
+                // Intermittent, never continuous: idle between pulses at the exact base pose.
+                _target.localPosition = _baseLocalPosition;
+                _target.localRotation = _baseLocalRotation;
+                return;
+            }
+
+            var t = phase / PulseDuration;
+            var strength = Mathf.Sin(Mathf.PI * t);
+
+            _target.localPosition = _baseLocalPosition + new Vector3(amplitude * strength, 0f, 0f);
+            _target.localRotation = _baseLocalRotation * Quaternion.Euler(0f, 0f, tilt * strength);
+        }
+
+        private static (float amplitude, float tilt, float interval) Tuning(BalanceRisk risk)
+        {
+            return risk == BalanceRisk.Strong
+                ? (StrongAmplitude, StrongTiltDegrees, StrongInterval)
+                : (MildAmplitude, MildTiltDegrees, MildInterval);
+        }
+    }
+}

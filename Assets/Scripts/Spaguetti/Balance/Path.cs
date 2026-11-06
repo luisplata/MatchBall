@@ -359,7 +359,12 @@ public class Path : MonoBehaviour, IPointerClickHandler
         return GetNextFreeIndex() < ballQueue.Length;
     }
 
-    private int GetNextFreeIndex()
+    /// <summary>
+    /// Index where the next ball would land: the last occupied index plus two, or the
+    /// authored base (level plus counter-balance) when empty. Exposed read-only so the
+    /// risk policy can measure moves until the capacity loss without owning slot math.
+    /// </summary>
+    public int GetNextFreeIndex()
     {
         for (int i = ballQueue.Length - 1; i >= 0; i--)
         {

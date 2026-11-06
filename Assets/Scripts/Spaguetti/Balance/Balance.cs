@@ -12,6 +12,16 @@ public class Balance : MonoBehaviour, IBalance
 {
     public Action<PathType> OnBalanceClicked;
 
+    /// <summary>
+    /// Raised once per settle when the graded near-loss risk actually changes. Starts
+    /// <see cref="BalanceRisk.Safe"/> and is never raised mid-animation: it fires only
+    /// after <see cref="BalanceBothPaths"/> has finished the final art update.
+    /// </summary>
+    public event Action<BalanceRisk> RiskChanged;
+
+    /// <summary>The risk published by the last settle; <see cref="BalanceRisk.Safe"/> until then.</summary>
+    public BalanceRisk CurrentRisk { get; private set; } = BalanceRisk.Safe;
+
     // public Action OnGetPoints;
     [SerializeField] private Path leftPath;
     [SerializeField] private Path rightPath;
@@ -25,6 +35,7 @@ public class Balance : MonoBehaviour, IBalance
     public void Configure(IMediatorBalance player)
     {
         _player = player;
+        CurrentRisk = BalanceRisk.Safe;
         leftPath.Configure(this);
         rightPath.Configure(this);
         checkerOfBallsToGetPoints.Configure();
@@ -193,15 +204,10 @@ public class Balance : MonoBehaviour, IBalance
             }
 
             //count the counter balance
-            if (Mathf.Abs(leftPath.GetOnlyBalls() - rightPath.GetOnlyBalls()) > 3)
+            if (Mathf.Abs(leftPath.GetOnlyBalls() - rightPath.GetOnlyBalls()) > BalanceRiskPolicy.MaxImbalance)
             {
                 //Debug.Log("GameOver too many counter balance");
                 _player.GameOver();
-            }
-
-            if (Mathf.Abs(leftPath.GetOnlyBalls() - rightPath.GetOnlyBalls()) >= 3)
-            {
-                //Debug.Log("Before to GameOver too many counter balance");
             }
 
             if (leftPath.GetBallCount() == rightPath.GetBallCount())
@@ -232,6 +238,27 @@ public class Balance : MonoBehaviour, IBalance
         {
             ballanceControllerArt.UpdatePositions();
         }
+
+        PublishRisk();
+    }
+
+    /// <summary>
+    /// Derives the settled risk and raises <see cref="RiskChanged"/> only when it moved.
+    /// Called after the final art update so the view never reacts to a board mid-animation.
+    /// </summary>
+    private void PublishRisk()
+    {
+        var risk = BalanceRiskPolicy.Evaluate(
+            leftPath.GetNextFreeIndex(),
+            rightPath.GetNextFreeIndex(),
+            leftPath.GetOnlyBalls(),
+            rightPath.GetOnlyBalls(),
+            _countOfColumns);
+
+        if (risk == CurrentRisk) return;
+
+        CurrentRisk = risk;
+        RiskChanged?.Invoke(risk);
     }
 
     public void EnableControls()
