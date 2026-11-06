@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using App.UseCase.PowerUps;
-using App.UseCase.Reward;
+using App.Reward;
+using Bootstrap;
 using Cysharp.Threading.Tasks;
 using Domain.Entities;
 using Newtonsoft.Json;
@@ -125,31 +125,25 @@ public class PlayerSessionDataCustom
 
     public async UniTask<RewardDataJson> AddReward(RewardData rewardData)
     {
-        var rewardDataC = JsonConvert.DeserializeObject<RewardDataJson>(rewardData.Reward);
+        var payload = JsonConvert.DeserializeObject<RewardDataJson>(rewardData.Reward);
+        if (payload == null || string.IsNullOrWhiteSpace(payload.type))
+            throw new Exception($"Ball pass reward at level {rewardData.Level} has no type.");
 
+        if (!ServiceLocator.Instance.TryGetService<IRewardCatalog>(out var catalog))
+            throw new InvalidOperationException(
+                "IRewardCatalog is not registered. Start Play from Login or the DevGame prelude.");
 
-        Debug.Log(rewardDataC.type);
+        var outcome = await catalog.GrantAsync(payload.type, payload.body);
 
-        switch (rewardDataC.type)
-        {
-            case "gold":
-                var currency = JsonUtility.FromJson<CurrencyReward>(rewardDataC.body);
-                await ServiceLocator.Instance.GetService<IPlayerSessionService>()
-                    .AddCoins(currency.amount);
-                break;
-            case "powerup":
-                //AddPowerUpToPlayer(rewardDataC.count);
-                var powerup = JsonUtility.FromJson<PowerUpReward>(rewardDataC.body);
-                var powerUpSelected = ServiceLocator.Instance.GetService<IPowerUpsUseCase>().GetPowerUpsFromStore()
-                    .First(p => p.id == powerup.powerup);
-                powerUpSelected.quantity = powerup.quantity;
-                await ServiceLocator.Instance.GetService<IClaimPowerUpUseCase>().Claim(powerUpSelected);
-                break;
-            default:
-                throw new Exception($"Reward type {rewardDataC.type} not supported yet");
-        }
+        // A failure must surface so the caller does not mark the claim. A skip is marked on purpose
+        // (unknown kind or unusable body) so the row cannot be claimed forever.
+        if (outcome == RewardGrantOutcome.Failed)
+            throw new Exception($"Reward '{payload.type}' at level {rewardData.Level} could not be granted.");
 
-        return rewardDataC;
+        if (outcome == RewardGrantOutcome.Skipped)
+            Debug.LogWarning($"[BallPass] Reward '{payload.type}' at level {rewardData.Level} was skipped.");
+
+        return payload;
     }
 
     [Obsolete("Use IClaimPowerUpUseCase or IBuyItemUseCase Services to claim or buy powerups")]

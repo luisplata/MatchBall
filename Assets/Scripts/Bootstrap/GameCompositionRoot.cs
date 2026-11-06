@@ -1,4 +1,6 @@
+using System;
 using App.Ports;
+using App.Reward;
 using App.UseCase;
 using App.UseCase.GameConfiguration;
 using App.UseCase.PassBall;
@@ -6,10 +8,13 @@ using App.UseCase.PowerUps;
 using App.UseCase.Reward;
 using Infra.AdModAdapter;
 using Infra.EventBus;
+using Infra.Persistence;
+using Infra.Reward;
 using Infra.UnityAdapters;
 using Infra.UnityConfiguration;
 using Infra.WebAdapter;
 using Infrastructure.UnityEconomy;
+using UnityEngine;
 
 namespace Bootstrap
 {
@@ -37,7 +42,20 @@ namespace Bootstrap
                 memoryEventBus));
             ServiceLocator.Instance.RegisterService<IClaimGoldUseCase>(new ClaimGoldUseCase(storeRepository,
                 memoryEventBus));
-            ServiceLocator.Instance.RegisterService<IClaimPowerUpUseCase>(new ClaimPowerUpUseCase(storeRepository));
+            var claimPowerUpUseCase = new ClaimPowerUpUseCase(storeRepository);
+            ServiceLocator.Instance.RegisterService<IClaimPowerUpUseCase>(claimPowerUpUseCase);
+
+            var rewardCatalog = RewardCatalogFactory.Create(storeRepository, claimPowerUpUseCase);
+            foreach (var issue in rewardCatalog.ValidateTable(BallPassLocalStore.RewardTable))
+            {
+                Debug.LogError($"[RewardCatalog] {issue}");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                throw new InvalidOperationException($"[RewardCatalog] Invalid ball pass reward table: {issue}");
+#endif
+            }
+
+            ServiceLocator.Instance.RegisterService<IRewardCatalog>(rewardCatalog);
+
             ServiceLocator.Instance.RegisterService<IPassBallUseCase>(new PassBallUseCase(webAdapter));
             ServiceLocator.Instance.RegisterService<ILoginUseCase>(new LoginUseCase(webAdapter, adModAdapter));
             ServiceLocator.Instance.RegisterService<IAdModUseCase>(new AdModUseCase(adModAdapter));
