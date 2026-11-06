@@ -11,7 +11,8 @@ public sealed class PlayerBoardView : MonoBehaviour
 {
     [SerializeField] private Balance balance;
 
-    // Seam for the next slice: the HUD cluster is rotated by S3, never by this class yet.
+    // The cluster lives in Canvas_UI_In_Game, not under the board, so it is a reference and not a
+    // child: rotating it in place is the whole counter-fix (the band is already the top strip).
     [SerializeField] private RectTransform hudCluster;
 
     // Elements positioned in board coordinates whose validity depends on the screen frame:
@@ -21,7 +22,7 @@ public sealed class PlayerBoardView : MonoBehaviour
     /// <summary>X of the board's own vertical axis: the midpoint of its two ball columns. NaN when unreadable.</summary>
     public float BoardCenterX => TryResolveBoardCenter(out var center) ? center : float.NaN;
 
-    /// <summary>The HUD cluster this board describes. Wired in a later slice; S2 leaves it untouched.</summary>
+    /// <summary>The HUD cluster this board describes. Wired by <see cref="ApplyOrientation"/>.</summary>
     public RectTransform HudCluster => hudCluster;
 
     /// <summary>
@@ -43,6 +44,17 @@ public sealed class PlayerBoardView : MonoBehaviour
         var targetX = 2f * center - transform.position.x;
         var targetPosition = new Vector3(targetX, transform.position.y, transform.position.z);
         transform.SetPositionAndRotation(targetPosition, Quaternion.Euler(0f, 0f, 180f));
+
+        // The cluster is a screen-space rect: rotate it about its own pivot (0.5/0.5) so the
+        // bounding box stays identical. Moving it would be a second layout to maintain.
+        if (hudCluster != null)
+        {
+            hudCluster.localRotation = Quaternion.Euler(0f, 0f, 180f);
+        }
+        else
+        {
+            Debug.LogError("[PlayerBoardView] P2 HUD cluster is not wired; it will read upside down for its owner.");
+        }
 
         if (screenSpaceStragglers != null)
         {

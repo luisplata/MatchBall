@@ -6690,7 +6690,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   balance: {fileID: 1229436175}
-  hudCluster: {fileID: 0}
+  hudCluster: {fileID: 1417645906}
   screenSpaceStragglers:
   - {fileID: 1393882834}
 --- !u!1 &421634998
