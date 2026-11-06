@@ -99,7 +99,8 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
     /// <summary>
     /// Reads the transient local-PvP flag and consumes it immediately, so a second boot is a normal
-    /// match. Only the mode is decided here; presentation lives in later slices.
+    /// match. In PvP it also flips the second board so it reads upright from the opposite seat; in
+    /// PvE and the tutorial nothing here runs and the board keeps its authored transform.
     /// </summary>
     private void ConsumeLocalPvP()
     {
@@ -110,6 +111,17 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         if (!_isLocalPvP) return;
 
         Debug.Log("[PvP] local PvP mode active: P2 is human, no Matching, no ad, no Lobby.");
+
+        // P2 sits opposite P1: mirror its board about its own columns and turn it 180 degrees.
+        // Runs in Awake, before the splash hides, so no unflipped frame is ever rendered.
+        var boardView = player2 != null ? player2.GetComponent<PlayerBoardView>() : null;
+        if (boardView == null)
+        {
+            Debug.LogError("[PvP] P2 has no PlayerBoardView; the board is left unflipped.");
+            return;
+        }
+
+        boardView.ApplyOrientation(true);
     }
 
     public void DuplcateCoins()

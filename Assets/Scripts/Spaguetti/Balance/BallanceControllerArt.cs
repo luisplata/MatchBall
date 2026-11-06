@@ -45,7 +45,9 @@ public class BallanceControllerArt : MonoBehaviour
         lineOfBallance.SetPosition(0, leftBase.position);
         lineOfBallance.SetPosition(1, rightBase.position);
         var mitad = GetCenterByTwoPoints(leftBase.position, rightBase.position);
-        var pointDown = AddInYPosition(-3, mitad);
+        // Point the stem away from the play area along the board's own up axis: the second
+        // board is rotated 180 degrees, so the world -Y constant used to draw into the board.
+        var pointDown = mitad - transform.up * 3f;
         lineaBase.SetPosition(0, mitad);
         lineaBase.SetPosition(1, pointDown);
     }
@@ -53,10 +55,5 @@ public class BallanceControllerArt : MonoBehaviour
     private Vector3 GetCenterByTwoPoints(Vector3 a, Vector3 b)
     {
         return new Vector3((a.x + b.x) / 2f, (a.y + b.y) / 2f, (a.z + b.z) / 2f);
-    }
-
-    private Vector3 AddInYPosition(float yPosition, Vector3 position)
-    {
-        return position + new Vector3(0, yPosition, 0);
     }
 }
