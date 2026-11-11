@@ -32,6 +32,11 @@ namespace Presentation.Tutorial
         private const float Margin = 24f;
         private const float BoardGap = 16f;
 
+        /// <summary>Body text floor: the prefab already used 18 as its minimum, 24 is the readable one.</summary>
+        private const float MinimalFontSize = 24f;
+        private const float FullFontSize = 32f;
+        private const float CompactFontSize = 24f;
+
         [Header("Layers")]
         [Tooltip("Full-screen block. raycastTarget must stay true; it is only active while modal.")]
         [SerializeField] private Image dim;
@@ -46,6 +51,10 @@ namespace Presentation.Tutorial
         [SerializeField] private GameObject matchGroup;
         [SerializeField] private GameObject balanceGroup;
         [SerializeField] private GameObject closeGroup;
+
+        [Header("Progress")]
+        [Tooltip("One dot per step. The count must match (int)TutorialStep.Done.")]
+        [SerializeField] private TutorialStepDots dots;
 
         [Header("Danger")]
         [Tooltip("Overflow-risk hint. Copy lives in the prefab; shown only while a path is 1-2 moves from loss.")]
@@ -72,6 +81,14 @@ namespace Presentation.Tutorial
             {
                 CopyRect(dropGroup), CopyRect(matchGroup), CopyRect(balanceGroup), CopyRect(closeGroup)
             };
+
+            // The curriculum's length is the enum's, not a literal: if the prefab drifts from it the
+            // indicator silently under- or over-reports progress, which is worse than a warning.
+            if (dots != null && dots.Count != (int)TutorialStep.Done)
+            {
+                Debug.LogWarning(
+                    $"[Tutorial] the progress indicator has {dots.Count} dots but the curriculum has {(int)TutorialStep.Done} steps.");
+            }
         }
 
         public void Initialize(Action onSkip, Action onContinue, Action onRetry)
@@ -115,6 +132,8 @@ namespace Presentation.Tutorial
             balanceGroup.SetActive(step == TutorialStep.Balance);
             closeGroup.SetActive(step == TutorialStep.Close);
 
+            if (dots != null) dots.SetCurrent((int)step);
+
             _dangerRequested = false;
             dangerHint.SetActive(false);
         }
@@ -141,6 +160,7 @@ namespace Presentation.Tutorial
             dim.gameObject.SetActive(false);
             _dangerRequested = false;
             dangerHint.SetActive(false);
+            if (dots != null) dots.Clear();
         }
 
         /// <summary>
@@ -272,11 +292,12 @@ namespace Presentation.Tutorial
                 compact ? new Vector2(200f, 52f) : new Vector2(280f, 84f),
                 compact ? new Vector2(0f, 56f) : new Vector2(0f, 84f));
 
-            // Copy strip: 228..444 in full, 116..200 (one line) in compact. The body never goes
-            // below 24 px, which is the legibility floor the prefab already used.
+            // Copy strip: 228..444 in full, 116..200 (one line) in compact. Autosizing is what keeps
+            // the promise that the body never drops below 24 px: the rich text title rides at 125 %
+            // of whatever size fits, so it stays bigger than the body in both modes.
             var copyMin = compact ? new Vector2(16f, 116f) : new Vector2(28f, 228f);
             var copyMax = compact ? new Vector2(-16f, -40f) : new Vector2(-28f, -76f);
-            var fontSize = compact ? 24f : 32f;
+            var copyMaxSize = compact ? CompactFontSize : FullFontSize;
 
             if (_copies != null)
             {
@@ -287,7 +308,11 @@ namespace Presentation.Tutorial
                     rect.offsetMax = copyMax;
 
                     var text = rect.GetComponent<TMPro.TMP_Text>();
-                    if (text != null) text.fontSize = fontSize;
+                    if (text == null) continue;
+
+                    text.enableAutoSizing = true;
+                    text.fontSizeMin = MinimalFontSize;
+                    text.fontSizeMax = copyMaxSize;
                 }
             }
 
@@ -299,6 +324,8 @@ namespace Presentation.Tutorial
             {
                 tail.sizeDelta = compact ? new Vector2(40f, 40f) : new Vector2(56f, 56f);
             }
+
+            if (dots != null) dots.ApplyLayout(compact);
         }
 
         private static void ApplyStrip(RectTransform rect, Vector2 size, Vector2 position)
