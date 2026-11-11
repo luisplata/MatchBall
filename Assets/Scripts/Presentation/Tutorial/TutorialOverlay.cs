@@ -37,6 +37,27 @@ namespace Presentation.Tutorial
         private const float FullFontSize = 32f;
         private const float CompactFontSize = 24f;
 
+        /// <summary>Below this canvas height the two-set layout takes over (see the design's 568 px).</summary>
+        private const float CompactCanvasHeight = 568f;
+
+        /// <summary>Skip's size and inset. Both sets are applied by <see cref="ApplyLayout"/>.</summary>
+        private const float CompactSkipWidth = 80f;
+        private const float CompactSkipHeight = 36f;
+        private const float CompactSkipInset = 12f;
+        private static readonly Vector2 CompactSkipSize = new Vector2(CompactSkipWidth, CompactSkipHeight);
+        private static readonly Vector2 FullSkipSize = new Vector2(120f, 56f);
+
+        /// <summary>Gap Skip keeps from the retry modal in compact, and the modal keeps from the top edge.</summary>
+        private const float RetrySkipGap = 8f;
+        private const float RetryTopMargin = 8f;
+
+        /// <summary>
+        /// Bottom band of a compact frame that belongs to Skip: inset + button + gap, plus the margin
+        /// the modal needs above itself.
+        /// </summary>
+        private const float RetryBottomStrip =
+            CompactSkipInset + CompactSkipHeight + RetrySkipGap + RetryTopMargin;
+
         [Header("Layers")]
         [Tooltip("Full-screen block. raycastTarget must stay true; it is only active while modal.")]
         [SerializeField] private Image dim;
@@ -76,6 +97,9 @@ namespace Presentation.Tutorial
 
         private RectTransform[] _copies;
         private RectTransform _skipRect;
+        private RectTransform _retryRect;
+        private Vector2 _retryDesignSize;
+        private Vector2 _retryDesignPosition;
         private bool _compact;
         private bool _layoutApplied;
         private bool _dangerRequested;
@@ -89,6 +113,15 @@ namespace Presentation.Tutorial
             };
 
             _skipRect = skipButton != null ? skipButton.transform as RectTransform : null;
+
+            // The retry modal's design rect is read once from the prefab instead of hardcoded: the
+            // compact pass shrinks and lifts it, and every full frame has to restore it verbatim.
+            _retryRect = retryPanel != null ? retryPanel.transform as RectTransform : null;
+            if (_retryRect != null)
+            {
+                _retryDesignSize = _retryRect.sizeDelta;
+                _retryDesignPosition = _retryRect.anchoredPosition;
+            }
 
             // The curriculum's length is the enum's, not a literal: if the prefab drifts from it the
             // indicator silently under- or over-reports progress, which is worse than a warning.
@@ -164,6 +197,10 @@ namespace Presentation.Tutorial
             // has to stay one tap away, so the overlay owns that button instead of the bubble.
             skipButton.gameObject.SetActive(true);
 
+            // Placed on the same frame it is shown: waiting for the late update would pop the modal
+            // in at its design rect for one frame before settling.
+            PlaceRetry();
+
             ShowCallout(calloutLeft, false);
             ShowCallout(calloutRight, false);
             _dangerRequested = false;
@@ -205,13 +242,21 @@ namespace Presentation.Tutorial
         /// </summary>
         private void LateUpdate()
         {
+            // The modal owns the layer while it is up, and it is the only frame where Skip is not on
+            // the bubble: one branch keeps both of them placed across a resize.
+            if (retryPanel != null && retryPanel.activeSelf)
+            {
+                PlaceRetry();
+                return;
+            }
+
             PlacePanel();
         }
 
         private void PlacePanel()
         {
-            // While the retry prompt has the bubble hidden, Skip keeps the spot of the last placement:
-            // the clamp already guarantees that spot is clear of the board.
+            // The retry prompt is laid out by PlaceRetry, which LateUpdate reaches first; this guard
+            // only protects the call that arrives while the bubble is already down.
             if (panel == null || !panel.gameObject.activeSelf) return;
 
             // The overlay root is a stretch child of Canvas_UI (pivot 0.5,0.5), so its rect *is* the
@@ -232,7 +277,7 @@ namespace Presentation.Tutorial
             }
 
             var band = (CanvasHalfWidth - Margin) - (boardRightX + BoardGap);
-            var compact = canvasHeight < 568f || band < 400f;
+            var compact = canvasHeight < CompactCanvasHeight || band < 400f;
 
             if (!_layoutApplied || compact != _compact)
             {
@@ -317,7 +362,7 @@ namespace Presentation.Tutorial
             // value: PlacePanel pins it to the bubble's bottom-left corner every late update.
             if (_skipRect != null)
             {
-                _skipRect.sizeDelta = compact ? new Vector2(80f, 36f) : new Vector2(120f, 56f);
+                _skipRect.sizeDelta = compact ? CompactSkipSize : FullSkipSize;
             }
 
             ApplyStrip(continueButton != null ? continueButton.transform as RectTransform : null,
@@ -372,13 +417,58 @@ namespace Presentation.Tutorial
             var halfWidth = compact ? 160f : 200f;
             var halfHeight = compact ? 120f : 260f;
             var scale = panel.localScale.x;
-            var inset = compact ? 12f : 24f;
+            var inset = compact ? CompactSkipInset : Margin;
 
             // The bubble is centred on the canvas and Skip is anchored to its bottom-left corner, so
             // the bubble corner has to be re-expressed in that origin.
             _skipRect.anchoredPosition = new Vector2(
                 panelPosition.x - halfWidth * scale + inset + CanvasHalfWidth,
                 panelPosition.y - halfHeight * scale + inset + canvasHeight * 0.5f);
+        }
+
+        /// <summary>
+        /// Lays out the retry prompt and Skip together. The modal is 780 x 420, which is taller than a
+        /// compact frame (506 px at 16:9, 405 px at 20:9): pinned to the canvas centre it leaves no free
+        /// band, and Skip — the last sibling, so the top-most graphic — would sit on top of "Reintentar"
+        /// and steal the tap. On compact frames the modal is shrunk to the height that fits and lifted
+        /// above a bottom strip that belongs to Skip alone, so their rects cannot intersect. Full frames
+        /// keep the prefab rect untouched: there Skip is on the bubble's corner, 180+ px below the modal.
+        /// </summary>
+        private void PlaceRetry()
+        {
+            var canvas = transform as RectTransform;
+            if (canvas == null || _retryRect == null) return;
+
+            var canvasHeight = canvas.rect.height;
+            if (canvasHeight <= 0f) return;
+
+            // The frame height decides on its own: the bubble's band test needs the camera and the
+            // opponent board, and neither is being measured while the modal has the screen.
+            if (canvasHeight >= CompactCanvasHeight && !_compact)
+            {
+                _retryRect.sizeDelta = _retryDesignSize;
+                _retryRect.anchoredPosition = _retryDesignPosition;
+                return;
+            }
+
+            // Squeeze only as far as the frame demands: 16:9 still fits the 420 px design height once
+            // the modal is lifted clear, and only 20:9 has to give some of it up.
+            var height = Mathf.Clamp(canvasHeight - RetryBottomStrip, 120f, _retryDesignSize.y);
+            var bottom = CompactSkipInset + CompactSkipHeight + RetrySkipGap;
+
+            // The modal is anchored and pivoted at the canvas centre, so its offset is the distance
+            // from that centre to the middle of the band it is allowed to occupy.
+            _retryRect.sizeDelta = new Vector2(_retryDesignSize.x, height);
+            _retryRect.anchoredPosition = new Vector2(
+                _retryDesignPosition.x,
+                bottom + height * 0.5f - canvasHeight * 0.5f);
+
+            if (_skipRect == null) return;
+
+            // Anchored and pivoted at (0,0): this is the canvas' bottom-left corner, inset so the
+            // button does not touch the frame edge that phones lose to a rounded corner or a notch.
+            _skipRect.sizeDelta = CompactSkipSize;
+            _skipRect.anchoredPosition = new Vector2(CompactSkipInset, CompactSkipInset);
         }
 
         private static void ApplyStrip(RectTransform rect, Vector2 size, Vector2 position)
