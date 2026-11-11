@@ -35,17 +35,19 @@ Reglas duras:
 
 | Grupo | Piezas | REPLACE | NEW |
 |---|---|---|---|
-| A — Tutorial / onboarding | 23 | 5 | 18 |
+| A — Tutorial / onboarding | 23 | 0 | 23 |
 | B — HUD de partida | 12 | 6 | 6 |
 | C — Tablero / gameplay (mundo, PPU 100) | 14 | 13 | 1 |
 | D — Bolas | 15 | 12 | 3 |
 | E — BallPass / pases | 14 | 14 | 0 |
 | F — Menú / login / matching / resultados / store | 36 | 33 | 3 |
 | G — Héroes | 7 | 7 | 0 |
-| **Total** | **121** | **90** | **31** |
+| **Total** | **121** | **85** | **36** |
 
-`REPLACE` = la pieza ya existe en el proyecto: se reemplazan **los bytes del PNG**, mismo path y mismo
-`.meta`. `NEW` = la pieza no existe y hay que dibujarla.
+`REPLACE` = la pieza ya existe con path y `.meta` en el proyecto: se reemplazan **los bytes del PNG**,
+mismo path, mismo `.meta`, mismo GUID. `NEW` = la pieza no existe: hay que dibujarla y **nace con GUID
+nuevo** (no hay `.meta` que conservar). El grupo A no tiene ninguna REPLACE: las 5 filas que antes se
+contaban como REPLACE sin archivo son NEW (ver la nota al pie de la §3).
 
 ---
 
@@ -58,7 +60,7 @@ Columnas: **archivo** (`<nombre>.png`) · **px** actuales leídos del archivo ·
 
 | archivo | px | estado | 9-slice | nota / origen |
 |---|---|---|---|---|
-| `ui_tutorial_dim_01.png` | 4×4 † | REPLACE | — | hoy la Image no tiene sprite (negro α 0.72); entregar BLANCO plano para tintar · origen: _sin PNG hoy_ |
+| `ui_tutorial_dim_01.png` | TBD | NEW | — | canvas de entrega 4×4, BLANCO plano para tintar (hoy la Image no tiene sprite: negro α 0.72). Nace con GUID nuevo: no hay archivo ni `.meta` que conservar |
 | `ui_tutorial_bubble_body_01.png` | TBD | NEW | 48/56/48/56 | cuerpo de la burbuja = el panel 400×520 (compacto 320×240); marco 9-slice |
 | `ui_tutorial_bubble_tail_left_01.png` | TBD | NEW | — | cola apuntando al tablero del jugador; el panel vive a su derecha. Sin versión _right |
 | `ui_tutorial_caption_pill_01.png` | TBD | NEW | 24/16/24/16 | fondo del < IZQUIERDA / DERECHA > bajo la mano |
@@ -73,13 +75,13 @@ Columnas: **archivo** (`<nombre>.png`) · **px** actuales leídos del archivo ·
 | `ui_tutorial_step_dot_normal_01.png` | TBD | NEW | — | px propuesto 28×28, punto pendiente |
 | `ui_tutorial_step_dot_active_01.png` | TBD | NEW | — | px propuesto 28×28, punto actual |
 | `ui_tutorial_step_dot_done_01.png` | TBD | NEW | — | px propuesto 28×28, punto completado |
-| `ui_tutorial_btn_skip_normal_01.png` | 120×56 † | REPLACE | 12/12/12/12 | hoy Image plano de color, sin sprite, dibujado 180×80 · origen: _sin PNG hoy_ |
+| `ui_tutorial_btn_skip_normal_01.png` | TBD | NEW | 12/12/12/12 | canvas de entrega 120×56 (hoy Image plano de color, sin sprite, dibujado 180×80). Nace con GUID nuevo |
 | `ui_tutorial_btn_skip_pressed_01.png` | TBD | NEW | 12/12/12/12 | mismo canvas que normal |
-| `ui_tutorial_btn_continue_normal_01.png` | 280×84 † | REPLACE | 12/12/12/12 | hoy Image plano verde (0.16, 0.55, 0.35), sin sprite · origen: _sin PNG hoy_ |
+| `ui_tutorial_btn_continue_normal_01.png` | TBD | NEW | 12/12/12/12 | canvas de entrega 280×84 (hoy Image plano verde (0.16, 0.55, 0.35), sin sprite). Nace con GUID nuevo |
 | `ui_tutorial_btn_continue_pressed_01.png` | TBD | NEW | 12/12/12/12 | mismo canvas que normal |
-| `ui_tutorial_btn_retry_normal_01.png` | 220×64 † | REPLACE | 12/12/12/12 | hoy Image plano, sin sprite · origen: _sin PNG hoy_ |
+| `ui_tutorial_btn_retry_normal_01.png` | TBD | NEW | 12/12/12/12 | canvas de entrega 220×64 (hoy Image plano, sin sprite). Nace con GUID nuevo |
 | `ui_tutorial_btn_retry_pressed_01.png` | TBD | NEW | 12/12/12/12 | mismo canvas que normal |
-| `ui_tutorial_panel_retry_01.png` | 780×420 † | REPLACE | 32/32/32/32 | hoy Image plano (0.08, 0.09, 0.13, 0.98), sin sprite · origen: _sin PNG hoy_ |
+| `ui_tutorial_panel_retry_01.png` | TBD | NEW | 32/32/32/32 | canvas de entrega 780×420 (hoy Image plano (0.08, 0.09, 0.13, 0.98), sin sprite). Nace con GUID nuevo |
 | `ui_tutorial_icon_danger_01.png` | TBD | NEW | — | px propuesto 48×48, acompaña «Si sigues así…» |
 
 ### B — HUD de partida (12)
@@ -147,12 +149,12 @@ Columnas: **archivo** (`<nombre>.png`) · **px** actuales leídos del archivo ·
 | `ui_pass_separator_page_01.png` | 360×8 | REPLACE | — | origen: `Assets/Sprites/Separador_ballpass.png` |
 | `ui_pass_separator_level_01.png` | 360×29 | REPLACE | — | origen: `Assets/Sprites/Separador_ballpass_levels.png` |
 | `ui_pass_reward_gold_01.png` | 1550×1028 | REPLACE | — | address `gold` · origen: `Assets/Sprites/BALLPASS/BALLPASS1.png` |
-| `ui_pass_reward_avatar_01.png` | 2156×2156 | REPLACE | — | address `profileAvatar_1` · origen: `Assets/Sprites/BALLPASS/BALLPASS4.png` |
-| `ui_pass_reward_avatar_02.png` | 1080×2151 | REPLACE | — | address `profileAvatar_2`; canvas vertical atípico: confirmar con el cliente antes de dibujar · origen: `Assets/Sprites/BALLPASS/BALLPASS5.png` |
+| `ui_pass_reward_avatar_01.png` | 2156×2156 | REPLACE | — | address `profileAvatar_1` · **2156 px de lado > `maxTextureSize: 2048`**: el import lo downsamplea (~2048×2048). Entregar **2048×2048** (el mismo canvas que ve el juego hoy), no 2156 · origen: `Assets/Sprites/BALLPASS/BALLPASS4.png` |
+| `ui_pass_reward_avatar_02.png` | 1080×2151 | REPLACE | — | address `profileAvatar_2` · canvas vertical atípico: confirmar con el cliente antes de dibujar · **2151 px de alto > 2048**: el import lo downsamplea (~1028×2048). Entregar **1028×2048** · origen: `Assets/Sprites/BALLPASS/BALLPASS5.png` |
 | `ui_pass_reward_picture_01.png` | 1578×1578 | REPLACE | — | address `profilePicture_1` y ADEMÁS avatar del HUD (rol doble, ver §6) · origen: `Assets/Sprites/BALLPASS/BALLPASS0.png` |
 | `ui_pass_reward_picture_02.png` | 1571×1571 | REPLACE | — | address `profilePicture_2` · origen: `Assets/Sprites/BALLPASS/BALLPASS2.png` |
-| `ui_pass_reward_background_01.png` | 2759×1120 | REPLACE | — | address `profileBackground_1` · origen: `Assets/Sprites/BALLPASS/BALLPASS3.png` |
-| `ui_pass_reward_background_02.png` | 2750×1116 | REPLACE | — | address `profileBackground_2` · origen: `Assets/Sprites/BALLPASS/BALLPASS7.png` |
+| `ui_pass_reward_background_01.png` | 2759×1120 | REPLACE | — | address `profileBackground_1` · **2759 px de ancho > `maxTextureSize: 2048`**: el import lo downsamplea (~2048×831). Entregar **2048×831** · origen: `Assets/Sprites/BALLPASS/BALLPASS3.png` |
+| `ui_pass_reward_background_02.png` | 2750×1116 | REPLACE | — | address `profileBackground_2` · **2750 px de ancho > 2048**: el import lo downsamplea (~2048×831). Entregar **2048×831** · origen: `Assets/Sprites/BALLPASS/BALLPASS7.png` |
 | `ui_pass_state_check_01.png` | 23×26 | REPLACE | — | origen: `Assets/Sprites/Check.png` |
 | `ui_pass_state_lock_01.png` | 23×26 | REPLACE | — | hoy huérfana: esta fila la PROMUEVE (ver triaje) · origen: `Assets/Sprites/CheckLock.png` |
 | `ui_pass_btn_return_01.png` | 200×35 | REPLACE | — | origen: `Assets/Sprites/Btn_Return.png` |
@@ -210,10 +212,14 @@ Columnas: **archivo** (`<nombre>.png`) · **px** actuales leídos del archivo ·
 | `hero_rojo_banner_01.png` | 1344×768 | REPLACE | — | origen: `Assets/Sprites/Heroes/HeroeRojo.png` |
 | `hero_dialog_bg_01.png` | 1344×768 | REPLACE | — | hoy JPG: entregar PNG al MISMO px · origen: `Assets/Sprites/Heroes/conversacion_bg_1.jpg` |
 
-**†** = fila REPLACE sin archivo de origen: hoy esas `Image` del prefab tienen `m_Sprite: {fileID: 0}`
-(color plano, sin textura). El px de la fila es el **canvas de entrega exigido**, no leído de un archivo.
-Son las 5 filas del grupo A: `dim`, `btn_skip_normal`, `btn_continue_normal`, `btn_retry_normal`,
-`panel_retry`. Las otras **85 REPLACE sí resolvieron a un PNG/JPEG en disco** y su px sale del header.
+**Nota de reclasificación (verify #3703, W-3 / RT-8).** Cinco filas del grupo A —
+`ui_tutorial_dim_01`, `ui_tutorial_btn_skip_normal_01`, `ui_tutorial_btn_continue_normal_01`,
+`ui_tutorial_btn_retry_normal_01` y `ui_tutorial_panel_retry_01` — se contaban como REPLACE con una
+marca †. Hoy esas `Image` del prefab tienen `m_Sprite: {fileID: 0}` (color plano) y **no existe ni el
+path ni el `.meta`** que RT-9 manda conservar. Operativamente son NEW, así que se reclasificaron como
+tales: su columna **px es TBD** (el canvas de entrega va en la nota, como en todas las NEW) y
+**nacerán con GUID nuevo**. Con eso el reparto del §2 queda en **85 REPLACE / 36 NEW**: las 85 REPLACE
+restantes resolvieron todas a un PNG/JPEG en disco y su px sale del header real del archivo.
 
 ---
 
@@ -226,7 +232,7 @@ Son las 5 filas del grupo A: `dim`, `btn_skip_normal`, `btn_continue_normal`, `b
 | PPU | **100** en todo el proyecto (verificado en los `.meta`) |
 | Canvas de mundo | `game_*` y `ball_*` conservan **exactamente** el px actual: las bolas miden 416/417 px = 4.16 u; entregar 512 px cambia el tamaño de mundo y rompe el alineado con los 33 slots (0.6 u) y los `BoxCollider2D` |
 | 9-slice | obligatorio declararlo por escrito en todo frame/botón/panel, con bordes en px |
-| Tamaño máximo | **2048 px por lado** (el importador tiene `maxTextureSize: 2048` en todos los `.meta` verificados) |
+| Tamaño máximo | **2048 px por lado** (el importador tiene `maxTextureSize: 2048` en todos los `.meta` verificados). Las **6 piezas REPLACE que hoy exceden el techo** —`game_board_backdrop_01`, `ui_pass_banner_01` y las 4 de BallPass— llevan en la §3 el tamaño exacto que el cliente debe entregar, porque el importador las downsamplea igual (verify #3703, W-4) |
 | Un archivo por pieza | nada de maestros (`PRUEBA.png` 4266×4267 y `BALLPASS.png` 6835×2664 hoy violan esto) |
 | Entrega | carpeta plana por sistema (`ui/`, `game/`, `ball/`, `hero/`), con `_01` en todas las piezas |
 
@@ -275,8 +281,8 @@ GUID** y las **11 addresses** de Addressables.
 ## 8. Auditoría de este documento
 
 - **px reales**: leídos del header de cada archivo (PNG IHDR bytes 16-24; JPEG SOF), no copiados de la
-  propuesta. Los 85 REPLACE con archivo de origen coinciden con el archivo que existe en el repo.
-- **conteo**: 121 filas · 90 REPLACE · 31 NEW · 0 duplicados.
+  propuesta. Las **85 REPLACE** con archivo de origen coinciden con el archivo que existe en el repo.
+- **conteo**: 121 filas · **85 REPLACE** · **36 NEW** · 0 duplicados (verify #3703, W-3).
 - **nombres**: `^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$` → 121/121 pasan.
 - **9-slice**: bordes de `Button_UI`, `Contenedor_UI`, `SubContenedor_UI` leídos de los `.meta`; son los
   únicos 3 no nulos del proyecto.
