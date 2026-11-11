@@ -18,6 +18,15 @@ namespace Presentation.Tutorial
         [SerializeField] private TutorialOverlay overlay;
 
         /// <summary>
+        /// Wall-clock delay from the controller's first tick until the overlay shows itself. It is
+        /// the tuning knob for "when does the lesson appear": smaller shows it earlier, larger lets
+        /// the opening countdown replay drive the reveal on its own.
+        /// </summary>
+        [Tooltip("Seconds from the tutorial controller starting until the overlay shows itself. " +
+                 "Smaller = earlier. Set it high (e.g. 99) to let the opening countdown replay drive the reveal.")]
+        [Min(0f)] [SerializeField] private float revealAfterSeconds = 1.2f;
+
+        /// <summary>
         /// How long the overlay waits for the opening countdown before showing itself anyway. The
         /// splash fades for 1.5 s and the replay follows right after it, so this is pure slack: it
         /// exists only so a missing or never-replayed director cannot hide the lesson for good.
@@ -153,14 +162,18 @@ namespace Presentation.Tutorial
         }
 
         /// <summary>
-        /// Holds the lesson back until the countdown that opens the match is the one running with
-        /// the game. The director's state alone cannot answer that: the scene authors it to autoplay
-        /// (<c>m_InitialState: 1</c>), so it is already playing behind the splash on the first frame.
-        /// What the player sees is the replay <c>OpeningGame</c> performs as the first command of
-        /// <c>Player.Configure</c>, and that replay is visible two ways: the command queue goes busy
-        /// (it stays busy for the whole countdown) and the director's time jumps backwards, which a
-        /// timeline never does on its own. The bounded wait only exists so a null, disabled or
-        /// never-replayed director cannot leave the tutorial invisible for good.
+        /// Holds the lesson back until it is time to show it. Three things can reveal it, whichever
+        /// comes first: the author-tuned <see cref="revealAfterSeconds"/> delay elapsing, the
+        /// countdown that opens the match being the one running with the game, or the bounded
+        /// fallback below.
+        ///
+        /// The director's state alone cannot answer "the game's countdown is running": the scene
+        /// authors it to autoplay (<c>m_InitialState: 1</c>), so it is already playing behind the
+        /// splash on the first frame. What the player sees is the replay <c>OpeningGame</c> performs
+        /// as the first command of <c>Player.Configure</c>, and that replay is visible two ways: the
+        /// command queue goes busy (it stays busy for the whole countdown) and the director's time
+        /// jumps backwards, which a timeline never does on its own. The bounded wait only exists so
+        /// a null, disabled or never-replayed director cannot leave the tutorial invisible for good.
         /// </summary>
         private void TickReveal()
         {
@@ -177,10 +190,11 @@ namespace Presentation.Tutorial
             var busy = ServiceLocator.Instance.TryGetService<ICommandQueue>(out var queue)
                        && queue != null && queue.IsBusy(_player);
 
-            if (!busy && !rewound)
+            // Unscaled: the delay is wall-clock, so a paused timeScale cannot defeat it.
+            _openingWaitSeconds += Time.unscaledDeltaTime;
+
+            if (!busy && !rewound && _openingWaitSeconds < revealAfterSeconds)
             {
-                // Unscaled: the guarantee is wall-clock, so a paused timeScale cannot defeat it.
-                _openingWaitSeconds += Time.unscaledDeltaTime;
                 if (_openingWaitSeconds < OpeningHoldTimeoutSeconds) return;
 
                 Debug.LogWarning(
