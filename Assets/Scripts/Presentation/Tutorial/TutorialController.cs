@@ -38,6 +38,7 @@ namespace Presentation.Tutorial
             _gameManager = FindFirstObjectByType<GameManager>();
             if (_gameManager == null || !_gameManager.IsTutorialMode())
             {
+                if (_gameManager != null) _gameManager.RestoreTutorialOpponentHud();
                 overlay.Hide();
                 enabled = false;
                 return;
@@ -48,10 +49,19 @@ namespace Presentation.Tutorial
             if (_balance == null)
             {
                 Debug.LogError("[Tutorial] the first player has no Balance; tutorial disabled.");
+                _gameManager.RestoreTutorialOpponentHud();
                 overlay.Hide();
                 enabled = false;
                 return;
             }
+
+            // The scene carries no override for this prefab: the bubble and the hand resolve their
+            // anchors from the live board the controller already owns.
+            overlay.Bind(
+                Camera.main,
+                _gameManager.GetOpponentBoardRoot(),
+                _balance.GetLeftPath() != null ? _balance.GetLeftPath().GetComponent<BoxCollider2D>() : null,
+                _balance.GetRightPath() != null ? _balance.GetRightPath().GetComponent<BoxCollider2D>() : null);
 
             _flow = new TutorialFlow(TutorialResume.Step);
             _balance.OnBalanceClicked += OnBalanceClicked;
@@ -192,6 +202,7 @@ namespace Presentation.Tutorial
             TutorialResume.Clear();
             Debug.Log("[Tutorial] completed -> BallPass");
 
+            if (_gameManager != null) _gameManager.RestoreTutorialOpponentHud();
             overlay.Hide();
             ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(() =>
                 SceneManager.LoadScene("BallPass"));

@@ -8,24 +8,44 @@ namespace Presentation.Tutorial
     /// The tutorial's on-screen layer. Copy lives in serialized <see cref="TMPro.TMP_Text"/> fields
     /// (never in code) and every non-modal step leaves the board clickable: only <see cref="dim"/>
     /// carries a raycast target, and it is enabled just for the closing card and the retry prompt.
+    /// The bubble is a world-anchored panel: it is re-placed every late update from the opponent
+    /// board, which keeps it off the playable balls at any aspect instead of parking on top of them.
     /// </summary>
     public sealed class TutorialOverlay : MonoBehaviour
     {
+        /// <summary>Point in the opponent board's space the bubble talks about: between its columns.</summary>
+        private static readonly Vector3 AnchorLocalPoint = new Vector3(-3f, -2.70f, 0f);
+
+        /// <summary>Constant world fallback, so an unwired anchor still lands where the design expects.</summary>
+        private static readonly Vector3 AnchorFallbackWorld = new Vector3(2.35f, -2.70f, 0f);
+
+        /// <summary>World x of the human board's right edge, used when no lane collider is wired.</summary>
+        private const float BoardRightFallbackWorldX = -0.0717f;
+
+        /// <summary>Design position from the prefab. Never (0,0): that would centre the bubble on the board.</summary>
+        private static readonly Vector2 DesignPosition = new Vector2(211f, -216f);
+
+        /// <summary>The canvas is a 900 px wide match-width scaler, so its half width is constant.</summary>
+        private const float CanvasHalfWidth = 450f;
+
+        /// <summary>Inset the bubble keeps from the canvas edge and from the board.</summary>
+        private const float Margin = 24f;
+        private const float BoardGap = 16f;
+
         [Header("Layers")]
         [Tooltip("Full-screen block. raycastTarget must stay true; it is only active while modal.")]
         [SerializeField] private Image dim;
-        [SerializeField] private GameObject card;
+        [Tooltip("The bubble. Layout node only: it is re-placed every late update.")]
+        [SerializeField] private RectTransform panel;
+        [Tooltip("Bubble tail. Parented to the bubble body and toggled off when it would point nowhere.")]
+        [SerializeField] private RectTransform tail;
         [SerializeField] private GameObject retryPanel;
 
-        [Header("Step copy (exclusive groups inside Card)")]
+        [Header("Step copy (exclusive groups inside the bubble)")]
         [SerializeField] private GameObject dropGroup;
         [SerializeField] private GameObject matchGroup;
         [SerializeField] private GameObject balanceGroup;
         [SerializeField] private GameObject closeGroup;
-
-        [Header("Hints")]
-        [SerializeField] private GameObject hintLeft;
-        [SerializeField] private GameObject hintRight;
 
         [Header("Danger")]
         [Tooltip("Overflow-risk hint. Copy lives in the prefab; shown only while a path is 1-2 moves from loss.")]
@@ -35,6 +55,24 @@ namespace Presentation.Tutorial
         [SerializeField] private Button skipButton;
         [SerializeField] private Button continueButton;
         [SerializeField] private Button retryButton;
+
+        private Camera _worldCamera;
+        private Transform _opponentBoard;
+        private Collider2D _rightLane;
+
+        private RectTransform[] _copies;
+        private bool _compact;
+        private bool _layoutApplied;
+        private bool _dangerRequested;
+        private bool _warned;
+
+        private void Awake()
+        {
+            _copies = new[]
+            {
+                CopyRect(dropGroup), CopyRect(matchGroup), CopyRect(balanceGroup), CopyRect(closeGroup)
+            };
+        }
 
         public void Initialize(Action onSkip, Action onContinue, Action onRetry)
         {
@@ -46,11 +84,29 @@ namespace Presentation.Tutorial
             retryButton.onClick.AddListener(() => onRetry());
         }
 
-        /// <summary>Observer mode: the card explains, the board stays tappable.</summary>
+        /// <summary>
+        /// Wires the three references the scene cannot carry without a prefab override: the world
+        /// camera, the board the bubble talks about, and the tap lane that bounds it. Called once by
+        /// <see cref="TutorialController"/> after it resolves the match.
+        /// </summary>
+        public void Bind(Camera worldCamera, Transform opponentBoard, Collider2D leftLane, Collider2D rightLane)
+        {
+            _worldCamera = worldCamera;
+            _opponentBoard = opponentBoard;
+            _rightLane = rightLane;
+
+            if (_opponentBoard == null && !_warned)
+            {
+                _warned = true;
+                Debug.LogWarning("[Tutorial] no opponent board root; the bubble falls back to a fixed world anchor.");
+            }
+        }
+
+        /// <summary>Observer mode: the bubble explains, the board stays tappable.</summary>
         public void ShowStep(TutorialStep step, PathType expectedSide)
         {
             retryPanel.SetActive(false);
-            card.SetActive(true);
+            panel.gameObject.SetActive(true);
             skipButton.gameObject.SetActive(true);
             dim.gameObject.SetActive(step == TutorialStep.Close);
 
@@ -59,36 +115,31 @@ namespace Presentation.Tutorial
             balanceGroup.SetActive(step == TutorialStep.Balance);
             closeGroup.SetActive(step == TutorialStep.Close);
 
-            hintLeft.SetActive(expectedSide == PathType.Left);
-            hintRight.SetActive(expectedSide == PathType.Right);
+            _dangerRequested = false;
             dangerHint.SetActive(false);
         }
 
         /// <summary>Modal prompt: the board is blocked until the player retries.</summary>
         public void ShowRetry()
         {
-            card.SetActive(false);
+            panel.gameObject.SetActive(false);
             retryPanel.SetActive(true);
-            skipButton.gameObject.SetActive(true);
             dim.gameObject.SetActive(true);
-            hintLeft.SetActive(false);
-            hintRight.SetActive(false);
+            _dangerRequested = false;
             dangerHint.SetActive(false);
         }
 
         /// <summary>
-        /// Removes every overlay affordance. Skip is part of this list on purpose: it is a
-        /// root-level sibling of the modal layer, so leaving it out leaks a dead 180x80 button
-        /// (and its raycast) into every normal match that shares the scene with this prefab.
+        /// Removes every overlay affordance. The bubble owns Skip, so hiding it also disarms that
+        /// button: leaving either behind leaks a dead clickable layer into every normal match that
+        /// shares the scene with this prefab.
         /// </summary>
         public void Hide()
         {
-            card.SetActive(false);
+            panel.gameObject.SetActive(false);
             retryPanel.SetActive(false);
-            skipButton.gameObject.SetActive(false);
             dim.gameObject.SetActive(false);
-            hintLeft.SetActive(false);
-            hintRight.SetActive(false);
+            _dangerRequested = false;
             dangerHint.SetActive(false);
         }
 
@@ -98,7 +149,170 @@ namespace Presentation.Tutorial
         /// </summary>
         public void ShowDanger(bool visible)
         {
-            if (dangerHint != null) dangerHint.SetActive(visible);
+            _dangerRequested = visible;
+            if (dangerHint != null) dangerHint.SetActive(visible && !_compact);
+        }
+
+        /// <summary>
+        /// Re-places the bubble. Runs every frame on purpose: the anchor is resolved from live world
+        /// transforms, so moving the camera or resizing the game view is handled on the next frame
+        /// without a single cached offset.
+        /// </summary>
+        private void LateUpdate()
+        {
+            PlacePanel();
+        }
+
+        private void PlacePanel()
+        {
+            if (panel == null || !panel.gameObject.activeSelf) return;
+
+            // The overlay root is a stretch child of Canvas_UI (pivot 0.5,0.5), so its rect *is* the
+            // 900 px wide canvas: local coordinates are the same ones the design tables use.
+            var canvas = transform as RectTransform;
+            if (canvas == null) return;
+
+            var canvasHeight = canvas.rect.height;
+            if (canvasHeight <= 0f) return;
+
+            if (_worldCamera == null) _worldCamera = Camera.main;
+
+            if (_worldCamera == null || !TryResolveAnchor(canvas, out var anchor, out var boardRightX))
+            {
+                panel.anchoredPosition = DesignPosition;
+                return;
+            }
+
+            var band = (CanvasHalfWidth - Margin) - (boardRightX + BoardGap);
+            var compact = canvasHeight < 568f || band < 400f;
+
+            if (!_layoutApplied || compact != _compact)
+            {
+                _compact = compact;
+                _layoutApplied = true;
+                ApplyLayout(compact);
+            }
+
+            var halfWidth = compact ? 160f : 200f;
+            var halfHeight = compact ? 120f : 260f;
+
+            // Safety net only: the compact layout already fits a 288 px tall canvas. Below that the
+            // bubble scales instead of spilling out of the frame.
+            var scale = compact && canvasHeight < 288f
+                ? Mathf.Clamp((canvasHeight - 24f) / 240f, 0.5f, 1f)
+                : 1f;
+            panel.localScale = new Vector3(scale, scale, 1f);
+
+            var minX = boardRightX + BoardGap + halfWidth * scale;
+            var maxX = CanvasHalfWidth - Margin - halfWidth * scale;
+            var x = Mathf.Clamp(anchor.x, minX, Mathf.Max(minX, maxX));
+            var y = Mathf.Clamp(
+                anchor.y,
+                -canvasHeight * 0.5f + Margin + halfHeight * scale,
+                canvasHeight * 0.5f - Margin - halfHeight * scale);
+
+            panel.anchoredPosition = new Vector2(x, y);
+
+            if (tail == null) return;
+
+            // The bubble always lives right of the board, so its tail always points left. When the
+            // clamp pushes the bubble over the board's edge there is nothing to point at: hide the
+            // tail rather than mirror it (the manifest ships no right-facing tail).
+            tail.anchoredPosition = new Vector2(0f, Mathf.Clamp(anchor.y - y, -halfHeight + 40f, halfHeight - 40f));
+            tail.gameObject.SetActive((x - halfWidth) >= boardRightX);
+        }
+
+        /// <summary>
+        /// Resolves the world anchor and the board's right edge in canvas space. Nothing is cached:
+        /// both come from live transforms and colliders, and the fallbacks exist so an unwired
+        /// tutorial still draws somewhere sensible instead of throwing.
+        /// </summary>
+        private bool TryResolveAnchor(RectTransform canvas, out Vector2 anchor, out float boardRightX)
+        {
+            boardRightX = 0f;
+
+            var boardPoint = _opponentBoard != null
+                ? _opponentBoard.TransformPoint(AnchorLocalPoint)
+                : AnchorFallbackWorld;
+
+            if (!TutorialProjection.TryWorldToCanvas(canvas, _worldCamera, boardPoint, out anchor))
+            {
+                if (!TutorialProjection.TryWorldToCanvas(canvas, _worldCamera, AnchorFallbackWorld, out anchor))
+                    return false;
+
+                if (!_warned)
+                {
+                    _warned = true;
+                    Debug.LogWarning("[Tutorial] the board anchor projects off-canvas; using the fixed world anchor.");
+                }
+            }
+
+            var boardRightWorldX = _rightLane != null ? _rightLane.bounds.max.x : BoardRightFallbackWorldX;
+            if (!TutorialProjection.TryWorldToCanvas(canvas, _worldCamera,
+                    new Vector3(boardRightWorldX, 0f, 0f), out var boardEdge))
+                return false;
+
+            boardRightX = boardEdge.x;
+            return true;
+        }
+
+        /// <summary>
+        /// Applies one of the two number sets from the design. The node tree is the same in both
+        /// modes: only rect values, sizes and the danger strip's visibility change.
+        /// </summary>
+        private void ApplyLayout(bool compact)
+        {
+            panel.sizeDelta = compact ? new Vector2(320f, 240f) : new Vector2(400f, 520f);
+
+            ApplyStrip(skipButton != null ? skipButton.transform as RectTransform : null,
+                compact ? new Vector2(80f, 36f) : new Vector2(120f, 56f),
+                compact ? new Vector2(12f, 12f) : new Vector2(24f, 24f));
+
+            ApplyStrip(continueButton != null ? continueButton.transform as RectTransform : null,
+                compact ? new Vector2(200f, 52f) : new Vector2(280f, 84f),
+                compact ? new Vector2(0f, 56f) : new Vector2(0f, 84f));
+
+            // Copy strip: 228..444 in full, 116..200 (one line) in compact. The body never goes
+            // below 24 px, which is the legibility floor the prefab already used.
+            var copyMin = compact ? new Vector2(16f, 116f) : new Vector2(28f, 228f);
+            var copyMax = compact ? new Vector2(-16f, -40f) : new Vector2(-28f, -76f);
+            var fontSize = compact ? 24f : 32f;
+
+            if (_copies != null)
+            {
+                foreach (var rect in _copies)
+                {
+                    if (rect == null) continue;
+                    rect.offsetMin = copyMin;
+                    rect.offsetMax = copyMax;
+
+                    var text = rect.GetComponent<TMPro.TMP_Text>();
+                    if (text != null) text.fontSize = fontSize;
+                }
+            }
+
+            // The strip has no room in the compact bubble: it is suppressed there and comes back
+            // with its last requested state when the frame grows again.
+            if (dangerHint != null) dangerHint.SetActive(_dangerRequested && !compact);
+
+            if (tail != null)
+            {
+                tail.sizeDelta = compact ? new Vector2(40f, 40f) : new Vector2(56f, 56f);
+            }
+        }
+
+        private static void ApplyStrip(RectTransform rect, Vector2 size, Vector2 position)
+        {
+            if (rect == null) return;
+            rect.sizeDelta = size;
+            rect.anchoredPosition = position;
+        }
+
+        /// <summary>Finds the copy label inside a step group. The tree is fixed, so this is a name lookup, not a search.</summary>
+        private static RectTransform CopyRect(GameObject group)
+        {
+            if (group == null) return null;
+            return group.transform.Find("Copy") as RectTransform;
         }
     }
 }

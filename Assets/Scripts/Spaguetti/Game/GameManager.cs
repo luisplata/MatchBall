@@ -35,6 +35,10 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     private bool _isTutorialMode;
     private bool _isLocalPvP;
 
+    /// <summary>Opponent HUD state captured before the tutorial hid it, so it can be handed back.</summary>
+    private bool _opponentHudWasActive;
+    private bool _opponentHudHidden;
+
     /// <summary>Fixed feed for the first-run lesson: drop, then build the 3+ match on tap six.</summary>
     private static readonly string[] TutorialBallOrder =
     {
@@ -91,6 +95,10 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
 
         if (player2 != null) player2.gameObject.SetActive(false);
         if (gameMode != null) gameMode.gameObject.SetActive(false);
+
+        // The opponent's scoreboard is not a child of its board, so disabling P2 leaves it drawn in
+        // the top band. There is no AI in the lesson: take it off screen and remember what it was.
+        HideTutorialOpponentHud();
 
         var ballFactory = Player1.GetBallZone()?.GetBallFactory();
         ballFactory?.SetConsumptionOrder(TutorialBallOrder);
@@ -342,6 +350,53 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
     public IPlayer GetFirstPlayer()
     {
         return Player1;
+    }
+
+    /// <summary>
+    /// The opponent board's root, so the tutorial can anchor its bubble to the empty half of the
+    /// screen. Null-safe: the tutorial falls back to a fixed world point when it is missing.
+    /// </summary>
+    public Transform GetOpponentBoardRoot()
+    {
+        return player2 != null ? player2.transform : null;
+    }
+
+    /// <summary>
+    /// Takes the opponent's HUD cluster off screen for the tutorial and records its previous state,
+    /// so a cluster another system had already hidden is not switched back on by us.
+    /// </summary>
+    private void HideTutorialOpponentHud()
+    {
+        var cluster = GetOpponentHudCluster();
+        if (cluster == null) return;
+
+        _opponentHudWasActive = cluster.gameObject.activeSelf;
+        _opponentHudHidden = true;
+        cluster.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Hands the opponent HUD back to whatever state it had before the tutorial started. Called on
+    /// every way out of the lesson, including the aborts, so no match inherits a hidden scoreboard.
+    /// </summary>
+    public void RestoreTutorialOpponentHud()
+    {
+        if (!_opponentHudHidden) return;
+
+        _opponentHudHidden = false;
+
+        var cluster = GetOpponentHudCluster();
+        if (cluster == null) return;
+
+        cluster.gameObject.SetActive(_opponentHudWasActive);
+    }
+
+    private RectTransform GetOpponentHudCluster()
+    {
+        if (player2 == null) return null;
+
+        var boardView = player2.GetComponent<PlayerBoardView>();
+        return boardView != null ? boardView.HudCluster : null;
     }
 
     public bool IsGameOver()
