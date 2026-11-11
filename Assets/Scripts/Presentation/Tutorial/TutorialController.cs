@@ -2,7 +2,6 @@ using Bootstrap;
 using Commander;
 using Domain.Services;
 using UnityEngine;
-using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
 
 namespace Presentation.Tutorial
@@ -18,32 +17,17 @@ namespace Presentation.Tutorial
         [SerializeField] private TutorialOverlay overlay;
 
         /// <summary>
-        /// Wall-clock delay from the controller's first tick until the overlay shows itself. It is
-        /// the tuning knob for "when does the lesson appear": smaller shows it earlier, larger lets
-        /// the opening countdown replay drive the reveal on its own.
+        /// Wall-clock delay from the scene start until the overlay shows itself. It is the single
+        /// source of truth for "when does the lesson appear": nothing else gates the reveal.
         /// </summary>
-        [Tooltip("Seconds from the tutorial controller starting until the overlay shows itself. " +
-                 "Smaller = earlier. Set it high (e.g. 99) to let the opening countdown replay drive the reveal.")]
-        [Min(0f)] [SerializeField] private float revealAfterSeconds = 1.2f;
-
-        /// <summary>
-        /// How long the overlay waits for the opening countdown before showing itself anyway. The
-        /// splash fades for 1.5 s and the replay follows right after it, so this is pure slack: it
-        /// exists only so a missing or never-replayed director cannot hide the lesson for good.
-        /// </summary>
-        private const float OpeningHoldTimeoutSeconds = 5f;
-
-        /// <summary>
-        /// Slack for the "the timeline went backwards" test: a whole frame's worth of time is enough
-        /// to tell a replay from normal playback without reacting to sub-frame jitter.
-        /// </summary>
-        private const double RewindTolerance = 0.1d;
+        [Tooltip("Seconds after the tutorial scene starts before the tutorial graphics appear. "
+                 + "0 = first frame. This is the only thing that decides when they show.")]
+        [Min(0f)] [SerializeField] private float graphicsDelaySeconds = 1.2f;
 
         private TutorialFlow _flow;
         private GameManager _gameManager;
         private IPlayer _player;
         private Balance _balance;
-        private PlayableDirector _openingDirector;
 
         private bool _active;
         private bool _exiting;
@@ -51,7 +35,6 @@ namespace Presentation.Tutorial
         private bool _pendingTap;
         private bool _busyObserved;
         private float _openingWaitSeconds;
-        private double _lastOpeningTime = -1d;
         private PathType _pendingSide;
         private int _settledBallCount;
         private int _ballsBeforeTap;
@@ -62,7 +45,7 @@ namespace Presentation.Tutorial
         /// <summary>
         /// The prefab ships visible and this controller only binds in <see cref="Start"/>, so the
         /// lesson would show through the splash. Hiding in Awake leaves no rendered frame showing it:
-        /// the overlay only comes back once the opening countdown is replayed with the game.
+        /// the overlay only comes back once <see cref="graphicsDelaySeconds"/> has elapsed.
         /// </summary>
         private void Awake()
         {
@@ -91,10 +74,6 @@ namespace Presentation.Tutorial
                 return;
             }
 
-            // The countdown that opens the match: the lesson shows itself when this is replayed with
-            // the game, never before it (the splash and the board load show no tutorial UI at all).
-            _openingDirector = _gameManager.GetDirectorOpening();
-
             // The scene carries no override for this prefab: the bubble and the hand resolve their
             // anchors from the live board the controller already owns.
             overlay.Bind(
@@ -109,7 +88,7 @@ namespace Presentation.Tutorial
             _balance.RiskChanged += OnRiskChanged;
             overlay.Initialize(OnSkip, OnContinue, OnRetry);
 
-            // Not `_active` yet: Update waits for the opening countdown in TickReveal before the
+            // Not `_active` yet: Update waits for graphicsDelaySeconds in TickReveal before the
             // first step is ever drawn, so the splash and the board load stay free of tutorial UI.
             Debug.Log($"[Tutorial] started at step {_flow.Step} (resume {TutorialResume.Step})");
         }
@@ -118,7 +97,7 @@ namespace Presentation.Tutorial
         {
             if (_exiting) return;
 
-            // Held: the overlay is down and the only work is waiting for the countdown to start.
+            // Held: the overlay is down and the only work is waiting for the graphics delay.
             if (!_active)
             {
                 TickReveal();
@@ -162,45 +141,15 @@ namespace Presentation.Tutorial
         }
 
         /// <summary>
-        /// Holds the lesson back until it is time to show it. Three things can reveal it, whichever
-        /// comes first: the author-tuned <see cref="revealAfterSeconds"/> delay elapsing, the
-        /// countdown that opens the match being the one running with the game, or the bounded
-        /// fallback below.
-        ///
-        /// The director's state alone cannot answer "the game's countdown is running": the scene
-        /// authors it to autoplay (<c>m_InitialState: 1</c>), so it is already playing behind the
-        /// splash on the first frame. What the player sees is the replay <c>OpeningGame</c> performs
-        /// as the first command of <c>Player.Configure</c>, and that replay is visible two ways: the
-        /// command queue goes busy (it stays busy for the whole countdown) and the director's time
-        /// jumps backwards, which a timeline never does on its own. The bounded wait only exists so
-        /// a null, disabled or never-replayed director cannot leave the tutorial invisible for good.
+        /// Holds the lesson back until <see cref="graphicsDelaySeconds"/> has elapsed since the scene
+        /// started. That delay is the only input: the opening countdown neither shortens nor extends
+        /// it. The clock is unscaled, so a paused <c>timeScale</c> cannot stall the reveal.
         /// </summary>
         private void TickReveal()
         {
-            var rewound = false;
-            if (_openingDirector != null)
-            {
-                var time = _openingDirector.time;
-                rewound = _openingDirector.state == PlayState.Playing
-                          && _lastOpeningTime >= 0d
-                          && time < _lastOpeningTime - RewindTolerance;
-                _lastOpeningTime = time;
-            }
-
-            var busy = ServiceLocator.Instance.TryGetService<ICommandQueue>(out var queue)
-                       && queue != null && queue.IsBusy(_player);
-
-            // Unscaled: the delay is wall-clock, so a paused timeScale cannot defeat it.
             _openingWaitSeconds += Time.unscaledDeltaTime;
 
-            if (!busy && !rewound && _openingWaitSeconds < revealAfterSeconds)
-            {
-                if (_openingWaitSeconds < OpeningHoldTimeoutSeconds) return;
-
-                Debug.LogWarning(
-                    $"[Tutorial] the opening countdown did not start within {OpeningHoldTimeoutSeconds:0} s " +
-                    "(missing, disabled or never replayed director); showing the overlay anyway so the lesson stays reachable.");
-            }
+            if (_openingWaitSeconds < graphicsDelaySeconds) return;
 
             _settledBallCount = CountBalls();
             _active = true;
