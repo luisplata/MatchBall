@@ -2,6 +2,7 @@ using Bootstrap;
 using Commander;
 using Domain.Services;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
 
 namespace Presentation.Tutorial
@@ -16,22 +17,48 @@ namespace Presentation.Tutorial
     {
         [SerializeField] private TutorialOverlay overlay;
 
+        /// <summary>
+        /// How long the overlay waits for the opening countdown before showing itself anyway. The
+        /// splash fades for 1.5 s and the replay follows right after it, so this is pure slack: it
+        /// exists only so a missing or never-replayed director cannot hide the lesson for good.
+        /// </summary>
+        private const float OpeningHoldTimeoutSeconds = 5f;
+
+        /// <summary>
+        /// Slack for the "the timeline went backwards" test: a whole frame's worth of time is enough
+        /// to tell a replay from normal playback without reacting to sub-frame jitter.
+        /// </summary>
+        private const double RewindTolerance = 0.1d;
+
         private TutorialFlow _flow;
         private GameManager _gameManager;
         private IPlayer _player;
         private Balance _balance;
+        private PlayableDirector _openingDirector;
 
         private bool _active;
         private bool _exiting;
         private bool _retryOffered;
         private bool _pendingTap;
         private bool _busyObserved;
+        private float _openingWaitSeconds;
+        private double _lastOpeningTime = -1d;
         private PathType _pendingSide;
         private int _settledBallCount;
         private int _ballsBeforeTap;
         private TutorialStep _retryStep;
 
         private static IStorageData Storage => ServiceLocator.Instance.GetService<IStorageData>();
+
+        /// <summary>
+        /// The prefab ships visible and this controller only binds in <see cref="Start"/>, so the
+        /// lesson would show through the splash. Hiding in Awake leaves no rendered frame showing it:
+        /// the overlay only comes back once the opening countdown is replayed with the game.
+        /// </summary>
+        private void Awake()
+        {
+            if (overlay != null) overlay.Hide();
+        }
 
         private void Start()
         {
@@ -55,6 +82,10 @@ namespace Presentation.Tutorial
                 return;
             }
 
+            // The countdown that opens the match: the lesson shows itself when this is replayed with
+            // the game, never before it (the splash and the board load show no tutorial UI at all).
+            _openingDirector = _gameManager.GetDirectorOpening();
+
             // The scene carries no override for this prefab: the bubble and the hand resolve their
             // anchors from the live board the controller already owns.
             overlay.Bind(
@@ -69,15 +100,23 @@ namespace Presentation.Tutorial
             _balance.RiskChanged += OnRiskChanged;
             overlay.Initialize(OnSkip, OnContinue, OnRetry);
 
-            _settledBallCount = CountBalls();
-            _active = true;
+            // Not `_active` yet: Update waits for the opening countdown in TickReveal before the
+            // first step is ever drawn, so the splash and the board load stay free of tutorial UI.
             Debug.Log($"[Tutorial] started at step {_flow.Step} (resume {TutorialResume.Step})");
-            Render();
         }
 
         private void Update()
         {
-            if (!_active || _exiting || _retryOffered) return;
+            if (_exiting) return;
+
+            // Held: the overlay is down and the only work is waiting for the countdown to start.
+            if (!_active)
+            {
+                TickReveal();
+                return;
+            }
+
+            if (_retryOffered) return;
 
             if (_player.IsGameOver())
             {
@@ -111,6 +150,47 @@ namespace Presentation.Tutorial
             }
 
             _settledBallCount = CountBalls();
+        }
+
+        /// <summary>
+        /// Holds the lesson back until the countdown that opens the match is the one running with
+        /// the game. The director's state alone cannot answer that: the scene authors it to autoplay
+        /// (<c>m_InitialState: 1</c>), so it is already playing behind the splash on the first frame.
+        /// What the player sees is the replay <c>OpeningGame</c> performs as the first command of
+        /// <c>Player.Configure</c>, and that replay is visible two ways: the command queue goes busy
+        /// (it stays busy for the whole countdown) and the director's time jumps backwards, which a
+        /// timeline never does on its own. The bounded wait only exists so a null, disabled or
+        /// never-replayed director cannot leave the tutorial invisible for good.
+        /// </summary>
+        private void TickReveal()
+        {
+            var rewound = false;
+            if (_openingDirector != null)
+            {
+                var time = _openingDirector.time;
+                rewound = _openingDirector.state == PlayState.Playing
+                          && _lastOpeningTime >= 0d
+                          && time < _lastOpeningTime - RewindTolerance;
+                _lastOpeningTime = time;
+            }
+
+            var busy = ServiceLocator.Instance.TryGetService<ICommandQueue>(out var queue)
+                       && queue != null && queue.IsBusy(_player);
+
+            if (!busy && !rewound)
+            {
+                // Unscaled: the guarantee is wall-clock, so a paused timeScale cannot defeat it.
+                _openingWaitSeconds += Time.unscaledDeltaTime;
+                if (_openingWaitSeconds < OpeningHoldTimeoutSeconds) return;
+
+                Debug.LogWarning(
+                    $"[Tutorial] the opening countdown did not start within {OpeningHoldTimeoutSeconds:0} s " +
+                    "(missing, disabled or never replayed director); showing the overlay anyway so the lesson stays reachable.");
+            }
+
+            _settledBallCount = CountBalls();
+            _active = true;
+            Render();
         }
 
         private void OnBalanceClicked(PathType side)
