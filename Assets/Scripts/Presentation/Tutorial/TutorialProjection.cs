@@ -18,8 +18,13 @@ namespace Presentation.Tutorial
         /// <summary>
         /// Projects <paramref name="world"/> into <paramref name="canvas"/> local space (origin at the
         /// rect's pivot). Returns false when the canvas has no layout yet, when there is no camera, or
-        /// when the point sits behind the camera.
+        /// when the point sits behind the camera or outside the camera's viewport.
         /// </summary>
+        /// <remarks>
+        /// The off-viewport case is a rejection, not a clamp: a point left or right of the letterboxed
+        /// frame would still yield a numeric local point (the rectangle conversion does not reject it),
+        /// and callers need to know the anchor is no longer on screen to take their fallback path.
+        /// </remarks>
         internal static bool TryWorldToCanvas(RectTransform canvas, Camera cam, Vector3 world, out Vector2 local)
         {
             local = Vector2.zero;
@@ -29,6 +34,7 @@ namespace Presentation.Tutorial
 
             var viewport = cam.WorldToViewportPoint(world);
             if (viewport.z <= 0f) return false;
+            if (viewport.x < 0f || viewport.x > 1f || viewport.y < 0f || viewport.y > 1f) return false;
 
             var pixelRect = cam.pixelRect;
             var screenPoint = new Vector2(

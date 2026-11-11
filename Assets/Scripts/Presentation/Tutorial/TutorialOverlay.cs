@@ -75,6 +75,7 @@ namespace Presentation.Tutorial
         private Collider2D _rightLane;
 
         private RectTransform[] _copies;
+        private RectTransform _skipRect;
         private bool _compact;
         private bool _layoutApplied;
         private bool _dangerRequested;
@@ -86,6 +87,8 @@ namespace Presentation.Tutorial
             {
                 CopyRect(dropGroup), CopyRect(matchGroup), CopyRect(balanceGroup), CopyRect(closeGroup)
             };
+
+            _skipRect = skipButton != null ? skipButton.transform as RectTransform : null;
 
             // The curriculum's length is the enum's, not a literal: if the prefab drifts from it the
             // indicator silently under- or over-reports progress, which is worse than a warning.
@@ -156,6 +159,11 @@ namespace Presentation.Tutorial
             panel.gameObject.SetActive(false);
             retryPanel.SetActive(true);
             dim.gameObject.SetActive(true);
+
+            // Skip is a root sibling on purpose: the bubble goes away here but leaving the tutorial
+            // has to stay one tap away, so the overlay owns that button instead of the bubble.
+            skipButton.gameObject.SetActive(true);
+
             ShowCallout(calloutLeft, false);
             ShowCallout(calloutRight, false);
             _dangerRequested = false;
@@ -163,15 +171,16 @@ namespace Presentation.Tutorial
         }
 
         /// <summary>
-        /// Removes every overlay affordance. The bubble owns Skip, so hiding it also disarms that
-        /// button: leaving either behind leaks a dead clickable layer into every normal match that
-        /// shares the scene with this prefab.
+        /// Removes every overlay affordance, Skip included: the button is a sibling of the bubble, so
+        /// hiding the panel no longer disarms it, and leaving it behind would leak a live clickable
+        /// layer into every normal match that shares the scene with this prefab.
         /// </summary>
         public void Hide()
         {
             panel.gameObject.SetActive(false);
             retryPanel.SetActive(false);
             dim.gameObject.SetActive(false);
+            skipButton.gameObject.SetActive(false);
             ShowCallout(calloutLeft, false);
             ShowCallout(calloutRight, false);
             _dangerRequested = false;
@@ -201,6 +210,8 @@ namespace Presentation.Tutorial
 
         private void PlacePanel()
         {
+            // While the retry prompt has the bubble hidden, Skip keeps the spot of the last placement:
+            // the clamp already guarantees that spot is clear of the board.
             if (panel == null || !panel.gameObject.activeSelf) return;
 
             // The overlay root is a stretch child of Canvas_UI (pivot 0.5,0.5), so its rect *is* the
@@ -216,6 +227,7 @@ namespace Presentation.Tutorial
             if (_worldCamera == null || !TryResolveAnchor(canvas, out var anchor, out var boardRightX))
             {
                 panel.anchoredPosition = DesignPosition;
+                PlaceSkip(DesignPosition, canvasHeight, _compact);
                 return;
             }
 
@@ -248,6 +260,7 @@ namespace Presentation.Tutorial
                 canvasHeight * 0.5f - Margin - halfHeight * scale);
 
             panel.anchoredPosition = new Vector2(x, y);
+            PlaceSkip(new Vector2(x, y), canvasHeight, compact);
 
             if (tail == null) return;
 
@@ -300,9 +313,12 @@ namespace Presentation.Tutorial
         {
             panel.sizeDelta = compact ? new Vector2(320f, 240f) : new Vector2(400f, 520f);
 
-            ApplyStrip(skipButton != null ? skipButton.transform as RectTransform : null,
-                compact ? new Vector2(80f, 36f) : new Vector2(120f, 56f),
-                compact ? new Vector2(12f, 12f) : new Vector2(24f, 24f));
+            // Skip is a root sibling rather than a bubble child, so only its size is a bubble layout
+            // value: PlacePanel pins it to the bubble's bottom-left corner every late update.
+            if (_skipRect != null)
+            {
+                _skipRect.sizeDelta = compact ? new Vector2(80f, 36f) : new Vector2(120f, 56f);
+            }
 
             ApplyStrip(continueButton != null ? continueButton.transform as RectTransform : null,
                 compact ? new Vector2(200f, 52f) : new Vector2(280f, 84f),
@@ -342,6 +358,27 @@ namespace Presentation.Tutorial
             }
 
             if (dots != null) dots.ApplyLayout(compact);
+        }
+
+        /// <summary>
+        /// Pins Skip to the bubble's bottom-left corner. Skip is a sibling of the bubble because the
+        /// retry prompt hides the bubble and leaving the tutorial has to stay one tap away; the design
+        /// still draws it inside the bubble's frame, so it follows the panel instead of living in it.
+        /// </summary>
+        private void PlaceSkip(Vector2 panelPosition, float canvasHeight, bool compact)
+        {
+            if (_skipRect == null) return;
+
+            var halfWidth = compact ? 160f : 200f;
+            var halfHeight = compact ? 120f : 260f;
+            var scale = panel.localScale.x;
+            var inset = compact ? 12f : 24f;
+
+            // The bubble is centred on the canvas and Skip is anchored to its bottom-left corner, so
+            // the bubble corner has to be re-expressed in that origin.
+            _skipRect.anchoredPosition = new Vector2(
+                panelPosition.x - halfWidth * scale + inset + CanvasHalfWidth,
+                panelPosition.y - halfHeight * scale + inset + canvasHeight * 0.5f);
         }
 
         private static void ApplyStrip(RectTransform rect, Vector2 size, Vector2 position)
