@@ -56,6 +56,11 @@ namespace Presentation.Tutorial
         [Tooltip("One dot per step. The count must match (int)TutorialStep.Done.")]
         [SerializeField] private TutorialStepDots dots;
 
+        [Header("Lane callouts")]
+        [Tooltip("Pointing hand for the left lane. Only one callout is visible at a time.")]
+        [SerializeField] private TutorialWorldAnchor calloutLeft;
+        [SerializeField] private TutorialWorldAnchor calloutRight;
+
         [Header("Danger")]
         [Tooltip("Overflow-risk hint. Copy lives in the prefab; shown only while a path is 1-2 moves from loss.")]
         [SerializeField] private GameObject dangerHint;
@@ -112,6 +117,10 @@ namespace Presentation.Tutorial
             _opponentBoard = opponentBoard;
             _rightLane = rightLane;
 
+            // Forwarded once: the callouts re-project on their own late update, never per frame from here.
+            if (calloutLeft != null) calloutLeft.Bind(worldCamera, leftLane);
+            if (calloutRight != null) calloutRight.Bind(worldCamera, rightLane);
+
             if (_opponentBoard == null && !_warned)
             {
                 _warned = true;
@@ -134,6 +143,9 @@ namespace Presentation.Tutorial
 
             if (dots != null) dots.SetCurrent((int)step);
 
+            ShowCallout(calloutLeft, expectedSide == PathType.Left);
+            ShowCallout(calloutRight, expectedSide == PathType.Right);
+
             _dangerRequested = false;
             dangerHint.SetActive(false);
         }
@@ -144,6 +156,8 @@ namespace Presentation.Tutorial
             panel.gameObject.SetActive(false);
             retryPanel.SetActive(true);
             dim.gameObject.SetActive(true);
+            ShowCallout(calloutLeft, false);
+            ShowCallout(calloutRight, false);
             _dangerRequested = false;
             dangerHint.SetActive(false);
         }
@@ -158,6 +172,8 @@ namespace Presentation.Tutorial
             panel.gameObject.SetActive(false);
             retryPanel.SetActive(false);
             dim.gameObject.SetActive(false);
+            ShowCallout(calloutLeft, false);
+            ShowCallout(calloutRight, false);
             _dangerRequested = false;
             dangerHint.SetActive(false);
             if (dots != null) dots.Clear();
@@ -333,6 +349,18 @@ namespace Presentation.Tutorial
             if (rect == null) return;
             rect.sizeDelta = size;
             rect.anchoredPosition = position;
+        }
+
+        /// <summary>
+        /// Shows or hides one lane callout. A visible callout is placed on the same frame: waiting for
+        /// its late update would pop the hand in a frame late on the step change.
+        /// </summary>
+        private static void ShowCallout(TutorialWorldAnchor callout, bool visible)
+        {
+            if (callout == null) return;
+
+            callout.gameObject.SetActive(visible);
+            if (visible) callout.Refresh();
         }
 
         /// <summary>Finds the copy label inside a step group. The tree is fixed, so this is a name lookup, not a search.</summary>
