@@ -4552,6 +4552,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: TutorialOverlay
       objectReference: {fileID: 0}
+    - target: {fileID: 6464391718865314838, guid: 21e41b8560992134b87439176844e7ed, type: 3}
+      propertyPath: revealAfterSeconds
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6464391718865314838, guid: 21e41b8560992134b87439176844e7ed, type: 3}
+      propertyPath: graphicsDelaySeconds
+      value: 10
+      objectReference: {fileID: 0}
     - target: {fileID: 7588137669761517580, guid: 21e41b8560992134b87439176844e7ed, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -6706,44 +6714,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d2c4f6a0b1e3d5c7f9a2b4c6d8e0f1a, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   balance: {fileID: 1229436175}
   shakeTarget: {fileID: 0}
---- !u!114 &1987654322
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 413823414}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e4f7a9b2c1d05e6f8a3b7c9d1e2f4056, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  balance: {fileID: 1229436175}
-  ballZone: {fileID: 74485331}
-  limitSeconds: 10
---- !u!114 &9000000002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 413823414}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 144d06acd9326ee3f8a48501d8b3faa5, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  ballZone: {fileID: 74485331}
-  deadline: {fileID: 1987654322}
-  mildAmplitude: 0.1
-  strongAmplitude: 0.18
-  mildInterval: 2
-  strongInterval: 1.1
-  pulseDuration: 0.18
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
@@ -20511,44 +20485,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d2c4f6a0b1e3d5c7f9a2b4c6d8e0f1a, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   balance: {fileID: 1049846897}
   shakeTarget: {fileID: 0}
---- !u!114 &1987654321
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1594678063}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e4f7a9b2c1d05e6f8a3b7c9d1e2f4056, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  balance: {fileID: 1049846897}
-  ballZone: {fileID: 1479719646}
-  limitSeconds: 10
---- !u!114 &9000000001
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1594678063}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 144d06acd9326ee3f8a48501d8b3faa5, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  ballZone: {fileID: 1479719646}
-  deadline: {fileID: 1987654321}
-  mildAmplitude: 0.1
-  strongAmplitude: 0.18
-  mildInterval: 2
-  strongInterval: 1.1
-  pulseDuration: 0.18
 --- !u!1 &1602182341
 GameObject:
   m_ObjectHideFlags: 0
@@ -24895,6 +24835,36 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
+--- !u!114 &1987654321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594678063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4f7a9b2c1d05e6f8a3b7c9d1e2f4056, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  balance: {fileID: 1049846897}
+  ballZone: {fileID: 1479719646}
+  limitSeconds: 10
+--- !u!114 &1987654322
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 413823414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4f7a9b2c1d05e6f8a3b7c9d1e2f4056, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  balance: {fileID: 1229436175}
+  ballZone: {fileID: 74485331}
+  limitSeconds: 10
 --- !u!1 &1991483540
 GameObject:
   m_ObjectHideFlags: 0
@@ -27309,6 +27279,44 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
+--- !u!114 &9000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1594678063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 144d06acd9326ee3f8a48501d8b3faa5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ballZone: {fileID: 1479719646}
+  deadline: {fileID: 1987654321}
+  mildAmplitude: 0.1
+  strongAmplitude: 0.18
+  mildInterval: 2
+  strongInterval: 1.1
+  pulseDuration: 0.18
+--- !u!114 &9000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 413823414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 144d06acd9326ee3f8a48501d8b3faa5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ballZone: {fileID: 74485331}
+  deadline: {fileID: 1987654322}
+  mildAmplitude: 0.1
+  strongAmplitude: 0.18
+  mildInterval: 2
+  strongInterval: 1.1
+  pulseDuration: 0.18
 --- !u!1001 &5355864332760435037
 PrefabInstance:
   m_ObjectHideFlags: 0
