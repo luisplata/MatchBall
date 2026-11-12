@@ -25,7 +25,15 @@ public class ShowPowerUpsInLobby : MonoBehaviour
     public async UniTask Configure()
     {
         powerUpsCanvasGroup.alpha = 0;
-        _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
+
+        // One clone per component instead of one per open: the configuration is only read
+        // (GetPowerUpPrefabById), so a single instance can be reused forever and re-opening the
+        // panel no longer leaks a ScriptableObject per call.
+        if (_powerUpsConfigurationInstance == null)
+        {
+            _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
+        }
+
         _playerSessionDataCustom = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
         foreach (var powerUpSelector in _powerUpSelectors)
         {

@@ -75,13 +75,20 @@ namespace Presentation.UI
         /// </summary>
         private async UniTaskVoid RunAsync(UniTaskCompletionSource<bool> pending, CancellationToken cancellationToken)
         {
-            var destroyToken = this.GetCancellationTokenOnDestroy();
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, destroyToken);
-            var token = linked.Token;
             var confirmed = false;
+
+            // Declared before the try so the finally can still read them when the setup itself throws.
+            // Both are created inside the try: a failure there must resolve the caller instead of
+            // escaping this unobserved UniTaskVoid.
+            var destroyToken = CancellationToken.None;
+            CancellationTokenSource linked = null;
 
             try
             {
+                destroyToken = this.GetCancellationTokenOnDestroy();
+                linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, destroyToken);
+                var token = linked.Token;
+
                 gameObject.SetActive(true);
                 ResetFade();
                 if (showPowerUps == null)
@@ -121,16 +128,36 @@ namespace Presentation.UI
             }
             finally
             {
-                ResetFade();
-
-                // A destroyed panel cannot be deactivated and its gameObject is already gone.
-                if (this != null && !destroyToken.IsCancellationRequested)
+                // Teardown is best effort: it must never be the reason the answer goes missing.
+                try
                 {
-                    gameObject.SetActive(false);
+                    ResetFade();
+
+                    // A destroyed panel cannot be deactivated and its gameObject is already gone.
+                    if (this != null && !destroyToken.IsCancellationRequested)
+                    {
+                        gameObject.SetActive(false);
+                    }
+                }
+                catch (Exception teardownException)
+                {
+                    Debug.LogError($"[PowerUpsSelectionPanelView] the panel failed to close: {teardownException}", this);
                 }
 
-                _pending = null;
+                // The one and only resolution point, reached from every path above. UniTask's
+                // TrySetResult is idempotent, so even an impossible second call would be a no-op
+                // that returns false instead of throwing; the caller is always answered.
                 pending.TrySetResult(confirmed);
+
+                // Cleared only after the task has an answer: a caller that arrives later starts a
+                // fresh run instead of receiving a task that already finished.
+                if (ReferenceEquals(_pending, pending))
+                {
+                    _pending = null;
+                }
+
+                // Released last: the answer is already out, so nothing here can strand the caller.
+                linked?.Dispose();
             }
         }
 
