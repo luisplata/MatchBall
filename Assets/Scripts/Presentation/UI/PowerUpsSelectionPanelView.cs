@@ -3,6 +3,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace Presentation.UI
@@ -172,8 +173,8 @@ namespace Presentation.UI
             }
 
             var choice = new UniTaskCompletionSource<bool>();
-            Action onConfirm = () => choice.TrySetResult(true);
-            Action onCancel = () => choice.TrySetResult(false);
+            UnityAction onConfirm = () => choice.TrySetResult(true);
+            UnityAction onCancel = () => choice.TrySetResult(false);
 
             confirmButton.onClick.AddListener(onConfirm);
             cancelButton.onClick.AddListener(onCancel);
