@@ -6739,11 +6739,11 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   ballZone: {fileID: 74485331}
   deadline: {fileID: 1987654322}
-  mildAmplitude: 0.1
-  strongAmplitude: 0.18
-  mildInterval: 2
-  strongInterval: 1.1
-  pulseDuration: 0.18
+  mildFrequencyHz: 14
+  strongFrequencyHz: 20
+  mildAmplitude: 0.012
+  strongAmplitude: 0.022
+  noiseAmount: 0.25
 --- !u!1 &421634998
 GameObject:
   m_ObjectHideFlags: 0
@@ -20544,11 +20544,11 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   ballZone: {fileID: 1479719646}
   deadline: {fileID: 1987654321}
-  mildAmplitude: 0.1
-  strongAmplitude: 0.18
-  mildInterval: 2
-  strongInterval: 1.1
-  pulseDuration: 0.18
+  mildFrequencyHz: 14
+  strongFrequencyHz: 20
+  mildAmplitude: 0.012
+  strongAmplitude: 0.022
+  noiseAmount: 0.25
 --- !u!1 &1602182341
 GameObject:
   m_ObjectHideFlags: 0
