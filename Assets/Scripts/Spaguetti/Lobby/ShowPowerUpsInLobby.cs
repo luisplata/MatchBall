@@ -12,15 +12,7 @@ public class ShowPowerUpsInLobby : MonoBehaviour
     [SerializeField] private PowerUpSelector powerUpSelectorPrefab;
     [SerializeField] private GameObject powerUpsContainer;
     PowerUpsConfiguration _powerUpsConfigurationInstance;
-    PlayerSessionDataCustom _playerSessionDataCustom;
     private List<PowerUpSelector> _powerUpSelectors = new();
-
-    private async void Start()
-    {
-        await Configure();
-        ShowPowerUps();
-        HidePowerUps();
-    }
 
     public async UniTask Configure()
     {
@@ -34,7 +26,6 @@ public class ShowPowerUpsInLobby : MonoBehaviour
             _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
         }
 
-        _playerSessionDataCustom = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
         foreach (var powerUpSelector in _powerUpSelectors)
         {
             Destroy(powerUpSelector.gameObject);
