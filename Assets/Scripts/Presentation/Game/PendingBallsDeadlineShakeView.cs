@@ -35,6 +35,7 @@ namespace Presentation.Game
 
         private BalanceRisk _effectiveRisk = BalanceRisk.Safe;
         private float _phaseStart;
+        private float _phase;
 
         private void OnDisable()
         {
@@ -71,6 +72,7 @@ namespace Presentation.Game
                 // is never frozen as a base.
                 _effectiveRisk = risk;
                 _phaseStart = Time.unscaledTime;
+                _phase = 0f;
             }
 
             // Discover the visual children of every non-null pending-ball slot. Only
@@ -96,7 +98,7 @@ namespace Presentation.Game
             if (_targets.Count == 0) return;
 
             var (amplitude, frequencyHz) = Tuning(_effectiveRisk);
-            var offset = amplitude * Vibration(Time.unscaledTime - _phaseStart, frequencyHz);
+            var offset = amplitude * Vibration(Time.unscaledTime - _phaseStart, Time.unscaledDeltaTime, frequencyHz);
 
             // Coherent row motion: the same horizontal offset for every ball, translation only
             // (round sprites).
@@ -106,23 +108,27 @@ namespace Presentation.Game
             }
         }
 
-        private float Vibration(float elapsed, float frequencyHz)
+        private float Vibration(float elapsed, float deltaTime, float frequencyHz)
         {
-            // Same function as the board, minus the breathing envelope: the row buzzes at a steady
-            // amplitude so the queue keeps reading as one moving row.
-            var frequency = EffectiveFrequency(frequencyHz);
-            var wave = Mathf.Sin(2f * Mathf.PI * frequency * elapsed);
+            // Same phase accumulation as the board, minus the breathing envelope: the row buzzes
+            // at a steady amplitude so the queue keeps reading as one moving row. Never rebuild
+            // the phase from a per-frame frequency times the absolute elapsed time: at dt = 0.5/f
+            // the samples land on multiples of PI and the sine is identically 0.
+            var frequency = EffectiveFrequency(frequencyHz, deltaTime);
+            _phase = Mathf.Repeat(_phase + 2f * Mathf.PI * frequency * deltaTime, 2f * Mathf.PI);
+
+            var wave = Mathf.Sin(_phase);
             var noise = Mathf.PerlinNoise(elapsed * 30f, 0.37f) * 2f - 1f;
             return (wave + noise * noiseAmount) / (1f + noiseAmount);
         }
 
-        private static float EffectiveFrequency(float frequencyHz)
+        private static float EffectiveFrequency(float frequencyHz, float deltaTime)
         {
-            // Hard cap at 20 Hz (about three frames per cycle at 60 fps), and never above the
-            // Nyquist limit of the current frame: past it the sine would alias into a frozen
-            // offset instead of vibrating.
-            var nyquist = 0.5f / Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
-            return Mathf.Min(frequencyHz, Mathf.Min(20f, nyquist));
+            // Hard cap at 20 Hz (about three frames per cycle at 60 fps) and never the exact
+            // Nyquist limit of the frame: 0.4/dt keeps at least 2.5 samples per cycle, so the
+            // sampled sine never collapses to zero the way 0.5/dt does.
+            var usable = 0.4f / Mathf.Max(deltaTime, 1e-4f);
+            return Mathf.Min(frequencyHz, Mathf.Min(20f, usable));
         }
 
         private void RestoreAndClear()

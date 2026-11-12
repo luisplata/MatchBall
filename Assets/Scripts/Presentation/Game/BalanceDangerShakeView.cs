@@ -25,7 +25,7 @@ namespace Presentation.Game
         [SerializeField] private float strongAmplitude = 0.011f;
         [SerializeField] private float mildTiltDegrees = 0.15f;
         [SerializeField] private float strongTiltDegrees = 0.30f;
-        [Tooltip("Slow amplitude breathing (floor -> 1x). Board only; the queue row does not breathe.")]
+        [Tooltip("Slow amplitude breathing in Mild only (floor -> 1x). Strong keeps a flat envelope. Board only; the queue row does not breathe.")]
         [SerializeField] private float breathingHz = 1.5f;
         [SerializeField] private float breathingFloor = 0.7f;
         [Tooltip("Perlin-noise share mixed into the sine so it reads as a buzz and not a click.")]
@@ -39,6 +39,7 @@ namespace Presentation.Game
         private BalanceRisk _boardRisk = BalanceRisk.Safe;
         private BalanceRisk _effectiveRisk = BalanceRisk.Safe;
         private float _phaseStart;
+        private float _phase;
 
         private void OnEnable()
         {
@@ -134,44 +135,57 @@ namespace Presentation.Game
                 CaptureBase();
                 _effectiveRisk = effective;
                 _phaseStart = Time.unscaledTime;
+                _phase = 0f;
             }
 
             if (!_hasBase || _target == null) return;
 
             var (amplitude, tilt, frequencyHz) = Tuning(_effectiveRisk);
-            var strength = Vibration(Time.unscaledTime - _phaseStart, frequencyHz);
+            var strength = Vibration(Time.unscaledTime - _phaseStart, Time.unscaledDeltaTime, frequencyHz);
 
             // Always written from the captured base, never from the current pose: no drift.
             _target.localPosition = _baseLocalPosition + new Vector3(amplitude * strength, 0f, 0f);
             _target.localRotation = _baseLocalRotation * Quaternion.Euler(0f, 0f, tilt * strength);
         }
 
-        private float Vibration(float elapsed, float frequencyHz)
+        private float Vibration(float elapsed, float deltaTime, float frequencyHz)
         {
-            // Continuous sine at the tuned frequency, mixed with Perlin noise. Noise (not Random)
-            // breaks the regularity without the shimmer white noise adds at 60 fps, and stays a
-            // pure function of time, so every board reads the same buzz.
-            var frequency = EffectiveFrequency(frequencyHz);
-            var wave = Mathf.Sin(2f * Mathf.PI * frequency * elapsed);
+            // Advance the phase by this frame's own step instead of rebuilding it from the
+            // absolute elapsed time. Multiplying a per-frame frequency by a shared elapsed
+            // teleports the phase whenever dt changes, and at exactly dt = 0.5/f the samples land
+            // on multiples of PI so sin is identically 0 and the buzz freezes. Accumulating the
+            // step is frame-rate independent and drift-free for the whole vibration lifetime,
+            // and the 0.4/dt guard below bounds one frame's advance to 144 degrees, so no hitch
+            // can ever jump the phase.
+            var frequency = EffectiveFrequency(frequencyHz, deltaTime);
+            _phase = Mathf.Repeat(_phase + 2f * Mathf.PI * frequency * deltaTime, 2f * Mathf.PI);
+
+            // Noise (not Random) breaks the regularity without the shimmer white noise adds at
+            // 60 fps, and stays a pure function of time, so every board reads the same buzz.
+            var wave = Mathf.Sin(_phase);
             var noise = Mathf.PerlinNoise(elapsed * 30f, 0.37f) * 2f - 1f;
             var strength = (wave + noise * noiseAmount) / (1f + noiseAmount);
 
             // Slow breathing so the buzz never sits at full amplitude for a whole risk window.
-            var breathing = Mathf.Lerp(
-                breathingFloor,
-                1f,
-                0.5f + 0.5f * Mathf.Sin(2f * Mathf.PI * breathingHz * elapsed));
+            // Mild only: at Strong the 0.7 trough would fall under the mild peak and make the
+            // louder level read weaker than the softer one, so Strong keeps a flat envelope.
+            var breathing = _effectiveRisk == BalanceRisk.Strong
+                ? 1f
+                : Mathf.Lerp(
+                    breathingFloor,
+                    1f,
+                    0.5f + 0.5f * Mathf.Sin(2f * Mathf.PI * breathingHz * elapsed));
 
             return breathing * strength;
         }
 
-        private static float EffectiveFrequency(float frequencyHz)
+        private static float EffectiveFrequency(float frequencyHz, float deltaTime)
         {
-            // Hard cap at 20 Hz (about three frames per cycle at 60 fps), and never above the
-            // Nyquist limit of the current frame: past it the sine would alias into a frozen
-            // offset instead of vibrating.
-            var nyquist = 0.5f / Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
-            return Mathf.Min(frequencyHz, Mathf.Min(20f, nyquist));
+            // Hard cap at 20 Hz (about three frames per cycle at 60 fps) and never the exact
+            // Nyquist limit of the frame: 0.4/dt keeps at least 2.5 samples per cycle, so the
+            // sampled sine never collapses to zero the way 0.5/dt does.
+            var usable = 0.4f / Mathf.Max(deltaTime, 1e-4f);
+            return Mathf.Min(frequencyHz, Mathf.Min(20f, usable));
         }
 
         private (float amplitude, float tilt, float frequencyHz) Tuning(BalanceRisk risk)
