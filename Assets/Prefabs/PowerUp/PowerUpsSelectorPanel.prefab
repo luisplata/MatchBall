@@ -115,9 +115,9 @@ CanvasGroup:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7700000001}
   m_Enabled: 1
-  m_Alpha: 1
+  m_Alpha: 0
   m_Interactable: 1
-  m_BlocksRaycasts: 1
+  m_BlocksRaycasts: 0
   m_IgnoreParentGroups: 0
 --- !u!114 &7700000007
 MonoBehaviour:
@@ -131,7 +131,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 57013a4ceb504534ea867cf0dd4f9126, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  powerUpsCanvasGroup: {fileID: 349218514}
+  powerUpsCanvasGroup: {fileID: 7700000006}
   powerUpsConfiguration: {fileID: 11400000, guid: 1e66078740ca63f49a61f91fd9602550, type: 2}
   powerUpSelectorPrefab: {fileID: 6927094926545751288, guid: 79a9b4c15e1c00547ade0203337bc503, type: 3}
   powerUpsContainer: {fileID: 1975291589}

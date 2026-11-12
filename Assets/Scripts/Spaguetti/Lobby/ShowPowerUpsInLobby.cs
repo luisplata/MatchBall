@@ -17,6 +17,7 @@ public class ShowPowerUpsInLobby : MonoBehaviour
     public async UniTask Configure()
     {
         powerUpsCanvasGroup.alpha = 0;
+        powerUpsCanvasGroup.blocksRaycasts = false;
 
         // One clone per component instead of one per open: the configuration is only read
         // (GetPowerUpPrefabById), so a single instance can be reused forever and re-opening the
@@ -47,11 +48,13 @@ public class ShowPowerUpsInLobby : MonoBehaviour
 
     public void ShowPowerUps()
     {
+        powerUpsCanvasGroup.blocksRaycasts = true;
         powerUpsCanvasGroup.DOFade(1, 0.5f);
     }
 
     public void HidePowerUps()
     {
+        powerUpsCanvasGroup.blocksRaycasts = false;
         powerUpsCanvasGroup.DOFade(0, 0.5f);
     }
 }

@@ -175,8 +175,10 @@ namespace Presentation.UI
 
             if (panelCanvasGroup != null)
             {
-                panelCanvasGroup.alpha = 1f;
-                panelCanvasGroup.blocksRaycasts = true;
+                // The panel is only visible once ShowPowerUpsInLobby.ShowPowerUps runs. Starting at
+                // alpha 1 made it flash empty before Configure had a chance to build the tiles.
+                panelCanvasGroup.alpha = 0f;
+                panelCanvasGroup.blocksRaycasts = false;
             }
         }
 
