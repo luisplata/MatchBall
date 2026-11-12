@@ -17,6 +17,13 @@ namespace Presentation.Game
     /// </summary>
     public sealed class ScoreFeedbackView : MonoBehaviour
     {
+        // Vertical stagger between awards that share the same instant, in canvas units. The
+        // horizontal lane is bounded by the per-board clamp, so the stagger cannot live in X.
+        private const float PopupCascadeStep = 24f;
+
+        // Gap kept between the popup box and the canvas centre line / canvas edge, in canvas units.
+        private const float PopupEdgePadding = 8f;
+
         [SerializeField] private Balance balance;
 
         [Tooltip("TMP child of the score block that shows the multiplier applied by the last award. " +
@@ -74,6 +81,7 @@ namespace Presentation.Game
             balance.PointsAwarded += OnPointsAwarded;
             BuildPool();
             HideBadge();
+            _cascadeIndex = 0;
         }
 
         private void OnDisable()
@@ -228,9 +236,15 @@ namespace Presentation.Game
                 return;
             }
 
-            // Cascade several awards from one resolution diagonally so stacked popups stay readable.
-            var stagger = (_cascadeIndex++ % 3) * 24f;
-            var start = new Vector3(anchored.x + stagger, anchored.y, rect.localPosition.z);
+            // Both board roots project close to the canvas centre (P1's projects exactly onto it)
+            // while a popup box is 44 % of the canvas width, so two simultaneous awards would sit on
+            // top of each other. Each popup stays inside its own board's half instead.
+            var x = ClampToBoardHalf(anchored.x, rect.rect.width);
+
+            // Cascade several awards from one resolution so stacked popups stay readable. The offset
+            // is vertical: the horizontal lane is already bounded by the clamp above.
+            var stagger = (_cascadeIndex++ % 3) * PopupCascadeStep;
+            var start = new Vector3(x, anchored.y + stagger, rect.localPosition.z);
             rect.localPosition = start;
 
             if (multiplier > 1) popup.Text.SetText("+{0} x{1}", points, multiplier);
@@ -262,12 +276,47 @@ namespace Presentation.Game
                 out localPoint);
         }
 
+        /// <summary>
+        /// Bounds the projected X to the half of <see cref="popupLayer"/> that belongs to this board,
+        /// so a popup from each board can never share the same pixels. The clearance is half the popup
+        /// box plus <see cref="PopupEdgePadding"/>: the box is the space the view reserves for one
+        /// award, which makes the rule independent of how long the "+N xM" string turns out to be.
+        /// </summary>
+        private float ClampToBoardHalf(float projectedX, float popupWidth)
+        {
+            var layer = popupLayer.rect;
+            var clearance = popupWidth * 0.5f + PopupEdgePadding;
+            var center = layer.center.x;
+            var left = IsLeftBoard();
+
+            var outerEdge = left ? layer.xMin + clearance : layer.xMax - clearance;
+            var innerEdge = left ? center - clearance : center + clearance;
+
+            return Mathf.Clamp(projectedX, Mathf.Min(outerEdge, innerEdge), Mathf.Max(outerEdge, innerEdge));
+        }
+
+        /// <summary>
+        /// Which half of the canvas this board owns. The first player is authored on the left column
+        /// and the second seat is mirrored to the right, so identity is the side rule; the projected
+        /// point cannot be used because P1's board root projects exactly onto the canvas centre.
+        /// </summary>
+        private bool IsLeftBoard()
+        {
+            if (_gameManager == null || balance == null) return true;
+            return ReferenceEquals(balance.GetPlayer(), _gameManager.GetFirstPlayer());
+        }
+
         private void Recycle(Popup popup)
         {
             if (popup == null) return;
 
             popup.Tween = null;
             _active.Remove(popup);
+
+            // The cascade window ends with the last popup in flight: the next award must start at
+            // offset zero instead of continuing the previous ramp.
+            if (_active.Count == 0) _cascadeIndex = 0;
+
             if (popup.Text == null) return;
 
             popup.Text.gameObject.SetActive(false);
