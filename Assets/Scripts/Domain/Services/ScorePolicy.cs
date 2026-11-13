@@ -13,15 +13,23 @@ namespace Domain.Services
         public readonly float NextAwardSeconds;
         public readonly bool Applied;
 
-        public ScoreAward(int points, int nextMultiplier, float nextAwardSeconds, bool applied)
+        /// <summary>
+        /// The multiplier that was actually applied to <see cref="Points"/>, i.e. the decayed
+        /// streak, never the raised one. A no-op award reports 1.
+        /// </summary>
+        public readonly int AppliedMultiplier;
+
+        public ScoreAward(int points, int nextMultiplier, float nextAwardSeconds, bool applied,
+            int appliedMultiplier)
         {
             Points = points;
             NextMultiplier = nextMultiplier;
             NextAwardSeconds = nextAwardSeconds;
             Applied = applied;
+            AppliedMultiplier = appliedMultiplier;
         }
 
-        public static ScoreAward None => new ScoreAward(0, 0, 0f, false);
+        public static ScoreAward None => new ScoreAward(0, 0, 0f, false, 1);
     }
 
     /// <summary>
@@ -59,7 +67,7 @@ namespace Domain.Services
             if (ballsCleared <= 0) return ScoreAward.None;
 
             var decayed = Decay(multiplier, nowSeconds - lastAwardAtSeconds);
-            return new ScoreAward(BasePoints(ballsCleared) * decayed, Raise(decayed), nowSeconds, true);
+            return new ScoreAward(BasePoints(ballsCleared) * decayed, Raise(decayed), nowSeconds, true, decayed);
         }
     }
 }

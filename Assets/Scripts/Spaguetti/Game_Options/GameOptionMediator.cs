@@ -8,6 +8,9 @@ public class GameOptionMediator : MonoBehaviour
     [SerializeField] private Button playLocalPvPButton;
     [SerializeField] private int singlePlayerSceneIndex;
 
+    // Set before leaving the menu, so a double tap cannot queue two splash transitions.
+    private bool _isNavigating;
+
     private void Start()
     {
         playSinglePlayerButton.onClick.AddListener(PlaySinglePlayer);
@@ -45,20 +48,20 @@ public class GameOptionMediator : MonoBehaviour
 
     /// <summary>
     /// Second local human instead of the AI: no Matching interstitial, no ad, no Lobby, exactly like
-    /// the tutorial route. The transient flag is written here and consumed by
-    /// <see cref="GameManager"/> on boot, so a second launch is a normal match.
+    /// the tutorial route. The power-up selection lives in its own screen (<c>PvPPowerUps</c>)
+    /// reached through the splash, so the menu never hosts an overlay; that screen writes
+    /// <see cref="GlobalData.LocalPvP"/> once the owner confirms.
     /// </summary>
     private void PlayLocalPvP()
     {
-        Debug.Log("Play Local PvP");
-        ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(() =>
+        if (_isNavigating)
         {
-            var storage = ServiceLocator.Instance.GetService<IStorageData>();
-            storage.SaveDataGlobal(GlobalData.TutorialMode, string.Empty);
-            storage.SaveDataGlobal(GlobalData.LocalPvP, "1");
-            TutorialResume.Clear();
-            Debug.Log("[LocalPvP] boot -> Game (Matching, ad and Lobby skipped).");
-            UnityEngine.SceneManagement.SceneManager.LoadScene("Game");
-        });
+            return;
+        }
+
+        _isNavigating = true;
+        Debug.Log("Play Local PvP");
+        ServiceLocator.Instance.GetService<ITransitionService>().ShowSplashScreen(
+            () => UnityEngine.SceneManagement.SceneManager.LoadScene("PvPPowerUps"));
     }
 }
