@@ -19,6 +19,13 @@ public class Balance : MonoBehaviour, IBalance
     /// </summary>
     public event Action<BalanceRisk> RiskChanged;
 
+    /// <summary>
+    /// Raised once per applied award, in the same frame and immediately after the points were
+    /// added to the player, so views can show exactly what the reward added.
+    /// Arguments: points awarded, multiplier actually applied, new running total.
+    /// </summary>
+    public event Action<int, int, int> PointsAwarded;
+
     /// <summary>The risk published by the last settle; <see cref="BalanceRisk.Safe"/> until then.</summary>
     public BalanceRisk CurrentRisk { get; private set; } = BalanceRisk.Safe;
 
@@ -318,6 +325,7 @@ public class Balance : MonoBehaviour, IBalance
         _lastAwardAt = award.NextAwardSeconds;
 
         _player.AddPoints(award.Points);
+        PointsAwarded?.Invoke(award.Points, award.AppliedMultiplier, _player.GetCoins());
         OnGetPoints?.Invoke();
     }
 

@@ -12,21 +12,21 @@ public class ShowPowerUpsInLobby : MonoBehaviour
     [SerializeField] private PowerUpSelector powerUpSelectorPrefab;
     [SerializeField] private GameObject powerUpsContainer;
     PowerUpsConfiguration _powerUpsConfigurationInstance;
-    PlayerSessionDataCustom _playerSessionDataCustom;
     private List<PowerUpSelector> _powerUpSelectors = new();
-
-    private async void Start()
-    {
-        await Configure();
-        ShowPowerUps();
-        HidePowerUps();
-    }
 
     public async UniTask Configure()
     {
         powerUpsCanvasGroup.alpha = 0;
-        _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
-        _playerSessionDataCustom = ServiceLocator.Instance.GetService<IPlayerSessionService>().GetPlayerSessionData();
+        powerUpsCanvasGroup.blocksRaycasts = false;
+
+        // One clone per component instead of one per open: the configuration is only read
+        // (GetPowerUpPrefabById), so a single instance can be reused forever and re-opening the
+        // panel no longer leaks a ScriptableObject per call.
+        if (_powerUpsConfigurationInstance == null)
+        {
+            _powerUpsConfigurationInstance = Instantiate(powerUpsConfiguration);
+        }
+
         foreach (var powerUpSelector in _powerUpSelectors)
         {
             Destroy(powerUpSelector.gameObject);
@@ -48,11 +48,13 @@ public class ShowPowerUpsInLobby : MonoBehaviour
 
     public void ShowPowerUps()
     {
+        powerUpsCanvasGroup.blocksRaycasts = true;
         powerUpsCanvasGroup.DOFade(1, 0.5f);
     }
 
     public void HidePowerUps()
     {
+        powerUpsCanvasGroup.blocksRaycasts = false;
         powerUpsCanvasGroup.DOFade(0, 0.5f);
     }
 }

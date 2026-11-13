@@ -4,12 +4,12 @@ using UnityEngine;
 namespace Presentation.Game
 {
     /// <summary>
-    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and pulses a brief frame
-    /// shake while the board is one or two moves from a loss. This view is the sole writer of the
-    /// board-root transform; deadline pressure is shown by
+    /// One per human board root. Reads <see cref="Balance.CurrentRisk"/> and vibrates the board
+    /// continuously while the board is one or two moves from a loss. This view is the sole writer of
+    /// the board-root transform; deadline pressure is shown by
     /// <see cref="PendingBallsDeadlineShakeView"/> on the queue row, not here. The AI board never
-    /// shakes; the pulse stops and the authored pose is restored the moment the risk clears, the
-    /// match ends, or the view is disabled/destroyed. Visual only: no audio, no haptics, and
+    /// vibrates; the vibration stops and the authored pose is restored the moment the risk clears,
+    /// the match ends, or the view is disabled/destroyed. Visual only: no audio, no haptics, and
     /// nothing that changes placement, scoring, outcome or save data.
     /// </summary>
     public sealed class BalanceDangerShakeView : MonoBehaviour
@@ -18,13 +18,18 @@ namespace Presentation.Game
         [Tooltip("Optional. Defaults to this transform (the board root). Leave empty.")]
         [SerializeField] private Transform shakeTarget;
 
-        private const float MildAmplitude = 0.03f;
-        private const float MildTiltDegrees = 0.6f;
-        private const float MildInterval = 2.0f;
-        private const float StrongAmplitude = 0.06f;
-        private const float StrongTiltDegrees = 1.2f;
-        private const float StrongInterval = 1.1f;
-        private const float PulseDuration = 0.18f;
+        [Header("Vibration tuning (translation and tilt on the board root)")]
+        [SerializeField] private float mildFrequencyHz = 14f;
+        [SerializeField] private float strongFrequencyHz = 20f;
+        [SerializeField] private float mildAmplitude = 0.005f;
+        [SerializeField] private float strongAmplitude = 0.011f;
+        [SerializeField] private float mildTiltDegrees = 0.15f;
+        [SerializeField] private float strongTiltDegrees = 0.30f;
+        [Tooltip("Slow amplitude breathing in Mild only (floor -> 1x). Strong keeps a flat envelope. Board only; the queue row does not breathe.")]
+        [SerializeField] private float breathingHz = 1.5f;
+        [SerializeField] private float breathingFloor = 0.7f;
+        [Tooltip("Perlin-noise share mixed into the sine so it reads as a buzz and not a click.")]
+        [SerializeField] private float noiseAmount = 0.25f;
 
         private GameManager _gameManager;
         private Transform _target;
@@ -34,6 +39,7 @@ namespace Presentation.Game
         private BalanceRisk _boardRisk = BalanceRisk.Safe;
         private BalanceRisk _effectiveRisk = BalanceRisk.Safe;
         private float _phaseStart;
+        private float _phase;
 
         private void OnEnable()
         {
@@ -125,36 +131,68 @@ namespace Presentation.Game
             {
                 // Capture the base pose only now, never in OnEnable, where the board's
                 // orientation may not have been applied yet. A level change restarts the phase
-                // without re-capturing (so a mid-pulse pose is never frozen as the base).
+                // without re-capturing (so a mid-vibration pose is never frozen as the base).
                 CaptureBase();
                 _effectiveRisk = effective;
                 _phaseStart = Time.unscaledTime;
+                _phase = 0f;
             }
 
             if (!_hasBase || _target == null) return;
 
-            var (amplitude, tilt, interval) = Tuning(_effectiveRisk);
-            var phase = (Time.unscaledTime - _phaseStart) % interval;
-            if (phase >= PulseDuration)
-            {
-                // Intermittent, never continuous: idle between pulses at the exact base pose.
-                _target.localPosition = _baseLocalPosition;
-                _target.localRotation = _baseLocalRotation;
-                return;
-            }
+            var (amplitude, tilt, frequencyHz) = Tuning(_effectiveRisk);
+            var strength = Vibration(Time.unscaledTime - _phaseStart, Time.unscaledDeltaTime, frequencyHz);
 
-            var t = phase / PulseDuration;
-            var strength = Mathf.Sin(Mathf.PI * t);
-
+            // Always written from the captured base, never from the current pose: no drift.
             _target.localPosition = _baseLocalPosition + new Vector3(amplitude * strength, 0f, 0f);
             _target.localRotation = _baseLocalRotation * Quaternion.Euler(0f, 0f, tilt * strength);
         }
 
-        private static (float amplitude, float tilt, float interval) Tuning(BalanceRisk risk)
+        private float Vibration(float elapsed, float deltaTime, float frequencyHz)
+        {
+            // Advance the phase by this frame's own step instead of rebuilding it from the
+            // absolute elapsed time. Multiplying a per-frame frequency by a shared elapsed
+            // teleports the phase whenever dt changes, and at exactly dt = 0.5/f the samples land
+            // on multiples of PI so sin is identically 0 and the buzz freezes. Accumulating the
+            // step is frame-rate independent and drift-free for the whole vibration lifetime,
+            // and the 0.4/dt guard below bounds one frame's advance to 144 degrees, so no hitch
+            // can ever jump the phase.
+            var frequency = EffectiveFrequency(frequencyHz, deltaTime);
+            _phase = Mathf.Repeat(_phase + 2f * Mathf.PI * frequency * deltaTime, 2f * Mathf.PI);
+
+            // Noise (not Random) breaks the regularity without the shimmer white noise adds at
+            // 60 fps, and stays a pure function of time, so every board reads the same buzz.
+            var wave = Mathf.Sin(_phase);
+            var noise = Mathf.PerlinNoise(elapsed * 30f, 0.37f) * 2f - 1f;
+            var strength = (wave + noise * noiseAmount) / (1f + noiseAmount);
+
+            // Slow breathing so the buzz never sits at full amplitude for a whole risk window.
+            // Mild only: at Strong the 0.7 trough would fall under the mild peak and make the
+            // louder level read weaker than the softer one, so Strong keeps a flat envelope.
+            var breathing = _effectiveRisk == BalanceRisk.Strong
+                ? 1f
+                : Mathf.Lerp(
+                    breathingFloor,
+                    1f,
+                    0.5f + 0.5f * Mathf.Sin(2f * Mathf.PI * breathingHz * elapsed));
+
+            return breathing * strength;
+        }
+
+        private static float EffectiveFrequency(float frequencyHz, float deltaTime)
+        {
+            // Hard cap at 20 Hz (about three frames per cycle at 60 fps) and never the exact
+            // Nyquist limit of the frame: 0.4/dt keeps at least 2.5 samples per cycle, so the
+            // sampled sine never collapses to zero the way 0.5/dt does.
+            var usable = 0.4f / Mathf.Max(deltaTime, 1e-4f);
+            return Mathf.Min(frequencyHz, Mathf.Min(20f, usable));
+        }
+
+        private (float amplitude, float tilt, float frequencyHz) Tuning(BalanceRisk risk)
         {
             return risk == BalanceRisk.Strong
-                ? (StrongAmplitude, StrongTiltDegrees, StrongInterval)
-                : (MildAmplitude, MildTiltDegrees, MildInterval);
+                ? (strongAmplitude, strongTiltDegrees, strongFrequencyHz)
+                : (mildAmplitude, mildTiltDegrees, mildFrequencyHz);
         }
     }
 }

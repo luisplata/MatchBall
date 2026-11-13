@@ -3,4 +3,5 @@
     void AddPoints(int points);
     void GameOver();
     IPlayer GetPlayer();
+    int GetCoins();
 }
