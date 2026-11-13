@@ -1,0 +1,139 @@
+# MatchBall — lista de imágenes (v1)
+# Cambio: refresh-visual-cliente · 121 piezas (85 REPLACE · 36 NEW)
+# Detalle completo (px, 9-slice, notas, origen): manifest-refresh-visual-v1.md
+
+
+[A — Tutorial / onboarding (23)]
+ui_tutorial_dim_01.png	NEW
+ui_tutorial_bubble_body_01.png	NEW
+ui_tutorial_bubble_tail_left_01.png	NEW
+ui_tutorial_caption_pill_01.png	NEW
+ui_tutorial_spotlight_ring_01.png	NEW
+ui_tutorial_spotlight_fill_01.png	NEW
+ui_tutorial_hand_tap_01.png	NEW
+ui_tutorial_hand_tap_02.png	NEW
+ui_tutorial_hand_tap_03.png	NEW
+ui_tutorial_hand_point_left_01.png	NEW
+ui_tutorial_hand_point_right_01.png	NEW
+ui_tutorial_icon_star_01.png	NEW
+ui_tutorial_step_dot_normal_01.png	NEW
+ui_tutorial_step_dot_active_01.png	NEW
+ui_tutorial_step_dot_done_01.png	NEW
+ui_tutorial_btn_skip_normal_01.png	NEW
+ui_tutorial_btn_skip_pressed_01.png	NEW
+ui_tutorial_btn_continue_normal_01.png	NEW
+ui_tutorial_btn_continue_pressed_01.png	NEW
+ui_tutorial_btn_retry_normal_01.png	NEW
+ui_tutorial_btn_retry_pressed_01.png	NEW
+ui_tutorial_panel_retry_01.png	NEW
+ui_tutorial_icon_danger_01.png	NEW
+
+[B — HUD de partida (12)]
+ui_hud_counter_pill_01.png	REPLACE
+ui_hud_icon_coin_01.png	REPLACE
+ui_hud_icon_cups_01.png	REPLACE
+ui_hud_btn_settings_normal_01.png	REPLACE
+ui_hud_btn_settings_pressed_01.png	NEW
+ui_hud_avatar_frame_player_01.png	NEW
+ui_hud_avatar_frame_ai_01.png	NEW
+ui_hud_score_pill_player_01.png	NEW
+ui_hud_score_pill_ai_01.png	NEW
+ui_hud_btn_powerup_slot_normal_01.png	REPLACE
+ui_hud_btn_powerup_slot_active_01.png	REPLACE
+ui_hud_panel_player_01.png	NEW
+
+[C — Tablero / gameplay (mundo, PPU 100) (14)]
+game_board_balance_bar_left_01.png	REPLACE
+game_board_balance_bar_right_01.png	REPLACE
+game_board_balance_base_01.png	REPLACE
+game_board_line_01.png	REPLACE
+game_board_line_shadow_01.png	REPLACE
+game_board_shadow_long_01.png	REPLACE
+game_board_shadow_mid_01.png	REPLACE
+game_board_shadow_short_01.png	REPLACE
+game_board_arrow_swap_01.png	REPLACE
+game_board_arrow_swap_alt_01.png	REPLACE
+game_board_arrow_shadow_01.png	REPLACE
+game_board_arrow_shadow_02.png	REPLACE
+game_board_backdrop_01.png	REPLACE
+game_board_zone_veil_01.png	NEW
+
+[D — Bolas (15)]
+ball_normal_red_01.png	REPLACE
+ball_normal_blue_01.png	REPLACE
+ball_normal_green_01.png	REPLACE
+ball_normal_orange_01.png	REPLACE
+ball_normal_purple_01.png	REPLACE
+ball_normal_yellow_01.png	REPLACE
+ball_shadow_01.png	REPLACE
+ball_power_ice_01.png	REPLACE
+ball_power_lead_01.png	REPLACE
+ball_power_joker_01.png	REPLACE
+ball_power_ray_01.png	REPLACE
+ball_power_shell_01.png	REPLACE
+ball_state_selected_ring_01.png	NEW
+ball_state_frozen_01.png	NEW
+ball_state_matched_01.png	NEW
+
+[E — BallPass / pases (14)]
+ui_pass_banner_01.png	REPLACE
+ui_pass_icon_pass_01.png	REPLACE
+ui_pass_separator_page_01.png	REPLACE
+ui_pass_separator_level_01.png	REPLACE
+ui_pass_reward_gold_01.png	REPLACE
+ui_pass_reward_avatar_01.png	REPLACE
+ui_pass_reward_avatar_02.png	REPLACE
+ui_pass_reward_picture_01.png	REPLACE
+ui_pass_reward_picture_02.png	REPLACE
+ui_pass_reward_background_01.png	REPLACE
+ui_pass_reward_background_02.png	REPLACE
+ui_pass_state_check_01.png	REPLACE
+ui_pass_state_lock_01.png	REPLACE
+ui_pass_btn_return_01.png	REPLACE
+
+[F — Menú / login / matching / resultados / store (36)]
+ui_common_btn_primary_normal_01.png	REPLACE
+ui_common_btn_primary_pressed_01.png	NEW
+ui_common_btn_primary_disabled_01.png	NEW
+ui_common_btn_large_01.png	REPLACE
+ui_common_panel_container_01.png	REPLACE
+ui_common_panel_subcontainer_01.png	REPLACE
+ui_common_card_01.png	REPLACE
+ui_common_divider_01.png	REPLACE
+ui_common_logo_game_01.png	REPLACE
+ui_common_logo_title_01.png	REPLACE
+ui_common_loader_01.png	REPLACE
+ui_menu_bg_01.png	REPLACE
+ui_menu_btn_play_normal_01.png	REPLACE
+ui_menu_btn_play_pressed_01.png	NEW
+ui_menu_btn_home_01.png	REPLACE
+ui_menu_btn_store_01.png	REPLACE
+ui_menu_btn_ballpass_01.png	REPLACE
+ui_menu_btn_friends_01.png	REPLACE
+ui_menu_btn_help_01.png	REPLACE
+ui_menu_btn_back_01.png	REPLACE
+ui_menu_btn_close_01.png	REPLACE
+ui_menu_tab_rules_normal_01.png	REPLACE
+ui_menu_tab_rules_active_01.png	REPLACE
+ui_menu_tab_powerups_normal_01.png	REPLACE
+ui_menu_tab_powerups_active_01.png	REPLACE
+ui_menu_avatar_player_01.png	REPLACE
+ui_menu_avatar_npc_01.png	REPLACE
+ui_menu_panel_profile_01.png	REPLACE
+ui_menu_picture_profile_01.png	REPLACE
+ui_menu_rules_illustration_01.png	REPLACE
+ui_menu_icon_vs_01.png	REPLACE
+ui_login_bg_01.png	REPLACE
+ui_matching_bg_01.png	REPLACE
+ui_result_win_01.png	REPLACE
+ui_result_lose_01.png	REPLACE
+ui_store_placeholder_01.png	REPLACE
+
+[G — Héroes (7)]
+hero_rojo_portrait_idle_01.png	REPLACE
+hero_rojo_portrait_happy_01.png	REPLACE
+hero_rojo_portrait_angry_01.png	REPLACE
+hero_rojo_portrait_determined_01.png	REPLACE
+hero_rojo_portrait_surprised_01.png	REPLACE
+hero_rojo_banner_01.png	REPLACE
+hero_dialog_bg_01.png	REPLACE

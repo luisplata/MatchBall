@@ -4552,6 +4552,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: TutorialOverlay
       objectReference: {fileID: 0}
+    - target: {fileID: 6464391718865314838, guid: 21e41b8560992134b87439176844e7ed, type: 3}
+      propertyPath: revealAfterSeconds
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6464391718865314838, guid: 21e41b8560992134b87439176844e7ed, type: 3}
+      propertyPath: graphicsDelaySeconds
+      value: 10
+      objectReference: {fileID: 0}
     - target: {fileID: 7588137669761517580, guid: 21e41b8560992134b87439176844e7ed, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -6707,8 +6715,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d2c4f6a0b1e3d5c7f9a2b4c6d8e0f1a, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   balance: {fileID: 1229436175}
   shakeTarget: {fileID: 0}
 --- !u!114 &1987654322
@@ -20813,8 +20821,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d2c4f6a0b1e3d5c7f9a2b4c6d8e0f1a, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   balance: {fileID: 1049846897}
   shakeTarget: {fileID: 0}
 --- !u!114 &1987654321
