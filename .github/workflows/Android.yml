@@ -363,6 +363,24 @@ jobs:
             --store-icon Docs/release/assets/store-icon-512.png \
             --dhash-max 8
 
+      # Play rechaza el envio a revision si el manifiesto fusionado deja
+      # android.hardware.screen.portrait como feature requerida: el juego esta
+      # bloqueado en vertical, asi que UnityPlayerActivity declara
+      # android:screenOrientation="portrait" y Play deduce la feature como
+      # obligatoria (y filtra tablets, PC, Play Games on PC, Android XR).
+      # El manifiesto del AAB es protobuf: se decodifica con Python porque un
+      # grep no distingue required="false" de "true" ni detecta el caso implicado.
+      - name: Verify orientation features in AAB
+        run: |
+          set -euo pipefail
+          AAB=$(find release -name '*.aab' -print -quit)
+          if [ -z "$AAB" ]; then
+            echo "::error::No .aab found under release/"
+            exit 1
+          fi
+          echo "Verificando $AAB"
+          python3 tools/android/verify_aab_orientation_feature.py --aab "$AAB"
+
       - uses: actions/upload-artifact@v4
         with:
           name: MatchBall-release-aab
