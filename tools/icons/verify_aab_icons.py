@@ -598,6 +598,9 @@ def print_report(report: Report, exit_code: int) -> None:
     print("FALLA: %d problema(s) en el AAB:" % len(report.errors), file=sys.stderr)
     for error in report.errors:
         print("  - " + error, file=sys.stderr)
+    if exit_code == 2:
+        print("  Revisar la invocacion: el archivo existe y es un AAB/zip valido?", file=sys.stderr)
+        return
     print(
         "  Revisar Player Settings > Icon (18 slots Android) y el guard AppIconBuildGuard.",
         file=sys.stderr,
