@@ -8,6 +8,9 @@ El launcher NO lleva wordmark: se recorta la banda del arte (circulos) y se rees
 la diagonal de ese bbox al 60% del lado del canvas, centrada. Se usa LANCZOS en un
 unico paso desde el original: no se redibuja nada, no se encadena resampleo.
 
+La capa 0 del icono adaptativo NO lleva el arte: es verde plano full-bleed. El arte
+vive solo en la capa 1 (foreground) porque Android 12+ anima esa capa sobre la 0.
+
 Uso:
     python tools/icons/generate_icons.py            # escribe los 5 PNG
     python tools/icons/generate_icons.py --check    # exit 1 si algun PNG difiere en pixeles
@@ -140,6 +143,13 @@ def frame(canvas: int, bbox: tuple[int, int, int, int]) -> tuple[int, int, int, 
 
 
 def render(source: Image.Image, bbox: tuple[int, int, int, int], canvas: int, mode: str) -> Image.Image:
+    if mode == "RGB" and canvas == ADAPTIVE_CANVAS:
+        # Capa 0 del adaptive icon: relleno verde plano full-bleed, SIN pieza.
+        # Android 12+ anima la capa 1 (parallax/escala) sobre esta capa: si la pieza
+        # estuviera tambien aca, se verian dos juegos de circulos. El arte vive solo
+        # en el foreground; aca no va ni el contorno negro.
+        return Image.new("RGB", (canvas, canvas), GREEN)
+
     piece_w, piece_h, offset_x, offset_y = frame(canvas, bbox)
     piece = source.crop(bbox).resize((piece_w, piece_h), Image.LANCZOS)
 
@@ -245,6 +255,22 @@ def assert_geometry(source_bbox: tuple[int, int, int, int], foreground: Image.Im
     return m
 
 
+def assert_background_full_bleed(background: Image.Image, verbose: bool) -> None:
+    """R2: la capa 0 adaptativa es verde plano en TODO el lienzo (0 px de otro color)."""
+    colors = background.getcolors(maxcolors=1 << 24) or []
+    total = background.width * background.height
+    off = sum(count for count, color in colors if color != GREEN)
+    if off:
+        raise ArtworkError(
+            "el background adaptativo tiene %d px que no son #%02X%02X%02X (%.2f%%): "
+            "la capa 0 tiene que ser full-bleed, sin pieza ni contorno"
+            % (off, GREEN[0], GREEN[1], GREEN[2], 100.0 * off / total)
+        )
+    if verbose:
+        print("  background %d: full-bleed #%02X%02X%02X, %d/%d px (%d de otro color)"
+              % (background.width, GREEN[0], GREEN[1], GREEN[2], total, total, off))
+
+
 def build_all(verbose: bool = True) -> dict:
     """Renderiza los 5 PNG en memoria, valida contrato y devuelve {ruta: imagen}."""
     source = load_source()
@@ -262,6 +288,7 @@ def build_all(verbose: bool = True) -> dict:
             print("  %-34s %3dx%d %-4s  %s" % (path.relative_to(REPO_ROOT), canvas, canvas, mode, role))
         rendered[path] = im
     assert_geometry(info["bbox"], rendered[ICON_DIR / "app_icon_foreground.png"], verbose)
+    assert_background_full_bleed(rendered[ICON_DIR / "app_icon_background.png"], verbose)
     return rendered
 
 
