@@ -345,6 +345,24 @@ jobs:
           cp "$AAB" "release/MatchBall-${{ needs.validate.outputs.version }}.aab"
           ls -la release
 
+      # Se valida el MISMO archivo que despues va al artifact y al Release.
+      # Si los iconos no son los del artwork commiteado el job queda rojo,
+      # upload-artifact no corre y publish se saltea solo (needs == success).
+      - name: Verify launcher icons in AAB
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check -r tools/icons/requirements.txt
+          AAB=$(find release -name '*.aab' -print -quit)
+          if [ -z "$AAB" ]; then
+            echo "::error::No .aab found under release/"
+            exit 1
+          fi
+          echo "Verificando $AAB"
+          python3 tools/icons/verify_aab_icons.py \
+            --aab "$AAB" \
+            --store-icon Docs/release/assets/store-icon-512.png \
+            --dhash-max 8
+
       - uses: actions/upload-artifact@v4
         with:
           name: MatchBall-release-aab
