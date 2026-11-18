@@ -6,6 +6,20 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
+    <!--
+      El juego queda bloqueado en vertical (Player Settings, defaultScreenOrientation: Portrait),
+      así que UnityPlayerActivity sale con android:screenOrientation="portrait". Google Play deduce
+      de ese atributo que la app REQUIERE android.hardware.screen.portrait y filtra la
+      disponibilidad (Teléfono, Tablet, PC, Google Play Games on PC, Android XR): Play Console
+      frenó la versión 3001 con "Declaraciones de funciones de hardware obligatorias restringen la
+      disponibilidad". Declararla con required="false" es la forma documentada de desactivar esa
+      deducción sin tocar la orientación del juego: la actividad sigue en vertical, pero el filtro
+      de instalación desaparece.
+    -->
+    <uses-feature
+        android:name="android.hardware.screen.portrait"
+        android:required="false" />
+
     <application>
         <activity android:name="com.unity3d.player.UnityPlayerActivity"
                   android:theme="@style/UnityThemeSelector">
