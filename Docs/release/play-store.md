@@ -13,11 +13,19 @@ rechaza la app por identidad de marca. Reglas duras:
 
 | Asset | Tamaño / modo | Dónde termina |
 |---|---|---|
-| `Assets/Art/AppIcon/app_icon_background.png` | 432×432 RGB opaco `#22B14C` | Adaptive, capa **0** (6 slots) |
+| `Assets/Art/AppIcon/app_icon_background.png` | 432×432 RGB, verde `#22B14C` **plano en todo el lienzo** (capa 0 **sin arte**: 1 solo color, 186624/186624 px) | Adaptive, capa **0** (6 slots) |
 | `Assets/Art/AppIcon/app_icon_foreground.png` | 432×432 RGBA (solo los círculos) | Adaptive, capa **1** (6 slots) |
 | `Assets/Art/AppIcon/app_icon_legacy.png` | 192×192 RGB | Legacy (6 slots) |
 | `Assets/Art/AppIcon/app_icon_round.png` | 192×192 RGB | Round (6 slots) |
 | `Docs/release/assets/store-icon-512.png` | 512×512 RGBA | Ficha de Play (default **y todas las locales**) |
+
+La capa 0 **no lleva el arte**: si los círculos están también ahí, Android 12+ los duplica, porque
+anima la capa 1 (parallax y escala) sobre la capa 0. Se verifica con un comando:
+
+```bash
+python -c "from PIL import Image; im=Image.open('Assets/Art/AppIcon/app_icon_background.png'); print(im.size, im.mode, im.getcolors(maxcolors=1<<24))"
+# tiene que imprimir (432, 432) RGB [(186624, (34, 177, 76))]  -> un solo color
+```
 
 **Generador** (fuente: `Assets/Sprites/matchballance_icon.png`; nunca se redibuja, se recorta y se
 reescala en un paso):
@@ -30,8 +38,9 @@ python tools/icons/generate_icons.py --manifest   # sha256 de los 5
 
 **Guard de build** (`Assets/Editor/AppIconBuildGuard.cs`): en cada build Android re-aplica los 18
 slots desde los assets versionados **antes** de compilar. Aborta con `BuildFailedException` si falta
-un slot, una textura no es legible o mide distinto. También está el menú
-`Tools > App Icons > Apply to Android Player Settings` para reasignar y persistir sin compilar.
+un slot, si un kind no expone los 6 slots (una por densidad), si una textura no es legible o si mide
+distinto. También está el menú `Tools > App Icons > Apply to Android Player Settings` para reasignar
+y persistir sin compilar (imprime `[AppIcon] 18 slots Android asignados` si todo pasó).
 
 ```text
 [AppIcon] Build bloqueado: no se pudieron aplicar los íconos de launcher Android.
@@ -47,9 +56,12 @@ un slot, una textura no es legible o mide distinto. También está el menú
 python tools/icons/verify_aab_icons.py --aab release/MatchBall-X.Y.Z.aab
 ```
 
-Exit `0` = PASS con inventario · `1` = falta un archivo/densidad, el fondo no es `#22B14C`, las capas
-están invertidas o el dhash contra `store-icon-512` supera 8/64 · `2` = no pudo leer el AAB. El
-mensaje de fallo nombra **densidad + archivo** (`falta base/res/mipmap-hdpi/ic_launcher_foreground.png`).
+Exit `0` = PASS con inventario · `1` = falta un archivo/densidad, el fondo no es `#22B14C`, el fondo
+no es full-bleed (más de 0.5% de píxeles fuera del color dominante: el arte se pegó en la capa 0),
+las capas están invertidas o el dhash contra `store-icon-512` supera 8/64 · `2` = no pudo leer el AAB.
+El mensaje de fallo nombra **densidad + archivo** (`falta base/res/mipmap-hdpi/ic_launcher_foreground.png`)
+o **densidad + porcentaje medido** (`bg xxxhdpi: 10.54% de los píxeles (19676 de 186624) no son el
+color dominante #22B14C`).
 
 En CI es el step `Verify launcher icons in AAB` del job `build-aab`, entre `Normalize AAB` y
 `upload-artifact`: valida **el mismo archivo** que se adjunta al Release. Si falla, no hay artifact
