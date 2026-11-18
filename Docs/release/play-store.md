@@ -69,6 +69,40 @@ y `publish` se saltea solo.
 
 ---
 
+## Disponibilidad: features de hardware de orientación
+
+Play Console frenó la versión **3001 (0.3.1)** con *«Declaraciones de funciones de hardware
+obligatorias restringen la disponibilidad»* sobre `android.hardware.screen.portrait`, para Teléfono,
+Tablet, PC, Google Play Games on PC y Android XR. No es un aviso: bloquea el envío a revisión.
+
+El manifiesto fusionado de ese AAB **no declara** esa feature. La causa es la regla de *implied
+feature*: `UnityPlayerActivity` sale con `android:screenOrientation="portrait"` (Player Settings,
+`defaultScreenOrientation: Portrait`) y Google Play deduce de ahí que la app **requiere** la feature.
+Por eso un `tools:node="remove"` no arregla nada: no hay declaración que quitar.
+
+La única forma documentada de desactivar la deducción es declararla opcional en
+`Assets/Plugins/Android/AndroidManifest.xml`. La actividad sigue en vertical; solo desaparece el
+filtro de instalación:
+
+```xml
+<uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+```
+
+**Guard de CI** (`Verify orientation features in AAB`, justo después del de íconos): decodifica el
+manifiesto protobuf del AAB publicado y falla si la feature queda requerida — declarada sin
+`required="false"` **o** implicada por una `<activity>` con `screenOrientation` fija. A mano:
+
+```bash
+python tools/android/verify_aab_orientation_feature.py --aab release/MatchBall-X.Y.Z.aab
+python tools/android/verify_aab_orientation_feature.py --aab release/MatchBall-X.Y.Z.aab --dump
+```
+
+Exit `0` = la feature no restringe · `1` = restringe (imprime qué activity la implica) · `2` = no
+pudo leer el AAB. Un `grep` del nombre **no** alcanza: no distingue `required="false"` de `"true"` ni
+detecta el caso implicado (el AAB de la 0.3.1, que Play rechazó, no contiene el string).
+
+---
+
 ## Antes de disparar
 
 | Check | Cómo |
@@ -133,7 +167,7 @@ mismo rechazo (el revisor compara lo que ve en la ficha con lo que ve instalado)
 |---|---|---|---|
 | 1 | Leer el **versionCode máximo publicado** (Production + Internal + Closed) | Console → Releases | menor que el que va a emitir el build (`v0.3.1` → `3001`) |
 | 2 | **Ficha primero**: ícono `store-icon-512.png` y título `MatchBallance` en la ficha **predeterminada y en todas las locales** (`es-419` incluida). El ícono de ficha es por locale: una por una | Presencia en la tienda → Ficha principal → selector de idioma | todas las locales con el mismo archivo y el mismo título |
-| 3 | Disparar el build | `gh workflow run Android.yml --ref main -f target=aab -f bump=patch` | run verde, incluido `Verify launcher icons in AAB` |
+| 3 | Disparar el build | `gh workflow run Android.yml --ref main -f target=aab -f bump=patch` | run verde, incluidos `Verify launcher icons in AAB` y `Verify orientation features in AAB` |
 | 4 | Descargar el AAB del Release | `gh release download vX.Y.Z --pattern "*.aab" --dir ./release` | archivo presente |
 | 5 | Subir a **Internal testing** (nunca directo a producción) | Console → Testing → Internal | release aceptada |
 | 6 | Instalar desde el link interno en un device/emulador **API ≥ 30** | device | ícono del launcher == `store-icon-512.png`, label `MatchBallance` |
@@ -168,7 +202,7 @@ Nada de esta lista es automático. Marcar a mano y archivar la evidencia:
 
 - [ ] versionCode máximo publicado leído (Production + Internal + Closed) y **menor** que el del build.
 - [ ] Ficha actualizada: `store-icon-512.png` + título `MatchBallance` en la ficha predeterminada y en **todas** las locales (`es-419` incluida).
-- [ ] `gh workflow run Android.yml --ref main -f target=aab -f bump=patch` → run verde con el step `Verify launcher icons in AAB` (el AAB validado es el que se publica).
+- [ ] `gh workflow run Android.yml --ref main -f target=aab -f bump=patch` → run verde con los steps `Verify launcher icons in AAB` y `Verify orientation features in AAB` (el AAB validado es el que se publica).
 - [ ] AAB del Release subido a **Internal testing**; versionCode en Console == el del run.
 - [ ] Instalado en device/emulador API ≥ 30 **sin instalación previa**: ícono del launcher == `store-icon-512.png`, label `MatchBallance`.
 - [ ] Dos capturas (launcher + ficha) con el mismo device y encuadre, fuera del repo.
