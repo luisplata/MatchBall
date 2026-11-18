@@ -83,6 +83,14 @@ GREEN_TOLERANCE = 3
 BRAND_GREEN_HEX = "#22B14C"
 STORE_ICON_SIZE = 512
 
+# Full-bleed de la capa 0: un background correcto es UN color, asi que todo pixel
+# que difiera del dominante es contenido pegado en la capa equivocada. Medido en
+# esta maquina: con los circulos pegados en la capa 0, 19676/186624 = 10.54% en
+# 432px (bbox no-verde == bbox del foreground); con la capa corregida, 0 px en las
+# 6 densidades. Se tolera 0.5% (933 px en 432, 33 px en 81) para el ringing que
+# pueda dejar un resampleo en densidades chicas: 21x por debajo del bug.
+BACKGROUND_OFF_COLOR_MAX_RATIO = 0.005
+
 # En el canvas 432 el foreground es ~10.2% opaco (medido por generate_icons.py):
 # el umbral de 10% tiene 0.2 pp de margen y solo se aplica ahi. A 81/108 px el
 # resampleo de Unity interpola el borde, asi que en el resto de las densidades
@@ -191,6 +199,14 @@ def alpha_ratios(image: Image.Image) -> tuple[float, float]:
 def dominant_color(image: Image.Image) -> tuple[int, int, int]:
     colors = image.convert("RGB").getcolors(maxcolors=1 << 24) or []
     return max(colors)[1]
+
+
+def off_color_ratio(image: Image.Image, color: tuple[int, int, int]) -> float:
+    """Fraccion de pixeles que NO son exactamente ``color``."""
+    colors = image.convert("RGB").getcolors(maxcolors=1 << 24) or []
+    total = sum(count for count, _ in colors) or 1
+    off = sum(count for count, pixel in colors if pixel != color)
+    return off / float(total)
 
 
 def dhash_bits(image: Image.Image, hash_size: int = 8) -> int:
@@ -397,11 +413,24 @@ def check_anydpi(aab: Aab, report: Report) -> None:
 
 
 def check_background_color(by_density: dict, report: Report) -> None:
-    """Color y opacidad de la capa 0 en la densidad mas grande disponible."""
-    for density in reversed(list(EXPECTED_DENSITIES)):
-        image = by_density.get(density, {}).get(ADAPTIVE_BACKGROUND)
-        if image is None:
-            continue
+    """Color, opacidad y full-bleed de la capa 0 en cada densidad publicada.
+
+    El color dominante solo no alcanza: 89.5% de verde pasa la tolerancia aunque la
+    capa 0 lleve el artwork pegado (incidente de S1). Por eso ademas se cuenta
+    cuantos pixeles difieren del dominante y se falla si superan
+    ``BACKGROUND_OFF_COLOR_MAX_RATIO``.
+    """
+    present = [
+        density
+        for density in reversed(list(EXPECTED_DENSITIES))
+        if by_density.get(density, {}).get(ADAPTIVE_BACKGROUND) is not None
+    ]
+    if not present:
+        report.error("no hay ninguna capa 0 (ic_launcher_background.png) que validar")
+        return
+
+    for density in present:
+        image = by_density[density][ADAPTIVE_BACKGROUND]
         red, green, blue = dominant_color(image)
         delta = max(
             abs(red - BRAND_GREEN[0]), abs(green - BRAND_GREEN[1]), abs(blue - BRAND_GREEN[2])
@@ -422,14 +451,34 @@ def check_background_color(by_density: dict, report: Report) -> None:
         else:
             report.info("  %s" % description)
 
+        off = off_color_ratio(image, (red, green, blue))
+        if off > BACKGROUND_OFF_COLOR_MAX_RATIO:
+            report.error(
+                "bg %s: %0.2f%% de los pixeles (%d de %d) no son el color dominante #%02X%02X%02X "
+                "- la capa 0 tiene que ser full-bleed: el artwork va SOLO en la capa 1 "
+                "(Android 12+ anima el foreground y se veria duplicado)"
+                % (
+                    density,
+                    off * 100.0,
+                    round(off * image.width * image.height),
+                    image.width * image.height,
+                    red,
+                    green,
+                    blue,
+                )
+            )
+        else:
+            report.info(
+                "  bg %-8s full-bleed: %0.2f%% de pixeles fuera del color dominante (maximo %0.2f%%)"
+                % (density, off * 100.0, BACKGROUND_OFF_COLOR_MAX_RATIO * 100.0)
+            )
+
         clear, _ = alpha_ratios(image)
         if clear > 0.0:
             report.error(
                 "bg %s tiene %0.1f%% de pixeles transparentes: la capa 0 debe ser opaca full-bleed"
                 % (density, clear * 100.0)
             )
-        return
-    report.error("no hay ninguna capa 0 (ic_launcher_background.png) que validar")
 
 
 def check_foreground_alpha(by_density: dict, report: Report) -> None:
@@ -618,8 +667,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Tabla de tamanos por densidad (base/res/mipmap-<densidad>/):\n"
             "  adaptive 81/108/162/216/324/432 / legacy y round 36/48/72/96/144/192\n"
-            "Checks: app_icon.xml con <background>+<foreground>, fondo #22B14C opaco,\n"
-            "foreground con alfa, y dhash(legacy mdpi) vs icono de ficha.\n"
+            "Checks: app_icon.xml con <background>+<foreground>, fondo #22B14C opaco y\n"
+            "full-bleed (0.5% maximo de pixeles fuera del color dominante), foreground\n"
+            "con alfa, y dhash(legacy mdpi) vs icono de ficha.\n"
             "\n"
             "Exit: 0 PASS / 1 no cumple el contrato / 2 no se pudo leer la entrada."
         ),
