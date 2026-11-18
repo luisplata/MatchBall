@@ -53,11 +53,17 @@ namespace DarkVoid.AppIcons
             new IconGroup("Round", 192, new[] { "app_icon_round.png" }, new[] { "round" }),
         };
 
+        // Slots que expone cada kind Android (6 densidades). Si un kind expusiera menos,
+        // SetPlatformIcons dejaria slots sin textura y el build publicaria un icono default.
+        const int AndroidSlots = 6;
+
         // Resuelve el kind por ToString() en vez de referenciar UnityEditor.Android.*:
         // así Assets/Editor compila aunque el módulo Android no esté instalado.
+        // GetSupportedIconKinds(NamedBuildTarget) es la API vigente; GetSupportedIconKindsForPlatform
+        // está [Obsolete] en este Editor (verificado por reflexión: "Use GetSupportedIconKinds(NamedBuildTarget) instead").
         static PlatformIconKind Kind(string prefix)
         {
-            foreach (PlatformIconKind kind in PlayerSettings.GetSupportedIconKindsForPlatform(BuildTargetGroup.Android))
+            foreach (PlatformIconKind kind in PlayerSettings.GetSupportedIconKinds(NamedBuildTarget.Android))
                 if (kind.ToString().StartsWith(prefix, StringComparison.Ordinal))
                     return kind;
             return null;
@@ -102,9 +108,11 @@ namespace DarkVoid.AppIcons
                 }
 
                 PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, kind);
-                if (icons == null || icons.Length == 0)
+                if (icons == null || icons.Length != AndroidSlots)
                 {
-                    errors.Add(string.Format("  · Kind {0} no expone slots en este Editor", group.Prefix));
+                    errors.Add(string.Format("  · Kind {0} expone {1} slots, se esperaban {2} (una por densidad): "
+                        + "Player Settings > Icon quedó incompleto",
+                        group.Prefix, icons == null ? 0 : icons.Length, AndroidSlots));
                     continue;
                 }
 
