@@ -314,3 +314,60 @@ antes de que `--freeze-guid` lo lea.
 `ArtMetaMigrator.cs` se verificó con un proyecto `dotnet` desechable contra stubs de
 `UnityEditor`/`UnityEngine` (0 errores, 0 warnings): sintaxis y firmas de API, no comportamiento.
 
+---
+
+## §2a — el mapa pieza→slot y el checker, cero YAML
+
+**Entregado**: `Docs/art/placeholders-v1.md` (37 filas: 20 `cableado` + 13 `sin_slot` +
+4 `bloqueado`) y `tools/art/check_placeholder_wiring.py`. Ningún archivo de `Assets/` cambió.
+
+### 2a.1 `--plan`: las 20 filas resuelven
+
+```
+$ python tools/art/check_placeholder_wiring.py --plan
+PLAN  ui_tutorial_dim_01.png                   image+tinte_design         TutorialOverlay/Dim
+PLAN  ui_tutorial_bubble_body_01.png           image                      TutorialOverlay/Panel/Bubble
+PLAN  ui_tutorial_hand_point_left_01.png       image                      TutorialOverlay/CalloutLeft/Hand
+PLAN  ui_tutorial_hand_point_right_01.png      image                      TutorialOverlay/CalloutRight/Hand
+PLAN  ui_tutorial_step_dot_normal_01.png       serialized_sprite_field    TutorialOverlay/Panel/Dots
+... (20 líneas, una por fila cableada)
+MAPA        37 filas: 20 cableado, 13 sin_slot, 4 bloqueado
+GUID        0 piezas con guid congelado | 0 YAML escaneados en busca de filtraciones
+PENDIENTE   20 capturas sin declarar (slice de capturas)
+RESULTADO   PASS  (0 hallazgos)
+```
+
+Cada `nodo` se resolvió contra el YAML real (walk de `m_Father` sobre
+`Transform`/`RectTransform`), no contra lo que decía el design: los 20 paths existen.
+
+### 2a.2 Gate de diff (APW-4 / APW-4b / APW-6)
+
+`git diff -U0` se clasifica por **clave + nodo**: cada línea cambiada se atribuye a su
+documento (`--- !u!114 &id`) y de ahí a su GameObject, y se compara contra la allowlist de la
+fila que nombra ese nodo.
+
+```
+$ (mover m_AnchoredPosition de TutorialOverlay/SkipButton y volver)
+DIFF: Assets/Prefabs/UI/TutorialOverlay.prefab:486 del 'm_AnchoredPosition' no esta permitida en la fila ui_tutorial_btn_skip_pressed_01.png
+RESULTADO   FAIL  (2 hallazgos)
+
+$ (mover m_AnchoredPosition de un nodo que no está en el mapa)
+DIFF: Assets/Prefabs/UI/TutorialOverlay.prefab:106 (m_AnchoredPosition) toca un nodo fuera del mapa
+RESULTADO   FAIL  (2 hallazgos)
+
+$ (cambiar m_Color de Bubble a 1/1/1/0.92, que es justo lo que hará el cableado)
+RESULTADO   PASS  (0 hallazgos)
+```
+
+Un `.cs` en el diff falla por sí solo (APW-6), y cualquier asset que no esté en el mapa también.
+
+### 2a.3 Lo que el mapa declara y el repo no sostiene
+
+| Hallazgo | Fila | Por qué |
+|---|---|---|
+| `hand_tap_01..03` y `icon_star` sin nodo | `sin_slot` | Las manos son 3 poses de **un** nodo (`CalloutLeft/Hand`, `CalloutRight/Hand` ya son `hand_point_*`) y no hay nodo badge para la estrella. Crear nodo es diseño de UI (APW-1). |
+| `zone_veil` → `TimeLineToStart/Canva/Canvas/Image/Image` | `cableado` | No existe ningún nodo llamado `Veil`/`Zone` en `Game.unity`; las `BallsZone`/`FreezeZone` son zonas de juego, no Images. El único Image de pantalla completa con `m_Color` negro (0/0/0/0.298) es el velo del countdown. **Si el dueño de la UI apuntaba a otro velo, se corrige esa celda** y el checker pasa sin tocar código. |
+| `btn_primary_pressed/disabled` con `nodo=-` | `cableado` | Son variantes de estado del sprite maestro `Button_UI` (124×25, border 7/6/5/7, el mismo contrato que su REPLACE). El slot es el sprite, no un nodo: el checker cuenta referencias `m_SpriteState` al GUID en vez de resolver un path. |
+| `dim` y `zone_veil` con `image+tinte_design` | `cableado` | APW-3 manda normalizar todo host con luminancia < 0.25, pero estas dos son relleno blanco 4×4 estirado a pantalla completa: su `m_Color` oscuro **es** el efecto (velo negro). Normalizarlo lo volvería un flash blanco. Es la única desviación declarada de APW-3 y está escrita **en la fila**. |
+
+
