@@ -20,7 +20,7 @@ este archivo existe para personas y no se parsea.
 | `estado` | `cableado` · `sin_slot` · `bloqueado` (una fila bloqueada puede nombrar su nodo: existe y hoy esta vacio, `m_Sprite: {fileID: 0}`, pero no se cablea) |
 | `tint_original` | `m_Color` vivo **antes** de normalizar, `r/g/b/a`; `-` si no se toca el tinte |
 | `transition_original` | `m_Transition` vivo antes de la excepción; `-` si no se toca |
-| `captura` | PNG de `Docs/art/captures/placeholders-v1/`; vacío hasta el slice de capturas |
+| `captura` | PNG de `Docs/art/captures/placeholders-v1/`; el mismo nombre de la pieza |
 
 ## Excepciones declaradas, por fila (nunca por asset)
 
@@ -72,8 +72,8 @@ pretendía otro velo, se corrige esa celda y el checker vuelve a pasar sin tocar
 
 ```csv
 pieza,slot_tipo,asset,nodo,componente,campo,estado,tint_original,transition_original,captura
-ui_tutorial_dim_01.png,image+tinte_design,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Dim,Image,m_Sprite,cableado,0/0/0/0.72,-,
-ui_tutorial_bubble_body_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Bubble,Image,m_Sprite,cableado,0.07/0.08/0.12/0.92,-,
+ui_tutorial_dim_01.png,image+tinte_design,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Dim,Image,m_Sprite,cableado,0/0/0/0.72,-,ui_tutorial_dim_01.png
+ui_tutorial_bubble_body_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Bubble,Image,m_Sprite,cableado,0.07/0.08/0.12/0.92,-,ui_tutorial_bubble_body_01.png
 ui_tutorial_bubble_tail_left_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Bubble/Tail,Image,m_Sprite,bloqueado,0.07/0.08/0.12/0.92,-,
 ui_tutorial_caption_pill_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/CalloutLeft/CaptionPill,Image,m_Sprite,bloqueado,0.07/0.08/0.12/0.9,-,
 ui_tutorial_spotlight_ring_01.png,image,-,-,-,-,sin_slot,-,-,
@@ -81,35 +81,68 @@ ui_tutorial_spotlight_fill_01.png,image,-,-,-,-,bloqueado,-,-,
 ui_tutorial_hand_tap_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_tutorial_hand_tap_02.png,image,-,-,-,-,sin_slot,-,-,
 ui_tutorial_hand_tap_03.png,image,-,-,-,-,sin_slot,-,-,
-ui_tutorial_hand_point_left_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/CalloutLeft/Hand,Image,m_Sprite,cableado,1/1/1/0.85,-,
-ui_tutorial_hand_point_right_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/CalloutRight/Hand,Image,m_Sprite,cableado,1/1/1/0.85,-,
+ui_tutorial_hand_point_left_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/CalloutLeft/Hand,Image,m_Sprite,cableado,1/1/1/0.85,-,ui_tutorial_hand_point_left_01.png
+ui_tutorial_hand_point_right_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/CalloutRight/Hand,Image,m_Sprite,cableado,1/1/1/0.85,-,ui_tutorial_hand_point_right_01.png
 ui_tutorial_icon_star_01.png,image,-,-,-,-,sin_slot,-,-,
-ui_tutorial_step_dot_normal_01.png,serialized_sprite_field,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Dots,TutorialStepDots,normalSprite,cableado,-,-,
-ui_tutorial_step_dot_active_01.png,serialized_sprite_field,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Dots,TutorialStepDots,activeSprite,cableado,-,-,
-ui_tutorial_step_dot_done_01.png,serialized_sprite_field,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Dots,TutorialStepDots,doneSprite,cableado,-,-,
-ui_tutorial_btn_skip_normal_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/SkipButton,Image,m_Sprite,cableado,0.18/0.2/0.28/0.9,-,
-ui_tutorial_btn_skip_pressed_01.png,selectable_state,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/SkipButton,Button,m_SpriteState.m_PressedSprite,cableado,0.18/0.2/0.28/0.9,1,
-ui_tutorial_btn_continue_normal_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/CloseGroup/ContinueButton,Image,m_Sprite,cableado,0.16/0.55/0.35/0.95,-,
-ui_tutorial_btn_continue_pressed_01.png,selectable_state,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/CloseGroup/ContinueButton,Button,m_SpriteState.m_PressedSprite,cableado,0.16/0.55/0.35/0.95,1,
-ui_tutorial_btn_retry_normal_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/RetryPanel/RetryButton,Image,m_Sprite,cableado,0.16/0.55/0.35/0.95,-,
-ui_tutorial_btn_retry_pressed_01.png,selectable_state,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/RetryPanel/RetryButton,Button,m_SpriteState.m_PressedSprite,cableado,0.16/0.55/0.35/0.95,1,
-ui_tutorial_panel_retry_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/RetryPanel,Image,m_Sprite,cableado,0.08/0.09/0.13/0.98,-,
-ui_tutorial_icon_danger_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/DangerStrip,Image,m_Sprite,cableado,1/0.7/0.2/0.12,-,
-ui_hud_btn_settings_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Profile/Settings,Button,m_SpriteState.m_PressedSprite,cableado,-,0,
+ui_tutorial_step_dot_normal_01.png,serialized_sprite_field,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Dots,TutorialStepDots,normalSprite,cableado,-,-,ui_tutorial_step_dot_normal_01.png
+ui_tutorial_step_dot_active_01.png,serialized_sprite_field,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Dots,TutorialStepDots,activeSprite,cableado,-,-,ui_tutorial_step_dot_active_01.png
+ui_tutorial_step_dot_done_01.png,serialized_sprite_field,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/Dots,TutorialStepDots,doneSprite,cableado,-,-,ui_tutorial_step_dot_done_01.png
+ui_tutorial_btn_skip_normal_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/SkipButton,Image,m_Sprite,cableado,0.18/0.2/0.28/0.9,-,ui_tutorial_btn_skip_normal_01.png
+ui_tutorial_btn_skip_pressed_01.png,selectable_state,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/SkipButton,Button,m_SpriteState.m_PressedSprite,cableado,0.18/0.2/0.28/0.9,1,ui_tutorial_btn_skip_pressed_01.png
+ui_tutorial_btn_continue_normal_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/CloseGroup/ContinueButton,Image,m_Sprite,cableado,0.16/0.55/0.35/0.95,-,ui_tutorial_btn_continue_normal_01.png
+ui_tutorial_btn_continue_pressed_01.png,selectable_state,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/CloseGroup/ContinueButton,Button,m_SpriteState.m_PressedSprite,cableado,0.16/0.55/0.35/0.95,1,ui_tutorial_btn_continue_pressed_01.png
+ui_tutorial_btn_retry_normal_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/RetryPanel/RetryButton,Image,m_Sprite,cableado,0.16/0.55/0.35/0.95,-,ui_tutorial_btn_retry_normal_01.png
+ui_tutorial_btn_retry_pressed_01.png,selectable_state,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/RetryPanel/RetryButton,Button,m_SpriteState.m_PressedSprite,cableado,0.16/0.55/0.35/0.95,1,ui_tutorial_btn_retry_pressed_01.png
+ui_tutorial_panel_retry_01.png,image,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/RetryPanel,Image,m_Sprite,cableado,0.08/0.09/0.13/0.98,-,ui_tutorial_panel_retry_01.png
+ui_tutorial_icon_danger_01.png,image+alfa_host,Assets/Prefabs/UI/TutorialOverlay.prefab,TutorialOverlay/Panel/DangerStrip,Image,m_Sprite,cableado,1/0.7/0.2/0.12,-,ui_tutorial_icon_danger_01.png
+ui_hud_btn_settings_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Profile/Settings,Button,m_SpriteState.m_PressedSprite,cableado,-,0,ui_hud_btn_settings_pressed_01.png
 ui_hud_avatar_frame_player_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_hud_avatar_frame_ai_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_hud_score_pill_player_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_hud_score_pill_ai_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_hud_panel_player_01.png,image,-,-,-,-,sin_slot,-,-,
-game_board_zone_veil_01.png,image+tinte_design,Assets/Scenes/Game.unity,TimeLineToStart/Canva/Canvas/Image/Image,Image,m_Sprite,cableado,0/0/0/0.29803923,-,
+game_board_zone_veil_01.png,image+tinte_design,Assets/Scenes/Game.unity,TimeLineToStart/Canva/Canvas/Image/Image,Image,m_Sprite,cableado,0/0/0/0.29803923,-,game_board_zone_veil_01.png
 ball_state_selected_ring_01.png,image,-,-,-,-,sin_slot,-,-,
 ball_state_frozen_01.png,image,-,-,-,-,bloqueado,-,-,
 ball_state_matched_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_menu_bg_panel_01.png,image,-,-,-,-,sin_slot,-,-,
-ui_common_btn_primary_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Audio,Button,m_SpriteState.m_PressedSprite,cableado,1/1/1/1,1,
-ui_common_btn_primary_disabled_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Name,Button,m_SpriteState.m_DisabledSprite,cableado,1/1/1/1,1,
-ui_menu_btn_play_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Button_Play,Button,m_SpriteState.m_PressedSprite,cableado,-,0,
+ui_common_btn_primary_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Audio,Button,m_SpriteState.m_PressedSprite,cableado,1/1/1/1,1,ui_common_btn_primary_pressed_01.png
+ui_common_btn_primary_disabled_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Name,Button,m_SpriteState.m_DisabledSprite,cableado,1/1/1/1,1,ui_common_btn_primary_disabled_01.png
+ui_menu_btn_play_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Button_Play,Button,m_SpriteState.m_PressedSprite,cableado,-,0,ui_menu_btn_play_pressed_01.png
 ```
+
+## Capturas (`Docs/art/captures/placeholders-v1/`)
+
+24 PNG: **20 recortes** con el nombre de su pieza + **4 panorámicas** de host a 900×1900 (la
+resolución de referencia del proyecto: `CanvasScaler` de todas las escenas es
+`ScaleWithScreenSize 900×1900`, match 0).
+
+Método: cámara del propio canvas (`Canvas.worldCamera`, `ScreenSpaceCamera`) → `RenderTexture`
+900×1900 → `ReadPixels` → recorte a la `RectTransform` del nodo. Nada de `ScreenCapture`: la
+resolución tiene que ser la del contrato, no la del Game view.
+
+Tres decisiones del rig, declaradas porque afectan lo que se ve:
+
+1. **`TutorialOverlay` es código, no un estado guardado.** En el prefab `Dim`, `Panel`,
+   `CalloutLeft/Right`, `SkipButton`, `RetryPanel` y `DangerStrip` están inactivos y los prende
+   `TutorialOverlay.cs` paso a paso. Cada recorte activa **sólo** la cadena de su nodo, y las tres
+   `step_dot_*` se capturan con `TutorialStepDots.SetCurrent(1)` (dot 0 `done`, dot 1 `active`,
+   dot 2 `normal`) — el estado real del componente, no una asignación a mano.
+2. **`pressed`/`disabled` se fuerzan con `Selectable.DoStateTransition`** (vía reflexión: es
+   `protected`), que es exactamente lo que hace el input. La captura de `pressed` muestra el sprite
+   de `m_PressedSprite` y **ningún** tinte de color: es la prueba visual del costo de APW-4b.
+3. **`MainMenu` sólo se ve bien en play mode**, y su panel `Configuration` no tiene *opener*
+   cableado (`onClick` con 0 listeners en el engranaje, `RectTransform` fuera de pantalla): el rig
+   corre en play mode y deja el panel en la posición que tendría abierto. No se guarda nada — el
+   play mode no escribe la escena.
+
+**Firma visual, en las capturas**: el marco `#FF00FF` y la etiqueta se ven en `bubble`, `skip`,
+`panel_retry`, `btn_primary_*`, `play` y `settings`. En `continue`/`retry` el tinte del host
+(`0.16/0.55/0.35`) **mata el magenta** (255×0.55 en G, 255×0.16 en R): el marco queda verde y la
+firma no pasa el umbral de APA-2. Es la consecuencia medida de no normalizar hosts con luminancia
+> 0.25 (APW-3); la pieza sigue siendo inconfundible por la placa `SIN ARTE`. En `dim` y `zone_veil`
+> la firma no existe por diseño (`flat4`, `except: sin_firma`), y en `danger` (alfa 0.12) y en los
+> dots (alfa 0.25/0.55) el alfa del host baja el magenta bajo el umbral sin cambiarlo de tono.
 
 ## Reversión
 

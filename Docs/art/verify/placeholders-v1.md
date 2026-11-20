@@ -1,7 +1,8 @@
 # placeholders-arte-v2 — evidencia por slice
 
 Change `placeholders-arte-v2` · contrato §9 de `manifest-refresh-visual-v1.md` (37 NEW) · base `a3b9cda`
-Python 3.13.6 / Pillow 13.0.0 · Gamma (`m_ActiveColorSpace: 0`) · sin Unity en esta máquina.
+Python 3.13.6 / Pillow 13.0.0 · Gamma (`m_ActiveColorSpace: 0`) · Unity 6000.3.10f1 (editor abierto:
+los §1b.6 y §2b se corrieron en él).
 
 Cada sección pega los comandos y su salida. Nada de acá se escribe a mano: el ledger es
 derivado, y esta página sólo transcribe lo que el gate imprimió.
@@ -401,41 +402,89 @@ Un `.cs` en el diff falla por sí solo (APW-6), y cualquier asset que no esté e
 
 ---
 
-## §2b — cableado y capturas: **bloqueado, no implementado**
+## §2b — cableado y capturas
 
-El slice 2b no se puede ejecutar en este entorno, y no por falta de tiempo: le faltan dos
-insumos que sólo produce Unity.
+**Entregado**: 30 celdas escritas en 3 YAML (`TutorialOverlay.prefab` 21, `MainMenu.unity` 8,
+`Game.unity` 1), el mapa con las 20 filas en `cableado` + su `captura`, y 24 PNG en
+`Docs/art/captures/placeholders-v1/` (20 recortes + 4 panorámicas). Cero `.cs`, cero nodos nuevos.
 
-1. **Las 33 referencias necesitan los 33 GUID.** `m_Sprite: {fileID: 21300000, guid: 8febf562…}`
-   sólo se puede escribir con el GUID que Unity acuña al importar el PNG. El ledger tiene la
-   columna `guid` vacía porque los `.meta` no existen (§1b.6). Inventar un GUID produce una
-   referencia colgada y, cuando el `.meta` real aparezca, `NEW-GUID` falla con el valor inventado.
-   Cablear "a medias" con `fileID: 0` es exactamente el estado que este change viene a sacar.
-2. **Las 24 capturas (APW-5) salen de la escena corriendo**, a 900×1900. Sin editor no hay captura,
-   y sin captura el gate de 2b (`--require-captures`) no puede pasar por diseño.
-
-Escribir el YAML sin esos dos insumos dejaría el repo peor que antes: 20 referencias rotas y un
-mapa que dice `cableado` sobre algo que no se ve. Por eso **no se tocó ningún archivo de `Assets/`**.
-
-Cuando haya editor, la secuencia completa (los tres slices en orden) es:
+### 2b.1 El diff, contra la allowlist
 
 ```
-python tools/art/generate_placeholders.py                                    # 1. PNG + ledger
-Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtMetaMigrator.BatchApply -artCohort new
-python tools/art/generate_placeholders.py --freeze-guid                      # 3. 33 GUID al ledger
-# --- acá existe lo que 2b necesita ---
-# 4. cableado: m_Sprite por GUID en las 20 filas del mapa, m_Color n/n/n donde APW-3 lo pide,
-#    m_Transition 1->2 + m_SpriteState en las 7 selectable_state. Sólo esos campos.
-python tools/art/check_placeholder_wiring.py --diff HEAD                     # 5. diff ⊆ allowlist
-# 6. capturas: 20 recortes + 4 panorámicas en Docs/art/captures/placeholders-v1/ y la columna
-#    `captura` del mapa completa
-python tools/art/check_placeholder_wiring.py --require-captures              # 7. 20/20 con captura
-python tools/art/generate_placeholders.py --check                            # 8. SURVIVE ya con host real
-python tools/art/audit_art_manifest.py                                       # 9. NEW-* en 0
+$ python tools/art/check_placeholder_wiring.py --require-captures
+MAPA        37 filas: 20 cableado, 13 sin_slot, 4 bloqueado
+GUID        33 piezas con guid congelado | 278 YAML escaneados en busca de filtraciones
+RESULTADO   PASS  (0 hallazgos)                                            # exit 0
 ```
 
-El mapa ya tiene las 20 filas con su nodo, su campo y su `tint_original`/`transition_original`:
-el paso 4 es mecánico y el paso 5 lo puede rechazar si alguien toca una clave de más.
+El gate de diff (APW-4/APW-4b/APW-6) corre por defecto contra `HEAD` y ya pasó en el commit del
+cableado (`f68b843`): 30 líneas cambiadas, todas `m_Sprite` (18), `m_Color` (4), `m_Transition` (7)
+y `m_SpriteState` (5) — ninguna clave fuera de la allowlist de su fila, ningún `.cs`, ningún asset
+fuera del mapa. Re-aplicar el procedimiento es no-op: la segunda pasada imprime `ya` en las 30
+celdas y `git diff` queda vacío (APW-6).
+
+### 2b.2 Las 20 referencias resuelven
+
+Las 33 GUID del ledger cargan como `Sprite` (20/20 de las cableadas), y el prefab instanciado
+devuelve los nombres esperados:
+
+```
+guids ok=20 bad=0
+SPRITE Dim -> ui_tutorial_dim_01 rect=4x4
+SPRITE Bubble -> ui_tutorial_bubble_body_01 rect=400x520
+SPRITE ContinueButton -> ui_tutorial_btn_continue_normal_01 rect=280x84
+SPRITE DangerStrip -> ui_tutorial_icon_danger_01 rect=48x48
+SPRITE RetryPanel -> ui_tutorial_panel_retry_01 rect=780x420
+SPRITE RetryButton -> ui_tutorial_btn_retry_normal_01 rect=220x64
+SPRITE Hand -> ui_tutorial_hand_point_left_01 rect=160x200
+SPRITE Hand -> ui_tutorial_hand_point_right_01 rect=160x200
+SPRITE SkipButton -> ui_tutorial_btn_skip_normal_01 rect=120x56
+```
+
+`m_Color` normalizado a `(1,1,1)` sólo donde APW-3 lo manda (bubble 0.07, skip 0.18, panel_retry
+0.08) preservando el alfa; `dim` y `zone_veil` conservan el suyo porque son `image+tinte_design`.
+
+### 2b.3 Las 24 capturas
+
+| Tipo | N | Archivos |
+|---|---|---|
+| recorte por pieza | 20 | `<pieza>.png`, en la `RectTransform` del nodo, con el marco y la banda |
+| panorámica de host 900×1900 | 4 | `tutorial-overlay.png`, `game.png`, `main-menu.png`, `main-menu-configuration.png` |
+
+24 sha256 distintos (T-26). El método está en el mapa (§*Capturas*): cámara del canvas →
+`RenderTexture` 900×1900 → recorte. `MainMenu` se capturó en **play mode** porque en edit time sus
+paneles están fuera de pantalla y el `Configuration` no tiene *opener* cableado; el rig lo deja en
+la posición que tendría abierto y **no guarda la escena**.
+
+Firma (`APA-2`) visible en `bubble`, `skip`, `panel_retry`, `btn_primary_*`, `play` y `settings`
+(marco magenta + placa `SIN ARTE` + 4 esquinas + banda cian). En `continue`/`retry` el tinte verde
+del host mata el magenta y el marco queda verde; en `dim`/`zone_veil` no hay firma por diseño
+(`flat4`), y en `danger`/dots el alfa del host la atenúa. Todo eso está declarado en el mapa.
+
+### 2b.4 El gate del placeholder y el auditor, después del cableado
+
+```
+$ python tools/art/generate_placeholders.py --check
+RESULTADO   PASS  (33 GENERATED, 4 bloqueadas, 0 hallazgos)                # exit 0
+$ python tools/art/audit_art_manifest.py
+LEDGER NEW  37 filas | 33 GENERATED registradas en el auditor
+VIOLACIONES 14 en 3 reglas            # baseline pre-cambio: las mismas 3 y 0 NEW-*
+```
+
+`SURVIVE` sigue midiéndose contra el `m_Color` **normalizado** del host (APW-3): las 3 filas
+normalizadas pasan a host `(1,1,1)`, y la tabla de APH-6b se sigue cumpliendo con el host medido
+`(0.07,0.08,0.12,0.92)` del §1a.6.
+
+### 2b.5 Desviación declarada: las dos variantes del sprite maestro
+
+En 2a esas dos filas decían `nodo=-` y el checker iba a contar referencias por GUID. En 2b se
+midió el costo real: con `nodo=-` el gate de diff no admite ningún nodo, así que las dos piezas
+quedaban `cableado` sin host que las mostrara — imposible de capturar (APW-5). Se corrigió **la
+celda del mapa**, no el código: `btn_primary_pressed` → `Button_Audio` y `btn_primary_disabled` →
+`Button_Name`, ambos `Selectable` con `m_Sprite` = `Button_UI` y `m_Transition: 1`. El alcance
+queda en **7 `Selectable`** con `SpriteSwap`, no en los 19 que estimaba APW-4b: es una reducción,
+y está escrita en el mapa.
+
 
 
 
