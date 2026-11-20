@@ -422,12 +422,20 @@ no se parsea. Cualquier discrepancia entre esta tabla y el `.meta` es un `fail`,
 | `px_actual` | header del archivo | `WxH` · `TBD` en las NEW (no hay archivo) |
 | `px_entrega` | canvas que se dibuja | `WxH`; difiere de `px_actual` sólo en las 6 de §4 (en las NEW `px_actual` es `TBD`) |
 | `mode_target` | `spriteImportMode` objetivo | `1` (Single) en todas — es lo que hace que el swap sea sólo bytes |
-| `mode_actual` | `spriteImportMode` medido | `2` en las 25, `1` en las 60 REPLACE conformes, `-` en las NEW |
+| `mode_actual` | `spriteImportMode` medido **el día del escaneo** (histórico) | `2` en las 25, `1` en las 60 REPLACE conformes, `-` en las NEW. **No es un gate** (ver nota) |
 | `border` | `spriteBorder` l/b/r/t | `0/0/0/0` = sin borde. En REPLACE se lee del `.meta`; en NEW es contrato |
 | `max_tex` | `maxTextureSize` | `2048` en las 122 |
 | `pivot` | `spritePivot` | `0.5/0.5` (el pivote en la punta del dedo de las manos del tutorial es de RectTransform, no del sprite) |
 | `ppu` | `spritePixelsToUnits` | `100` en las 122 |
 | `address` | address de Addressables | `-` si la pieza no está direccionada (11 con address) |
+
+> **Nota sobre `mode_actual` (histórico, no gate).** `mode_actual` es el **snapshot del escaneo**
+> con el que se congeló esta tabla ("cómo estaba el arte el 2026-11-11"). No se actualiza cuando
+> una pieza se migra y **no se puede usar como condición de nada**: ni el auditor
+> (`tools/art/audit_art_manifest.py`) ni el harness sintético (`ArtSyntheticBatch`) deciden con
+> ella. La columna operativa es **`mode_target`**, y ambos comparan el `spriteMode` **medido en el
+> `.meta`** contra ese target. Usarla como estado vivo hace que cada pieza migrada genere una
+> violación nueva (cancela el avance de S2) y que el gate no pueda correr justo después de migrar.
 
 ```csv
 pieza,estado,origen,px_actual,px_entrega,mode_target,mode_actual,border,max_tex,pivot,ppu,address

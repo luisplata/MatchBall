@@ -50,15 +50,18 @@
 //   world    -> game_board_* + ball_*                       (S2a)
 //   avatars  -> hero_* + ui_menu_avatar_* + panel/picture   (S2b)
 //   rest     -> all - world - avatars                       (S2c)
-//   mode1    -> REPLACE con mode_actual 1 y px_actual == px_entrega (gate valido HOY)
+//   mode1    -> REPLACE con spriteMode MEDIDO en el .meta == 1 y px_actual == px_entrega
 // El parametro `pieces` (glob separado por comas) reemplaza al cohorte; matchea la pieza y el
 // basename del origen. No hay parser de argv: los entrypoints son menu y -executeMethod.
 //
 // Exit codes: 0 ok (o dry-run ok) · 1 algun veredicto != exact · 2 plan/manifiesto ·
 //             3 guard (Assets/ sucio) · 4 restauracion no byte-identica · 5 error interno.
 //
-// Deuda declarada: el gate de las 25 piezas mode-2 solo es valido DESPUES de S2 (design §3.5):
-// hoy el importador reescribe el rect y el assert falla por diseno. Se marcan `skipped`.
+// Gate: se decide con el spriteMode MEDIDO en el `.meta` (el mismo dato que lee el auditor
+// Python), comparado contra `mode_target`. `mode_actual` de la sec.9 es el snapshot del
+// escaneo y NO es un gate (F-S2a-2): despues de migrar una pieza, el gate tiene que poder
+// correr sobre ella, no saltearla. Una pieza es corrible cuando su origen es PNG (ASC-5),
+// px_actual == px_entrega y el spriteMode medido ya es Single.
 
 #if UNITY_EDITOR
 using System;
@@ -222,6 +225,8 @@ namespace DarkVoid.ArtContract
             public string ExpectedSource;
             public int FileW;
             public int FileH;
+            /// <summary>spriteMode medido en el `.meta` (el mismo dato que lee el auditor Python). -1 = no se pudo medir.</summary>
+            public int MeasuredMode = -1;
             public string SkipReason;
         }
 
@@ -466,17 +471,6 @@ namespace DarkVoid.ArtContract
                 {
                     continue;
                 }
-                if (pattern != null)
-                {
-                    if (!Matches(pattern, row.Pieza) && !Matches(pattern, BaseName(row.Origen)))
-                    {
-                        continue;
-                    }
-                }
-                else if (!MatchesCohort(options.Cohort, row))
-                {
-                    continue;
-                }
 
                 var target = new Target
                 {
@@ -485,6 +479,22 @@ namespace DarkVoid.ArtContract
                     AssetPath = ArtContractManifest.NormalizePath(row.Origen),
                     MetaPath = ArtContractManifest.NormalizePath(row.Origen) + ".meta",
                 };
+                // El modo medido se lee del `.meta` ANTES de elegir el cohorte: el cohorte `mode1`
+                // ya no se define por la columna historica `mode_actual` de la sec.9.
+                target.MeasuredMode = MeasureSpriteMode(target.MetaPath);
+
+                if (pattern != null)
+                {
+                    if (!Matches(pattern, row.Pieza) && !Matches(pattern, BaseName(row.Origen)))
+                    {
+                        continue;
+                    }
+                }
+                else if (!MatchesCohort(options.Cohort, target))
+                {
+                    continue;
+                }
+
                 ResolveExpectation(target);
                 targets.Add(target);
             }
@@ -501,8 +511,9 @@ namespace DarkVoid.ArtContract
             return targets;
         }
 
-        static bool MatchesCohort(string cohort, ArtContractRow row)
+        static bool MatchesCohort(string cohort, Target target)
         {
+            ArtContractRow row = target.Row;
             string pieza = row.Pieza ?? string.Empty;
             switch ((cohort ?? string.Empty).ToLowerInvariant())
             {
@@ -517,18 +528,68 @@ namespace DarkVoid.ArtContract
                         || pieza.StartsWith("ui_menu_panel_profile_", StringComparison.Ordinal)
                         || pieza.StartsWith("ui_menu_picture_profile_", StringComparison.Ordinal);
                 case "rest":
-                    return !MatchesCohort("world", row) && !MatchesCohort("avatars", row);
+                    return !MatchesCohort("world", target) && !MatchesCohort("avatars", target);
                 case "mode1":
-                    return IsValidToday(row);
+                    return IsValidToday(target);
                 default:
                     return false;
             }
         }
 
-        static bool IsValidToday(ArtContractRow row)
+        /// <summary>
+        /// Corrible HOY: el import ya esta en Single (medido, no el snapshot de la sec.9) y
+        /// px_actual == px_entrega (si difieren, el swap cambia el tamano y el patron no calza).
+        /// </summary>
+        static bool IsValidToday(Target target)
         {
-            return string.Equals(row.ModeActual, "1", StringComparison.Ordinal)
-                && string.Equals(row.PxActual, row.PxEntrega, StringComparison.Ordinal);
+            return target.MeasuredMode == 1
+                && string.Equals(target.Row.PxActual, target.Row.PxEntrega, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// spriteMode real del import, leido del `.meta` (la MISMA medicion que hace
+        /// tools/art/audit_art_manifest.py: la linea `spriteMode:` del TextureImporter).
+        /// -1 si falta el `.meta` o no se puede leer. Solo lectura: no importa ni reimporta.
+        /// </summary>
+        static int MeasureSpriteMode(string metaPath)
+        {
+            if (string.IsNullOrEmpty(metaPath))
+            {
+                return -1;
+            }
+            string absolute = System.IO.Path.Combine(ArtContractManifest.ProjectRoot(), metaPath);
+            if (!File.Exists(absolute))
+            {
+                return -1;
+            }
+            foreach (string line in File.ReadLines(absolute))
+            {
+                string trimmed = line.Trim();
+                if (!trimmed.StartsWith("spriteMode:", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                int mode;
+                if (int.TryParse(trimmed.Substring("spriteMode:".Length).Trim(),
+                        NumberStyles.Integer, CultureInfo.InvariantCulture, out mode))
+                {
+                    return mode;
+                }
+                return -1;
+            }
+            return -1;
+        }
+
+        static string ModeLabel(int mode)
+        {
+            switch (mode)
+            {
+                case 1: return "1 (Single)";
+                case 2: return "2 (Multiple)";
+                case 3: return "3 (Polygon)";
+                case 0: return "0 (None)";
+                default: return mode < 0 ? "?" : mode.ToString(CultureInfo.InvariantCulture);
+            }
         }
 
         static void ResolveExpectation(Target target)
@@ -648,9 +709,9 @@ namespace DarkVoid.ArtContract
             {
                 foreach (Target target in targets)
                 {
-                    if (string.IsNullOrEmpty(target.SkipReason) && !IsValidToday(target.Row))
+                    if (string.IsNullOrEmpty(target.SkipReason) && !IsValidToday(target))
                     {
-                        target.SkipReason = GateReason(target.Row);
+                        target.SkipReason = GateReason(target);
                     }
                 }
             }
@@ -665,7 +726,8 @@ namespace DarkVoid.ArtContract
                     runnable++;
                     Debug.Log("  run  " + Pad(target.Pieza, 44) + " " + target.ExpectedW + "x" + target.ExpectedH +
                               " (" + target.ExpectedSource + ") · archivo " + target.FileW + "x" + target.FileH +
-                              " · mode " + target.Row.ModeActual + " · " + target.AssetPath);
+                              " · mode medido " + ModeLabel(target.MeasuredMode) +
+                              " · target " + target.Row.ModeTarget + " · " + target.AssetPath);
                 }
                 else
                 {
@@ -676,13 +738,15 @@ namespace DarkVoid.ArtContract
             Debug.Log("[ArtSyntheticBatch] plan: " + runnable + " corribles · " + skipped + " salteadas");
         }
 
-        static string GateReason(ArtContractRow row)
+        static string GateReason(Target target)
         {
-            if (!string.Equals(row.ModeActual, "1", StringComparison.Ordinal))
+            if (target.MeasuredMode != 1)
             {
-                return "mode_actual " + row.ModeActual + ": el gate sintetico solo es valido despues de S2 (design 3.5)";
+                return "spriteMode medido " + ModeLabel(target.MeasuredMode) + " != mode_target " +
+                       target.Row.ModeTarget + ": el gate sintetico solo es valido con el import ya en Single" +
+                       " (design 3.5; mode_actual de sec.9 es historico y no se usa)";
             }
-            return "px_entrega " + row.PxEntrega + " != px_actual " + row.PxActual +
+            return "px_entrega " + target.Row.PxEntrega + " != px_actual " + target.Row.PxActual +
                    ": el swap cambia el tamano del archivo, no es un swap de bytes 1:1";
         }
 
@@ -1697,7 +1761,10 @@ namespace DarkVoid.ArtContract
                         error = "git status salio con " + process.ExitCode + ": " + stderr.Trim();
                         return false;
                     }
-                    porcelain = output.Trim();
+                    // TrimEnd, no Trim: el primer path de `git status --porcelain` arranca con
+                    // un espacio (" M Assets/...") y `Trim()` se lo comia, perdiendo el primer
+                    // caracter (`ssets/...`) y rompiendo la exencion del propio fuente (F-S2a-3).
+                    porcelain = output.TrimEnd();
                     return true;
                 }
             }

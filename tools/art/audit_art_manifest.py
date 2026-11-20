@@ -14,8 +14,7 @@ Que compara (regla -> columna de sec.9 -> archivo):
   ORIGEN-EXISTS     origen         el path declarado existe en el working tree
   FORMAT-JPG        origen         ASC-5: nada de JPG en la entrega
   PX-ACTUAL         px_actual      header del archivo (PNG IHDR / JPEG SOF)
-  MODE-ACTUAL       mode_actual    spriteMode medido en el .meta
-  MODE-TARGET       mode_target    spriteImportMode objetivo (1 = Single)
+  MODE-TARGET       mode_target    spriteMode medido en el .meta vs objetivo (1 = Single)
   RECT-STALE        -              rect del spriteSheet vs lienzo completo
   BORDER-META       border         spriteBorder del .meta (l/b/r/t)
   BORDER-SLICED     border         borde declarado si un Image lo dibuja Sliced/Tiled
@@ -25,6 +24,12 @@ Que compara (regla -> columna de sec.9 -> archivo):
   PX-ENTREGA-TECHO  px_entrega     max(px_entrega) <= max_tex
   ADDRESS-RESOLVE   address        la entry existe en AddressableAssetsData
   ADDRESS-PATH      address        address -> m_GUID -> path == origen
+
+`mode_actual` NO es una regla: es el snapshot del escaneo con el que se congelo la sec.9
+("como estaba el arte el 2026-11-11"). Perseguirlo como estado vivo hace que cada pieza
+migrada produzca una violacion nueva (F-S2a-2), por eso solo se reporta como INFO
+(`MODE-ACTUAL-DRIFT`) cuando el .meta ya no coincide. El unico gate de import es
+`mode_target`: el objetivo no cambia cuando el asset se migra.
 
 Exit code: 0 = PASS / 1 = hay violaciones / 2 = el manifiesto no se pudo leer.
 
@@ -528,10 +533,12 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             continue
 
         if row["mode_actual"].isdigit() and meta.sprite_mode != int(row["mode_actual"]):
-            fail(
-                "MODE-ACTUAL",
-                name,
-                "spriteMode medido %s != mode_actual %s" % (meta.sprite_mode, row["mode_actual"]),
+            # Historico, no gate (F-S2a-2): `mode_actual` es el snapshot del escaneo. Se reporta
+            # como INFO para que la migracion quede trazable, pero jamas puede fallar el audit.
+            info.append(
+                "MODE-ACTUAL-DRIFT  %s: mode_actual %s (snapshot del escaneo), spriteMode medido %s"
+                "; informativo, el gate es mode_target %s"
+                % (name, row["mode_actual"], meta.sprite_mode, row["mode_target"])
             )
         if meta.sprite_mode != int(row["mode_target"]):
             fail(
@@ -750,7 +757,6 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "META-EXISTS": "el .meta del origen existe y tiene guid",
         "FORMAT-JPG": "ASC-5: la entrega es PNG, no JPG",
         "PX-ACTUAL": "header del archivo vs px_actual",
-        "MODE-ACTUAL": "spriteMode medido vs mode_actual",
         "MODE-TARGET": "spriteMode medido vs mode_target",
         "RECT-STALE": "rect del spriteSheet vs lienzo completo",
         "BORDER-META": "spriteBorder vs columna border",
