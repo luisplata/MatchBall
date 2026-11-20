@@ -34,13 +34,30 @@ este archivo existe para personas y no se parsea.
   countdown). Se cablea el sprite y **no** se normaliza el tinte: normalizarlo convertiría un
   velo negro en un flash blanco. Es la única desviación declarada de APW-3, con la fila escrita.
 
-## Los dos `nodo=-` y por qué
+## Las dos variantes del sprite maestro: alcance recortado (declarado)
 
 `ui_common_btn_primary_pressed_01` y `ui_common_btn_primary_disabled_01` son las variantes de
 estado del botón maestro `Button_UI` (124×25, border 7/6/5/7 — el mismo contrato que su REPLACE
-`ui_common_btn_primary_normal_01`). No tienen un nodo propio: el slot es **el sprite maestro**,
-y lo consumen los Selectables que lo referencian. El checker, para esas dos filas, cuenta las
-referencias `m_SpriteState` al GUID de la pieza en vez de resolver un path.
+`ui_common_btn_primary_normal_01`). El maestro lo consumen 15 `Selectable` de `MainMenu.unity` (más
+3 en otras escenas): no existe un nodo que sea "el slot", así que la fila nombra **un consumidor**.
+
+En 2a se había escrito `nodo=-` con la idea de contar referencias `m_SpriteState` por GUID en vez de
+resolver un path. El slice 2b encontró el costo real de eso: el gate de diff (APW-4) sólo admite
+nodos **nombrados en el mapa**, y el mapa congela 20 filas `cableado`; con `nodo=-` esas dos piezas
+quedaban declaradas como cableadas sin poder aparecer en ninguna captura (APW-5 pediría una captura
+de un host que no las muestra). Se corrige **la celda**, no el código:
+
+| Fila | Nodo declarado | Por qué ese |
+|---|---|---|
+| `ui_common_btn_primary_pressed_01` | `Canvas/Configuration/Contenedor/SubContainer/Button_Audio` | `Selectable` con `m_Transition: 1` y `m_Sprite` = `Button_UI`: es el caso exacto de la variante `pressed` |
+| `ui_common_btn_primary_disabled_01` | `Canvas/Configuration/Contenedor/SubContainer/Button_Name` | ídem para `m_DisabledSprite` |
+
+**Alcance y costo, medidos**: el costo que APW-4b declara ("19 botones pierden el tinte") **no se
+materializa** en este slice: quedan 7 `Selectable` con `m_Transition: 2` (skip, continue, retry,
+settings, play, audio, name), no 19. Los otros 13 consumidores de `Button_UI` siguen en `ColorTint`
+porque tocar un nodo fuera del mapa lo rechaza el gate. Es una **reducción** del blast radius, no una
+ampliación: si el review quiere las variantes en los 15 consumidores, se agregan filas al mapa (no se
+toca código) y el gate las empieza a admitir.
 
 ## Piezas que §9 promete y la topología no sostiene
 
@@ -89,8 +106,8 @@ ball_state_selected_ring_01.png,image,-,-,-,-,sin_slot,-,-,
 ball_state_frozen_01.png,image,-,-,-,-,bloqueado,-,-,
 ball_state_matched_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_menu_bg_panel_01.png,image,-,-,-,-,sin_slot,-,-,
-ui_common_btn_primary_pressed_01.png,selectable_state,Assets/Sprites/Button_UI.png,-,Button,m_SpriteState.m_PressedSprite,cableado,-,1,
-ui_common_btn_primary_disabled_01.png,selectable_state,Assets/Sprites/Button_UI.png,-,Button,m_SpriteState.m_DisabledSprite,cableado,-,1,
+ui_common_btn_primary_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Audio,Button,m_SpriteState.m_PressedSprite,cableado,1/1/1/1,1,
+ui_common_btn_primary_disabled_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Name,Button,m_SpriteState.m_DisabledSprite,cableado,1/1/1/1,1,
 ui_menu_btn_play_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Button_Play,Button,m_SpriteState.m_PressedSprite,cableado,-,0,
 ```
 
