@@ -10,22 +10,32 @@ Que prueba:
     MAPA       37 filas, 10 columnas, pieza a pieza == ledger, estados en 20/13/4
     ASSET      el `asset` de cada fila `cableado` existe en el working tree
     NODO       el `nodo` resuelve a un GameObject de ese asset (walk de m_Father)
-    CAMPO      la clave esta en la allowlist de su `slot_tipo`
+    CAMPO      la clave declarada es una de las que admite su `slot_tipo`
+    VALOR      el campo declarado lleva el GUID de SU pieza segun el ledger, y para las
+               filas sin nodo su GUID aparece al menos una vez en el asset
+    SPRITESWAP `m_Transition` en 2, el sprite de estado declarado con el GUID de su pieza y un
+               `m_PressedSprite` no vacio (APW-4b: un boton que no muestra nada al presionar
+               esta roto, no "recortado")
+    TINTE      `m_Color` del host == `(1,1,1,alfa_original)` cuando la luminancia WCAG del
+               `tint_original` es < 0.25, y == `tint_original` cuando no; las filas
+               `image+tinte_design` conservan el suyo por excepcion declarada. El alfa nunca
+               se toca (APW-3)
     FALTA      ningun `sin_slot`/`bloqueado` aparece referenciado en ningun YAML (por GUID)
-    SPRITESWAP `m_Transition` en 2 y `m_SpriteState` declarado para las filas selectable_state
     CAPTURA    cada fila `cableado` con `captura` tiene su PNG (las vacias son pendientes)
     DIFF       con --diff REF, cada linea cambiada toca solo claves permitidas de SU fila,
                ningun `.cs` y ningun asset fuera del mapa (APW-4, APW-4b, APW-6)
 
-Las filas con `nodo=-` son las dos variantes de estado del boton maestro `Button_UI`: su slot
-es el sprite, asi que en vez de resolver un path se cuentan las referencias `m_SpriteState`
-al GUID de la pieza (>= 1, y ninguna en un `sin_slot`).
+El gate de DIFF no tiene default a proposito: `--diff HEAD` sobre un arbol limpio compara el
+arbol consigo mismo y da un verde vacio. Se corre con la base del slice
+(`--diff <commit anterior al cableado>`), y es el unico modo de que la allowlist pruebe algo.
+
+Las filas con `nodo=-` no tienen path que resolver: su slot es un sprite, asi que se cuenta
+que el GUID de la pieza aparezca al menos una vez en el asset (y ninguna en un `sin_slot`).
 
 Uso:
     python tools/art/check_placeholder_wiring.py --plan      # mapa resuelto, sin diff
-    python tools/art/check_placeholder_wiring.py             # + gate de diff contra HEAD
-    python tools/art/check_placeholder_wiring.py --diff main # gate contra otra base
     python tools/art/check_placeholder_wiring.py --require-captures   # gate de 2b
+    python tools/art/check_placeholder_wiring.py --diff <base>        # + allowlist del diff
 
 Exit code: 0 = PASS / 1 = hay hallazgos / 2 = el mapa o el manifiesto no se pueden leer.
 """
@@ -83,15 +93,15 @@ class MapError(Exception):
     """El mapa o el ledger no se pueden leer: el gate no opina (exit 2)."""
 
 
-def read_map() -> list[dict]:
+def read_map(path: Path = MAP_FILE) -> list[dict]:
     try:
-        text = MAP_FILE.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except OSError as error:
-        raise MapError("no se pudo leer %s: %s" % (MAP_FILE, error)) from error
+        raise MapError("no se pudo leer %s: %s" % (path, error)) from error
     blocks = FENCED_CSV_RE.findall(text)
     if len(blocks) != 1:
         raise MapError("%s tiene %d bloques ```csv: el mapa tiene que ser uno"
-                       % (MAP_FILE.name, len(blocks)))
+                       % (path.name, len(blocks)))
     reader = csv.reader(blocks[0].splitlines())
     header = tuple(cell.strip() for cell in next(reader, ()))
     if header != COLUMNS:
@@ -112,6 +122,14 @@ def read_ledger_guids() -> dict[str, str]:
         return {}
     with LEDGER.open(newline="", encoding="utf-8") as handle:
         return {row["pieza"]: row["guid"] for row in csv.DictReader(handle) if row.get("guid")}
+
+
+def read_ledger_paths() -> set[str]:
+    """Los paths que el ledger declara: sus bytes los juzga el generador, no este gate."""
+    if not LEDGER.is_file():
+        return set()
+    with LEDGER.open(newline="", encoding="utf-8") as handle:
+        return {row["path"] for row in csv.DictReader(handle) if row.get("path", "-") != "-"}
 
 
 # --------------------------------------------------------------------------- YAML
@@ -185,6 +203,169 @@ def game_object_of_document(path: Path, document: int) -> str | None:
         if game_object == wanted:
             return candidate
     return None
+
+
+# --------------------------------------------------------------------------- valores
+
+IMAGE_KEYS = ("m_Sprite", "m_Color")
+BUTTON_KEYS = ("m_Transition", "m_SpriteState")
+COLOR_TOLERANCE = 5e-4
+
+
+def wcag_luminance(rgb: tuple[float, float, float]) -> float:
+    """Luminancia relativa WCAG con los mismos 8 bits que `check_placeholders`: una sola definicion."""
+    linear = []
+    for value in rgb:
+        srgb = round(min(max(value, 0.0), 1.0) * 255) / 255.0
+        linear.append(srgb / 12.92 if srgb <= 0.04045 else ((srgb + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def parse_color(text: str | None) -> tuple[float, float, float, float] | None:
+    cells = dict(re.findall(r"([rgba]): (-?[0-9.eE+-]+)", text or ""))
+    if set(cells) != {"r", "g", "b", "a"}:
+        return None
+    try:
+        return tuple(float(cells[channel]) for channel in "rgba")
+    except ValueError:
+        return None
+
+
+def parse_sprite(text: str | None) -> str | None:
+    match = re.search(r"guid: ([0-9a-f]{32})", text or "")
+    return match.group(1) if match else None
+
+
+def has_key(doc: str, name: str) -> bool:
+    return re.search(r"(?m)^\s{0,4}%s:" % re.escape(name), doc) is not None
+
+
+def component_docs(path: Path, node: str, component: str) -> list[str]:
+    """Los documentos del componente sobre el GameObject del nodo, sin abrir Unity."""
+    nodes = node_paths(path)
+    if node not in nodes:
+        return []
+    wanted = nodes[node]
+    found = []
+    for file_id, (cls, doc) in documents(path).items():
+        if cls != 114:
+            continue
+        ref = GO_REF_RE.search(field(doc, "m_GameObject") or "")
+        if not ref or int(ref.group(1)) != wanted:
+            continue
+        if component == "Button" and all(has_key(doc, key) for key in BUTTON_KEYS):
+            found.append(doc)
+        elif component == "Image" and all(has_key(doc, key) for key in IMAGE_KEYS):
+            found.append(doc)
+        elif component == "TutorialStepDots" and any(
+                has_key(doc, key) for key in ("normalSprite", "activeSprite", "doneSprite")):
+            found.append(doc)
+    return found
+
+
+def declared_value(doc: str, declared: str) -> str | None:
+    """`m_SpriteState.m_PressedSprite` -> el valor de esa clave dentro del bloque."""
+    if "." in declared:
+        block, _, key = declared.partition(".")
+        if field(doc, block) not in (None, ""):
+            return None          # el bloque tiene contenido en la misma linea: no es el formato de Unity
+        match = re.search(r"(?m)^\s+%s: (.+)$" % re.escape(key), doc)
+        return match.group(1).strip() if match else None
+    return field(doc, declared)
+
+
+def expected_tint(row: dict) -> tuple[float, float, float, float] | None:
+    """El `m_Color` que el mapa obliga a tener: APW-3 normaliza si L < 0.25, el alfa nunca cambia."""
+    if row["tint_original"] in ("", "-"):
+        return None
+    cells = [cell for cell in row["tint_original"].split("/") if cell.strip()]
+    try:
+        red, green, blue, alpha = (float(cell) for cell in cells)
+    except ValueError:
+        return None
+    if row["slot_tipo"] == "image+tinte_design":
+        return red, green, blue, alpha
+    if wcag_luminance((red, green, blue)) < 0.25:
+        return 1.0, 1.0, 1.0, alpha
+    return red, green, blue, alpha
+
+
+def check_values(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], int]:
+    """El campo declarado lleva el GUID de su pieza, y el `m_Color` es el que APW-3 manda."""
+    failures: list[str] = []
+    checked = 0
+    cache: dict[Path, list[str]] = {}
+    for row in rows:
+        if row["estado"] != "cableado" or row["pieza"] not in guids:
+            continue
+        asset = REPO_ROOT / row["asset"]
+        if not asset.is_file():
+            continue
+        guid = guids[row["pieza"]]
+        if row["nodo"] == "-":
+            text = asset.read_text(encoding="utf-8", errors="replace")
+            if str(guid) not in text:
+                failures.append("%s: el guid %s no aparece en %s" % (row["pieza"], guid, row["asset"]))
+            else:
+                checked += 1
+            continue
+        key = (asset, row["nodo"], row["componente"])
+        if key not in cache:
+            cache[key] = component_docs(asset, row["nodo"], row["componente"])
+        docs = cache[key]
+        if not docs:
+            failures.append("%s: el nodo '%s' no tiene un %s legible" % (row["pieza"], row["nodo"], row["componente"]))
+            continue
+        value = None
+        for doc in docs:
+            value = declared_value(doc, row["campo"])
+            if value is not None:
+                break
+        if value is None:
+            failures.append("%s: %s no tiene la clave '%s'" % (row["pieza"], row["nodo"], row["campo"]))
+            continue
+        found = parse_sprite(value)
+        if found != guid:
+            failures.append("%s: %s.%s = %s, el ledger congela %s"
+                            % (row["pieza"], row["nodo"], row["campo"], found or "sin sprite", guid))
+            continue
+        checked += 1
+
+        if row["slot_tipo"] == "selectable_state":
+            transition = field(docs[0], "m_Transition")
+            if transition != "2":
+                failures.append("%s: m_Transition = %s, la excepcion spriteswap exige 2 (APW-4b)"
+                                % (row["pieza"], transition))
+            pressed = None
+            for doc in docs:
+                pressed = declared_value(doc, "m_SpriteState.m_PressedSprite")
+                if pressed is not None:
+                    break
+            if parse_sprite(pressed) is None:
+                failures.append("%s: m_SpriteState.m_PressedSprite vacio: con m_Transition 2 "
+                                "el boton no muestra nada al presionar (APW-4b)"
+                                % row["pieza"])
+
+        expected = expected_tint(row)
+        if expected is None:
+            continue
+        image = cache.get((asset, row["nodo"], "Image"))
+        if image is None:
+            image = component_docs(asset, row["nodo"], "Image")
+            cache[(asset, row["nodo"], "Image")] = image
+        live = None
+        for doc in image:
+            live = parse_color(field(doc, "m_Color"))
+            if live is not None:
+                break
+        if live is None:
+            failures.append("%s: el nodo '%s' no tiene m_Color legible" % (row["pieza"], row["nodo"]))
+            continue
+        if any(abs(measured - wanted) > COLOR_TOLERANCE for measured, wanted in zip(live, expected)):
+            failures.append("%s: m_Color %s, el mapa exige %s (APW-3, tint_original %s)"
+                            % (row["pieza"], "/".join("%.4g" % value for value in live),
+                               "/".join("%.4g" % value for value in expected), row["tint_original"]))
+    return failures, checked
 
 
 # --------------------------------------------------------------------------- checks
@@ -309,13 +490,21 @@ def check_diff(rows: list[dict], base: str) -> list[str]:
     failures: list[str] = []
     by_node = {(row["asset"], row["nodo"]): row for row in rows if row["nodo"] != "-"}
     mapped_assets = {row["asset"] for row in rows if row["asset"] != "-"}
+    placeholder_paths = read_ledger_paths()
     line_cache: dict[str, tuple[dict[int, int], dict[str, int]]] = {}
+    code_reported: set[str] = set()
     for path, kind, line, text in changed_lines(base):
         if path is None:
             continue
         suffix = Path(path).suffix.lower()
         if suffix in FORBIDDEN_SUFFIXES:
-            failures.append("DIFF: %s es codigo (APW-6 prohibe .cs)" % path)
+            if path not in code_reported:
+                code_reported.add(path)
+                failures.append("DIFF: %s es codigo (APW-6 prohibe .cs)" % path)
+            continue
+        # Los bytes del cohorte (PNG y su .meta) no son una referencia de cableado: los
+        # aprieta generate_placeholders.py --check y el auditor (NEW-SHA / NEW-META / NEW-GUID).
+        if path in placeholder_paths or (suffix == ".meta" and path[: -len(".meta")] in placeholder_paths):
             continue
         if path not in mapped_assets:
             failures.append("DIFF: %s no esta en el mapa" % path)
@@ -347,20 +536,22 @@ def check_diff(rows: list[dict], base: str) -> list[str]:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Gate del cableado de placeholders.")
     parser.add_argument("--plan", action="store_true", help="solo resuelve el mapa, sin diff")
-    parser.add_argument("--diff", metavar="REF", help="gate de diff contra REF (default HEAD)")
+    parser.add_argument("--diff", metavar="REF",
+                        help="gate de allowlist contra REF (sin default: contra HEAD no prueba nada)")
     parser.add_argument("--require-captures", action="store_true",
                         help="falla si una fila cableada no tiene captura (gate del slice 2b)")
     parser.add_argument("--map", type=Path, help="mapa alternativo")
     args = parser.parse_args(argv)
 
     try:
-        rows = read_map()
+        rows = read_map(args.map or MAP_FILE)
         map_failures, guids, counts = check_map(rows)
         row_failures, pending = check_rows(rows, guids)
+        value_failures, valued = check_values(rows, guids)
         leak_failures, scanned = check_guid_leaks(rows, guids)
-        failures = map_failures + row_failures + leak_failures
-        if args.diff is not None or not args.plan:
-            failures += check_diff(rows, args.diff or "HEAD")
+        failures = map_failures + row_failures + value_failures + leak_failures
+        if args.diff is not None:
+            failures += check_diff(rows, args.diff)
     except MapError as error:
         print("ERROR: %s" % error, file=sys.stderr)
         return 2
@@ -372,8 +563,11 @@ def main(argv: list[str]) -> int:
                                                 row["nodo"] if row["nodo"] != "-" else row["asset"]))
     print("MAPA        %d filas: %d cableado, %d sin_slot, %d bloqueado"
           % (len(rows), counts["cableado"], counts["sin_slot"], counts["bloqueado"]))
-    print("GUID        %d piezas con guid congelado | %d YAML escaneados en busca de filtraciones"
-          % (len(guids), scanned))
+    print("GUID        %d piezas con guid congelado | %d campos resueltos contra su pieza"
+          % (len(guids), valued))
+    print("DIFF        %s" % (("allowlist contra %s" % args.diff) if args.diff is not None
+                              else "sin base: pasar --diff REF para correr la allowlist"))
+    print("YAML        %d archivos escaneados en busca de filtraciones" % scanned)
     if args.require_captures and pending:
         failures += ["CAPTURA: %s sin captura declarada" % pieza for pieza in pending]
     elif pending:
