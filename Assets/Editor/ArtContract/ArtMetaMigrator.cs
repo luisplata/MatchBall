@@ -17,10 +17,16 @@
 //     es `git checkout -- Assets`, y eso borra trabajo ajeno si ya habia cambios.
 //
 // Uso:
-//   Tools > Art Contract > Meta Migrator > Print Plan (dry-run)
-//   Tools > Art Contract > Meta Migrator > Apply Plan (escribe)
-//   Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtMetaMigrator.BatchDryRun
-//   Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtMetaMigrator.BatchApply
+//   Tools > Art Contract > Meta Migrator > Print Plan — all / — S2a (dry-run)
+//   Tools > Art Contract > Meta Migrator > Apply Plan — all (escribe)
+//   DryRun(cohort, pieces) / Apply(cohort, pieces, allowDirty) desde otro editor script
+//   Unity -batchmode -quit -executeMethod ...BatchDryRun -artCohort s2a | -artPieces "game_board_*"
+//
+// Seleccion (design §10: S2 se parte por grupo de assets, no por tipo de cambio):
+//   cohort = all | s2a | s2b | s2c   (s2a = game_board_*, s2b = avatares+heroes,
+//   s2c = el resto). `pieces` (glob separado por comas) reemplaza al cohorte, igual que
+//   ArtSyntheticBatch.SelectTargets. NO hay default: sin cohorte ni pieces se aborta (2).
+//   OJO: el cohorte `world` del harness sintetico NO es s2a — mete ball_shadow_01, que es s2c.
 //
 // Orden de apply por pieza (una sola operacion, en este orden):
 //   1. rect-resync (solo si la pieza queda en Multiple; ver BuildPlan)
@@ -65,66 +71,84 @@ namespace DarkVoid.ArtContract
 
         // ------------------------------------------------------------------ menu
 
-        [MenuItem(MenuRoot + "Print Plan (dry-run)", false, 2000)]
+        [MenuItem(MenuRoot + "Print Plan — all (dry-run)", false, 2000)]
         public static void PrintPlanMenu()
         {
-            DryRun();
+            DryRun("all", null);
         }
 
-        [MenuItem(MenuRoot + "Apply Plan (escribe)", false, 2001)]
+        [MenuItem(MenuRoot + "Print Plan — S2a game_board_* (dry-run)", false, 2001)]
+        public static void PrintPlanS2aMenu()
+        {
+            DryRun("s2a", null);
+        }
+
+        [MenuItem(MenuRoot + "Apply Plan — all (escribe)", false, 2010)]
         public static void ApplyPlanMenu()
         {
             bool confirmed = EditorUtility.DisplayDialog(
                 "ArtMetaMigrator",
-                "Vas a reescribir .meta y referencias fileID de las piezas planificadas.\n\n" +
-                "Precondicion: arbol limpio en Assets/. El dry-run ya tiene que estar revisado.",
+                "Vas a reescribir .meta y referencias fileID de TODAS las piezas planificadas (cohort=all).\n\n" +
+                "Precondicion: arbol limpio en Assets/. El dry-run del cohorte ya tiene que estar revisado.\n" +
+                "Para un solo grupo usar DryRun/Apply con cohorte (s2a|s2b|s2c) o `pieces`.",
                 "Aplicar",
                 "Cancelar");
             if (confirmed)
             {
-                Apply(false);
+                Apply("all", null, false);
             }
         }
 
         // ------------------------------------------------------------- entrypoints
+        //
+        // Seleccion obligatoria: no hay default silencioso. Sin cohorte ni `pieces` se
+        // aborta con 2, aunque el plan de `all` sea el historico de 25 piezas / 52 refs.
 
-        /// <summary>Imprime el plan y no escribe nada. Devuelve 0 si pudo planificar.</summary>
-        public static int DryRun()
+        /// <summary>Imprime el plan del subconjunto y no escribe nada. Devuelve 0 si pudo planificar.</summary>
+        public static int DryRun(string cohort, string pieces)
         {
-            return Run(false, false);
+            return Run(false, false, cohort, pieces);
         }
 
-        /// <summary>Aplica el plan. allowDirty solo existe para el harness sintetico, nunca para un humano.</summary>
-        public static int Apply(bool allowDirty)
+        /// <summary>Aplica el plan del subconjunto. allowDirty solo existe para el harness sintetico, nunca para un humano.</summary>
+        public static int Apply(string cohort, string pieces, bool allowDirty)
         {
-            return Run(true, allowDirty);
+            return Run(true, allowDirty, cohort, pieces);
         }
 
-        /// <summary>Entrada para -batchmode -executeMethod. Sale con el codigo del run.</summary>
+        /// <summary>Entrada para -batchmode -executeMethod. Seleccion por `-artCohort` / `-artPieces`.</summary>
         public static void BatchDryRun()
         {
-            int code = Run(false, false);
+            int code = Run(false, false, BatchArg("-artCohort"), BatchArg("-artPieces"));
             if (Application.isBatchMode)
             {
                 EditorApplication.Exit(code);
             }
         }
 
-        /// <summary>Entrada para -batchmode -executeMethod. Sale con el codigo del run.</summary>
+        /// <summary>Entrada para -batchmode -executeMethod. Seleccion por `-artCohort` / `-artPieces`.</summary>
         public static void BatchApply()
         {
-            int code = Run(true, false);
+            int code = Run(true, false, BatchArg("-artCohort"), BatchArg("-artPieces"));
             if (Application.isBatchMode)
             {
                 EditorApplication.Exit(code);
             }
+        }
+
+        static string BatchArg(string name)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            int at = Array.FindIndex(args, arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
+            return at >= 0 && at + 1 < args.Length ? args[at + 1] : null;
         }
 
         // ------------------------------------------------------------------- run
 
-        public static int Run(bool apply, bool allowDirty)
+        public static int Run(bool apply, bool allowDirty, string cohort, string pieces)
         {
-            Log("<b>ArtMetaMigrator</b> " + (apply ? "APPLY" : "DRY-RUN") + " · manifiesto " + ManifestPath);
+            Log("<b>ArtMetaMigrator</b> " + (apply ? "APPLY" : "DRY-RUN") + " · manifiesto " + ManifestPath +
+                " · seleccion " + DescribeSelection(cohort, pieces));
 
             string porcelain;
             string gitError;
@@ -168,7 +192,7 @@ namespace DarkVoid.ArtContract
             List<PiecePlan> plan;
             try
             {
-                plan = BuildPlan(rows);
+                plan = BuildPlan(SelectRows(rows, cohort, pieces));
             }
             catch (Exception error)
             {
@@ -176,7 +200,7 @@ namespace DarkVoid.ArtContract
                 return 2;
             }
 
-            PrintPlan(plan, DescribeGitState(dirty, gitOk, porcelain));
+            PrintPlan(plan, DescribeGitState(dirty, gitOk, porcelain), DescribeSelection(cohort, pieces));
 
             if (!apply)
             {
@@ -186,7 +210,7 @@ namespace DarkVoid.ArtContract
 
             if (plan.Count == 0)
             {
-                Log("nada que aplicar: el contrato ya se cumple en las 85 REPLACE.");
+                Log("nada que aplicar: el contrato ya se cumple en la seleccion.");
                 return 0;
             }
 
@@ -200,6 +224,107 @@ namespace DarkVoid.ArtContract
                 return "no verificable";
             }
             return dirty ? porcelain.Replace("\r", string.Empty).Replace("\n", "; ") : "limpio";
+        }
+
+        // --------------------------------------------------------------- seleccion
+
+        static string DescribeSelection(string cohort, string pieces)
+        {
+            if (!string.IsNullOrEmpty(pieces) && pieces.Trim().Length > 0)
+            {
+                return "pieces=" + pieces.Trim();
+            }
+            return "cohort=" + (string.IsNullOrEmpty(cohort) || cohort.Trim().Length == 0 ? "(ninguno)" : cohort.Trim().ToLowerInvariant());
+        }
+
+        /// <summary>
+        /// Filtra las filas REPLACE antes de planificar. Es el unico punto donde se decide el
+        /// alcance: BuildPlan y Execute no saben de cohortes, solo reciben menos filas. Un glob
+        /// que no matchea nada aborta (no hay plan vacio "exitoso" por error de tipeo).
+        /// </summary>
+        static List<Row> SelectRows(List<Row> rows, string cohort, string pieces)
+        {
+            bool hasPieces = !string.IsNullOrEmpty(pieces) && pieces.Trim().Length > 0;
+            string name = string.IsNullOrEmpty(cohort) ? null : cohort.Trim().ToLowerInvariant();
+            if (!hasPieces && string.IsNullOrEmpty(name))
+            {
+                throw new InvalidOperationException(
+                    "seleccion obligatoria: pasar cohorte (all|s2a|s2b|s2c) o `pieces` (glob). cohort=all aplica las 85 REPLACE.");
+            }
+
+            Regex pattern = hasPieces ? BuildGlob(pieces.Trim()) : null;
+            var selected = new List<Row>();
+            foreach (Row row in rows)
+            {
+                if (!string.Equals(row.Estado, "REPLACE", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                bool match = pattern != null
+                    ? pattern.IsMatch(row.Pieza) || pattern.IsMatch(System.IO.Path.GetFileNameWithoutExtension(row.Origen ?? string.Empty))
+                    : MatchesCohort(name, row);
+                if (match)
+                {
+                    selected.Add(row);
+                }
+            }
+
+            if (selected.Count == 0)
+            {
+                throw new InvalidOperationException(pattern != null
+                    ? "`pieces` no matcheo ninguna pieza REPLACE: " + pieces
+                    : "cohorte desconocido o vacio: " + cohort + " (validos: all, s2a, s2b, s2c)");
+            }
+            return selected;
+        }
+
+        static bool MatchesCohort(string cohort, Row row)
+        {
+            string pieza = row.Pieza ?? string.Empty;
+            switch (cohort ?? string.Empty)
+            {
+                case "all":
+                    return true;
+                case "s2a":
+                    return pieza.StartsWith("game_board_", StringComparison.Ordinal);
+                case "s2b":
+                    // avatares + heroes, menos el bg de dialogo (design §10: ese va con BG_V2 y sombra)
+                    if (pieza.StartsWith("hero_dialog_bg_", StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                    return pieza.StartsWith("hero_", StringComparison.Ordinal)
+                        || pieza.StartsWith("ui_menu_avatar_", StringComparison.Ordinal)
+                        || pieza.StartsWith("ui_menu_panel_profile_", StringComparison.Ordinal)
+                        || pieza.StartsWith("ui_menu_picture_profile_", StringComparison.Ordinal);
+                case "s2c":
+                    return !MatchesCohort("s2a", row) && !MatchesCohort("s2b", row);
+                default:
+                    return false;
+            }
+        }
+
+        static Regex BuildGlob(string pieces)
+        {
+            var builder = new StringBuilder("^(?:");
+            foreach (string term in pieces.Split(','))
+            {
+                string trimmed = term.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+                if (builder.Length > 4)
+                {
+                    builder.Append('|');
+                }
+                foreach (char character in trimmed)
+                {
+                    builder.Append(character == '*' ? ".*" : character == '?' ? "." : Regex.Escape(character.ToString()));
+                }
+            }
+            builder.Append(")$");
+            return new Regex(builder.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
         // -------------------------------------------------------------- manifiesto
@@ -594,7 +719,7 @@ namespace DarkVoid.ArtContract
 
         // ----------------------------------------------------------------- print
 
-        static void PrintPlan(List<PiecePlan> plans, string gitState)
+        static void PrintPlan(List<PiecePlan> plans, string gitState, string selection)
         {
             int planned = 0;
             int refs = 0;
@@ -631,6 +756,8 @@ namespace DarkVoid.ArtContract
             }
 
             Log("guard Assets/: " + gitState);
+            Log("seleccion: " + selection + " | piezas=" + planned + " | refs=" + refs + " | filas=" + plans.Count);
+            Log("piezas seleccionadas: " + string.Join(", ", plans.ConvertAll(plan => plan.Row.Pieza).ToArray()));
             Log("TOTAL " + planned + " piezas con operaciones planificadas | " + refs + " ocurrencias de fileID a remapear");
             if (unchanged > 0)
             {
@@ -649,7 +776,7 @@ namespace DarkVoid.ArtContract
                 return 0;
             }
 
-            Log("apply: " + toApply.Count + " piezas. Escenas y prefabs abiertos se van a recargar; conviene cerrarlos.");
+            Log("apply: " + toApply.Count + " piezas (solo el subconjunto seleccionado). Escenas y prefabs abiertos se van a recargar; conviene cerrarlos.");
             int metaWrites = 0;
             int filesWritten = 0;
             int refsRemapped = 0;
