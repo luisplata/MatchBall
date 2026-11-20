@@ -217,7 +217,7 @@ namespace DarkVoid.ArtContract
 
         static List<Row> LoadManifest()
         {
-            string manifest = Path.Combine(ProjectRoot(), ManifestPath);
+            string manifest = System.IO.Path.Combine(ProjectRoot(), ManifestPath);
             if (!File.Exists(manifest))
             {
                 throw new FileNotFoundException("falta el manifiesto", manifest);
@@ -416,7 +416,7 @@ namespace DarkVoid.ArtContract
                 Sheet sheet;
                 try
                 {
-                    sheet = ParseSheet(File.ReadAllText(Path.Combine(ProjectRoot(), plan.MetaPath), Encoding.UTF8));
+                    sheet = ParseSheet(File.ReadAllText(System.IO.Path.Combine(ProjectRoot(), plan.MetaPath), Encoding.UTF8));
                 }
                 catch (Exception error)
                 {
@@ -791,7 +791,7 @@ namespace DarkVoid.ArtContract
             int written = 0;
             foreach (string projectPath in plan.RefFiles)
             {
-                string absolute = Path.Combine(ProjectRoot(), projectPath);
+                string absolute = System.IO.Path.Combine(ProjectRoot(), projectPath);
                 string original = File.ReadAllText(absolute, Encoding.UTF8);
                 string updated = regex.Replace(original, evaluator);
                 if (string.Equals(updated, original, StringComparison.Ordinal))
@@ -818,7 +818,7 @@ namespace DarkVoid.ArtContract
             var regex = new Regex(@"fileID:\s*(-?\d+),\s*guid:\s*" + plan.Guid);
             foreach (string projectPath in plan.RefFiles)
             {
-                string text = File.ReadAllText(Path.Combine(ProjectRoot(), projectPath), Encoding.UTF8);
+                string text = File.ReadAllText(System.IO.Path.Combine(ProjectRoot(), projectPath), Encoding.UTF8);
                 foreach (Match match in regex.Matches(text))
                 {
                     long fileId;
@@ -835,9 +835,9 @@ namespace DarkVoid.ArtContract
         static string WriteReport(List<PiecePlan> applied, int metaWrites, int filesWritten,
             int refsRemapped, List<string> failures)
         {
-            string directory = Path.Combine(ProjectRoot(), ReportDir);
+            string directory = System.IO.Path.Combine(ProjectRoot(), ReportDir);
             Directory.CreateDirectory(directory);
-            string path = Path.Combine(directory, "art-meta-migrator-" +
+            string path = System.IO.Path.Combine(directory, "art-meta-migrator-" +
                 DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".md");
 
             var text = new StringBuilder();
@@ -1045,14 +1045,14 @@ namespace DarkVoid.ArtContract
 
         static IEnumerable<string> ConsumerFiles()
         {
-            string assets = Path.Combine(ProjectRoot(), "Assets");
+            string assets = System.IO.Path.Combine(ProjectRoot(), "Assets");
             if (!Directory.Exists(assets))
             {
                 yield break;
             }
             foreach (string file in Directory.GetFiles(assets, "*.*", SearchOption.AllDirectories))
             {
-                string suffix = Path.GetExtension(file).ToLowerInvariant();
+                string suffix = System.IO.Path.GetExtension(file).ToLowerInvariant();
                 if (Array.IndexOf(ConsumerSuffixes, suffix) < 0)
                 {
                     continue;
