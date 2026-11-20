@@ -411,17 +411,21 @@ Un `.cs` en el diff falla por sí solo (APW-6), y cualquier asset que no esté e
 ### 2b.1 El diff, contra la allowlist
 
 ```
-$ python tools/art/check_placeholder_wiring.py --require-captures
+$ python tools/art/check_placeholder_wiring.py --require-captures --diff 4d98726
 MAPA        37 filas: 20 cableado, 13 sin_slot, 4 bloqueado
-GUID        33 piezas con guid congelado | 278 YAML escaneados en busca de filtraciones
+GUID        33 piezas con guid congelado | 20 campos resueltos contra su pieza
+DIFF        allowlist contra 4d98726
+YAML        278 archivos escaneados en busca de filtraciones
 RESULTADO   PASS  (0 hallazgos)                                            # exit 0
 ```
 
-El gate de diff (APW-4/APW-4b/APW-6) corre por defecto contra `HEAD` y ya pasó en el commit del
-cableado (`f68b843`): 30 líneas cambiadas, todas `m_Sprite` (18), `m_Color` (4), `m_Transition` (7)
-y `m_SpriteState` (5) — ninguna clave fuera de la allowlist de su fila, ningún `.cs`, ningún asset
-fuera del mapa. Re-aplicar el procedimiento es no-op: la segunda pasada imprime `ya` en las 30
-celdas y `git diff` queda vacío (APW-6).
+El gate de diff (APW-4/APW-4b/APW-6) **no tiene default**: `--diff HEAD` sobre un árbol limpio
+compara el árbol consigo mismo y da un verde vacío, así que la base se pasa explícita
+(`4d98726`, el commit anterior al cableado). Medido ahí: **33 celdas** cambiadas — `m_Sprite` 10,
+`m_Transition` 7, `m_PressedSprite` 7, `m_DisabledSprite` 1, `m_Color` 5 y los 3 campos
+serializados de `TutorialStepDots` — ninguna clave fuera de la allowlist de su fila, ningún `.cs`,
+ningún asset fuera del mapa. Re-aplicar el procedimiento es no-op: la segunda pasada imprime `ya`
+en las celdas y `git diff` queda vacío (APW-6).
 
 ### 2b.2 Las 20 referencias resuelven
 
@@ -442,7 +446,8 @@ SPRITE SkipButton -> ui_tutorial_btn_skip_normal_01 rect=120x56
 ```
 
 `m_Color` normalizado a `(1,1,1)` sólo donde APW-3 lo manda (bubble 0.07, skip 0.18, panel_retry
-0.08) preservando el alfa; `dim` y `zone_veil` conservan el suyo porque son `image+tinte_design`.
+0.08, **continue y retry 0.16/0.55/0.35 → L 0.1995**, §3.2) preservando el alfa; `dim` y
+`zone_veil` conservan el suyo porque son `image+tinte_design`.
 
 ### 2b.3 Las 24 capturas
 
@@ -456,9 +461,10 @@ SPRITE SkipButton -> ui_tutorial_btn_skip_normal_01 rect=120x56
 paneles están fuera de pantalla y el `Configuration` no tiene *opener* cableado; el rig lo deja en
 la posición que tendría abierto y **no guarda la escena**.
 
-Firma (`APA-2`) visible en `bubble`, `skip`, `panel_retry`, `btn_primary_*`, `play` y `settings`
-(marco magenta + placa `SIN ARTE` + 4 esquinas + banda cian). En `continue`/`retry` el tinte verde
-del host mata el magenta y el marco queda verde; en `dim`/`zone_veil` no hay firma por diseño
+Firma (`APA-2`) visible en `bubble`, `skip`, `panel_retry`, **`continue`, `retry`**, `btn_primary_*`,
+`play` y `settings` (marco magenta + placa `SIN ARTE` + 4 esquinas + banda cian). `continue`/`retry`
+llegaron acá con el host en `0.16/0.55/0.35` y el marco verde: eso **no** era una excepción de
+APW-3 sino dos hosts que faltaba normalizar (§3.2). En `dim`/`zone_veil` no hay firma por diseño
 (`flat4`), y en `danger`/dots el alfa del host la atenúa. Todo eso está declarado en el mapa.
 
 ### 2b.4 El gate del placeholder y el auditor, después del cableado
@@ -484,6 +490,158 @@ celda del mapa**, no el código: `btn_primary_pressed` → `Button_Audio` y `btn
 `Button_Name`, ambos `Selectable` con `m_Sprite` = `Button_UI` y `m_Transition: 1`. El alcance
 queda en **7 `Selectable`** con `SpriteSwap`, no en los 19 que estimaba APW-4b: es una reducción,
 y está escrita en el mapa.
+
+## §3 — Cierre de los warnings W1–W5 de la verificación
+
+La verificación devolvió **PASS WITH WARNINGS** (obs #4051) y el dueño del change decidió cerrar
+cinco de ellas antes del archivo. Nada de acá toca el contrato §9, el ledger ni un byte de los 33
+PNG: cambia historia, tinte de host, prosa del mapa y el gate.
+
+### 3.1 W1 — APH-4: el PNG, su `.meta` y el GUID, en un solo commit
+
+Antes: los PNG en un commit, el arreglo del writer en otro y los 33 `.meta` en un tercero, con tres
+commits de otra cosa en el medio. Ahora la historia del change es
+`c19732f → b060a50 (1b) → 0bd4160 → 92e31b5 → ef57c8f → 4d98726 → 1b91947 → 930b11f`, y `b060a50`
+lleva las 72 rutas del slice: **33 PNG + 33 `.meta` + el ledger con los 33 GUID congelados** + el
+cohorte `new` con su rect-resync + el auditor.
+
+La prueba no es el mensaje del commit, es el árbol:
+
+```
+$ git rev-parse backup/pre-w1^{tree}
+dc91e1a0d2f1588f6d3237e2ae51a3a0fc5226a0
+$ git rev-parse 930b11f^{tree}          # el mismo commit, con la historia reescrita
+dc91e1a0d2f1588f6d3237e2ae51a3a0fc5226a0
+$ git diff --stat backup/pre-w1 930b11f
+                                        # vacío: el árbol no cambió
+$ git status --porcelain -- Assets
+                                        # vacío
+$ git show --name-only --format="" b060a50 | grep -c '\.png\.meta$'
+33
+$ git show --name-only --format="" b060a50 | grep -c '^Assets/Sprites/.*\.png$'
+33
+```
+
+Ningún archivo se editó para "arreglar" la historia: los commits nuevos se armaron copiando los
+blobs originales (`git checkout <sha> -- <paths>`) y el árbol final es el mismo objeto de git. El
+único texto que quedó en un commit aparte es el de esta página (§1b), porque su sección se escribe
+después de §2a/§2b por orden del documento; los bytes, los `.meta` y el ledger van juntos.
+`c19732f` y todo lo anterior no se tocaron, y no se pusheó nada.
+
+### 3.2 W2 — APW-3: `continue` y `retry` se normalizan
+
+El mapa los dejaba con `m_Color` `0.16/0.55/0.35` y lo justificaba con luma (`0.411 > 0.25`). La
+definición del proyecto es la luminancia WCAG de 8 bits de `check_placeholders.wcag_luminance`:
+
+```
+$ python -c "from check_placeholders import wcag_luminance; print(wcag_luminance((41,140,89)))"
+0.199489            # < 0.25 => APW-3 manda normalizar
+```
+
+No era una excepción declarada: eran dos hosts sin normalizar, y el precio medido era la firma de
+APA-2 (marco `#FF00FF` apagado a verde en 4 capturas). Se normalizó el RGB a `(1,1,1)` con el alfa
+intacto (`0.95`), `tint_original` conserva el valor previo en el mapa, y los 4 recortes se volvieron
+a capturar con el mismo rig (cámara del canvas → `RenderTexture` 900×1900 → recorte a la
+`RectTransform`).
+
+Prueba de que el rig es el mismo y no un re-render nuevo: las capturas que no dependen del tinte
+salieron byte-idénticas (`ui_tutorial_btn_skip_normal_01` y `ui_tutorial_btn_continue_normal_01`
+antes del cambio), y la panorámica `tutorial-overlay.png` volvió **byte-idéntica** porque en ella el
+botón no se ve. Las 24 capturas siguen teniendo 24 sha256 distintos.
+
+**El agregado de los PNG no cambió**: el cambio es de tinte de host, no de byte de pieza.
+
+```
+$ python tools/art/generate_placeholders.py --manifest | tail -1
+AGREGADO  eafea6fcfc8e54a5bf3e122dff6723c2d0219c5c630908efe613bbb6a967d6e5  33/33
+$ python tools/art/generate_placeholders.py --check
+RESULTADO   PASS  (33 GENERATED, 4 bloqueadas, 0 hallazgos)                # exit 0
+```
+
+### 3.3 W3 — el gate del cableado hace lo que promete
+
+Antes: el docstring prometía el valor del campo contra el GUID de la pieza y el `m_Color` esperado,
+y el código no los miraba; `--map` se parseaba y se ignoraba; `--diff` tenía default `HEAD` (verde
+vacío sobre árbol limpio); y cualquier base anterior a `5a8e8aa` estallaba en 6531 hallazgos de
+"`*.png.meta` no está en el mapa". Ahora:
+
+| Aserción | Cómo se prueba hoy |
+|---|---|
+| `VALOR` | resuelve nodo → componente → campo declarado y exige el GUID de esa fila (20/20) |
+| `TINTE` | `m_Color` == `(1,1,1,alfa)` si `L(tint_original) < 0.25`, si no == `tint_original`; `image+tinte_design` conserva el suyo |
+| `SPRITESWAP` | `m_Transition: 2`, el sprite declarado con su GUID **y** `m_PressedSprite` no vacío |
+| `DIFF` | sin default: `--diff <base>` obligatorio; los PNG/`.meta` del cohorte no se juzgan acá (los aprieta el generador/auditor); un `.cs` se reporta una vez |
+
+Cada una se probó al revés, y cada una falla con su mensaje y su fila:
+
+```
+# un nodo cambiado en el mapa (VALOR)
+ui_tutorial_bubble_body_01.png: TutorialOverlay/SkipButton.m_Sprite = 302a5116…, el ledger congela ea7430d8…
+RESULTADO   FAIL  (1 hallazgos)
+
+# un Button devuelto a ColorTint y los hosts con el verde viejo (SPRITESWAP + TINTE)
+ui_tutorial_btn_skip_pressed_01.png: m_Transition = 1, la excepcion spriteswap exige 2 (APW-4b)
+ui_tutorial_btn_continue_normal_01.png: m_Color 0.16/0.55/0.35/0.95, el mapa exige 1/1/1/0.95 (APW-3, tint_original 0.16/0.55/0.35/0.95)
+RESULTADO   FAIL  (5 hallazgos)
+
+# un m_PressedSprite vacío (press mudo)
+ui_common_btn_primary_disabled_01.png: m_SpriteState.m_PressedSprite vacio: con m_Transition 2 el boton no muestra nada al presionar (APW-4b)
+RESULTADO   FAIL  (1 hallazgos)
+```
+
+Las tres pruebas usaron copias del mapa/prefab en `Temp/` con `--map` (y por eso `--map` ahora se
+respeta): ningún archivo trackeado se tocó para forzar el fallo. Con los archivos reales:
+
+```
+$ python tools/art/check_placeholder_wiring.py --require-captures --diff 4d98726
+MAPA        37 filas: 20 cableado, 13 sin_slot, 4 bloqueado
+GUID        33 piezas con guid congelado | 20 campos resueltos contra su pieza
+DIFF        allowlist contra 4d98726
+YAML        278 archivos escaneados en busca de filtraciones
+RESULTADO   PASS  (0 hallazgos)                                            # exit 0
+```
+
+### 3.4 W4 — `zone_veil` deja de mentir sobre su tamaño
+
+La prosa decía "el único Image de pantalla completa con `m_Color` oscuro". Medido en la escena:
+`m_SizeDelta` **286.2×144.69**, anclas `0.5/0.5`, `m_Color` `0/0/0/0.29803923`; el Image de pantalla
+completa es su **padre**. El mapa ahora describe ese nodo y el recorte que lo prueba (288×146). La
+fila del CSV no cambió: mismo asset, mismo nodo, mismo `tint_original`. El cable sigue siendo real y
+reversible con una celda; lo que no está confirmado —y ahora está escrito— es la intención de
+producto.
+
+### 3.5 W5 — `Button_Name` no queda con el press mudo
+
+Estaba en `m_Transition: 2` con **sólo** `m_DisabledSprite`: al presionar no pasaba nada. Ahora lleva
+`m_PressedSprite` = `ui_common_btn_primary_pressed_01` (la variante pressed del maestro, el mismo
+GUID que `Button_Audio`, `77843b73…`), sin fila nueva: la fila sigue declarando `m_DisabledSprite` y
+el mapa declara el campo extra en prosa. El costo de APW-4b queda completo: con `m_Transition: 2` el
+`m_ColorBlock` no se aplica, así que los 7 pierden tinte de press **y** de hover, y ninguno tiene
+`m_HighlightedSprite`.
+
+El gate lo vuelve inolvidable: toda fila `selectable_state` con `m_PressedSprite` vacío falla
+(§3.3), que es justo el estado del que venía este botón.
+
+### 3.6 Los tres gates después del cierre
+
+```
+$ python tools/art/generate_placeholders.py --check
+RESULTADO   PASS  (33 GENERATED, 4 bloqueadas, 0 hallazgos)                # exit 0
+$ python tools/art/generate_placeholders.py --manifest | tail -1
+AGREGADO  eafea6fcfc8e54a5bf3e122dff6723c2d0219c5c630908efe613bbb6a967d6e5  33/33
+$ python tools/art/check_placeholder_wiring.py --require-captures --diff 4d98726
+RESULTADO   PASS  (0 hallazgos)                                            # exit 0
+$ python tools/art/audit_art_manifest.py
+FILAS       122  (REPLACE 85 | NEW 37 | addresses 11)
+LEDGER NEW  37 filas | 33 GENERATED registradas en el auditor
+VIOLACIONES 14 en 3 reglas      # FORMAT-JPG 3 · MODE-TARGET 1 · RECT-STALE 10, 0 NEW-*
+RESULTADO   FAIL                # exit 1: el baseline declarado del auditor
+```
+
+Los cinco cierres son de historia, de tinte de host, de prosa y de gate: `git diff 930b11f..HEAD --
+Assets/Sprites Docs/art/placeholders-v1.csv` está vacío, o sea que los 33 PNG, los 33 `.meta` y el
+ledger no cambiaron un byte.
+
 
 
 
