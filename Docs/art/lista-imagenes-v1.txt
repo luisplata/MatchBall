@@ -1,5 +1,5 @@
 # MatchBall — lista de imágenes (v1)
-# Cambio: refresh-visual-cliente · 121 piezas (85 REPLACE · 36 NEW)
+# Cambio: refresh-visual-cliente · 122 piezas (85 REPLACE · 37 NEW)
 # Detalle completo (px, 9-slice, notas, origen): manifest-refresh-visual-v1.md
 
 
@@ -91,7 +91,7 @@ ui_pass_state_check_01.png	REPLACE
 ui_pass_state_lock_01.png	REPLACE
 ui_pass_btn_return_01.png	REPLACE
 
-[F — Menú / login / matching / resultados / store (36)]
+[F — Menú / login / matching / resultados / store (37)]
 ui_common_btn_primary_normal_01.png	REPLACE
 ui_common_btn_primary_pressed_01.png	NEW
 ui_common_btn_primary_disabled_01.png	NEW
@@ -104,6 +104,7 @@ ui_common_logo_game_01.png	REPLACE
 ui_common_logo_title_01.png	REPLACE
 ui_common_loader_01.png	REPLACE
 ui_menu_bg_01.png	REPLACE
+ui_menu_bg_panel_01.png	NEW
 ui_menu_btn_play_normal_01.png	REPLACE
 ui_menu_btn_play_pressed_01.png	NEW
 ui_menu_btn_home_01.png	REPLACE
