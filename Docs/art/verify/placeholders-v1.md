@@ -203,15 +203,13 @@ $ echo $?
 
 ## §1b — los 33 bytes, el ledger y las reglas `NEW-*` del auditor
 
-**Entregado**: 33 PNG en `Assets/Sprites/` + `Docs/art/placeholders-v1.csv` (37 filas) +
-`Docs/art/deliveries-v1.csv` (sólo encabezado) + cohorte `new` y guard v2 en
-`ArtMetaMigrator.cs` + 6 reglas `NEW-*` en `audit_art_manifest.py`.
+**Entregado**: 33 PNG en `Assets/Sprites/` + sus 33 `.meta` + `Docs/art/placeholders-v1.csv` (37
+filas, 33 GUID congelados) + `Docs/art/deliveries-v1.csv` (sólo encabezado) + cohorte `new` y guard
+v2 en `ArtMetaMigrator.cs` + 6 reglas `NEW-*` en `audit_art_manifest.py`.
 
-**No entregado, y es el único hueco**: los **33 `.meta`**. Los escribe `TextureImporter` vía
-Unity (`ArtMetaMigrator`, cohorte `new`) y en esta máquina no hay editor instalado. Ese paso es
-una puerta de una sola dirección (33 GUID) y queda declarado abajo con el comando exacto; el
-ledger deja la columna `guid` **vacía a propósito** hasta que corra, y el gate lo reporta como
-`NEW-PENDING` en vez de inventar un GUID (D1: un solo escritor de `.meta`).
+El paso de Unity ya corrió: los 33 `.meta` los escribió `TextureImporter` vía `ArtMetaMigrator`
+(cohorte `new`) en el editor 6000.3.10f1, y `--freeze-guid` congeló los 33 GUID en el ledger
+(§1b.6). Ningún `.meta` se editó a mano: D1 sigue con un solo escritor.
 
 ### 1b.1 Generación sobre `Assets/Sprites/`
 
@@ -290,29 +288,60 @@ Y el caso de APA-1, arte real: el mismo píxel torcido **con** una fila
 `ui_tutorial_dim_01.png,<sha>,arte-test,2026-11-20` en `deliveries-v1.csv` pasa a
 `NEW-DELIVERY` (INFO) y el auditor vuelve a 14: el sha distinto queda reconocido, no silenciado.
 
-### 1b.6 El paso pendiente: los 33 `.meta` (bloqueado, sin Unity en esta máquina)
+### 1b.6 El paso Unity: los 33 `.meta` (hecho, editor 6000.3.10f1)
 
-El orden de D1 no se puede acortar. Con el editor disponible (batchmode o el ítem de menú R6):
+Se corrió el orden de D1 **dentro del editor abierto**, no en batchmode: `ArtMetaMigrator.Apply("new",
+null, false)` desde el mismo código del `-executeMethod`/R6 (la sesión batchmode habría abierto una
+segunda instancia del proyecto). Es el único escritor: **ningún `.meta` se editó a mano**, y los 33
+son salida de `TextureImporter.SaveAndReimport()`.
 
 ```
-python tools/art/generate_placeholders.py                                    # 1. PNG + ledger
-Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtMetaMigrator.BatchApply -artCohort new
-python tools/art/generate_placeholders.py --freeze-guid                      # 3. GUID al ledger
-python tools/art/generate_placeholders.py --check                            # 4. gate, ya con GUID
-python tools/art/audit_art_manifest.py                                       # 5. NEW-GUID / NEW-META 0
+$ ArtMetaMigrator.Apply("new", null, false)
+guard v2 ok: lo sucio en Assets/ es del cohorte (33 piezas del ledger)
+apply: 33 .meta reimportados, 0 archivos YAML reescritos, 0 referencias remapeadas a 21300000
+apply ok                                                                # exit 0
 ```
 
-Alternativa sin licencia (R6): `Tools > Art Contract > Meta Migrator > Apply Plan — new placeholders
-(escribe)`, que hace exactamente lo mismo. **Nunca** un escritor Python de `.meta` (D1 rechaza el
-segundo escritor).
+**Dos defectos del writer, encontrados por el auditor y corregidos en el writer** (commit
+`b4603ec`), no en los `.meta`:
 
-El guard v2 ya está preparado para ese momento: con los 33 PNG sucios en `Assets/`, tolera
-exactamente `{PNG, PNG.meta}` del ledger y aborta (3) con el primer path ajeno. El migrador no
-agrupa el cohorte `new` con `StartAssetEditing`, para que cada `SaveAndReimport` acuñe el GUID
-antes de que `--freeze-guid` lo lea.
+1. **RECT-STALE.** El primer import de un PNG lo deja en `Multiple` (default del proyecto) y recorta
+   el `rect` del sub-sprite al alfa; el flip a `Single` **no reescribe** ese `rect`, así que 14 de los
+   33 `.meta` quedaban con `rect ≠ lienzo` y el auditor los marcaba (14 → 28 violaciones). El writer
+   ahora resincroniza los rects al lienzo con `ISpriteEditorDataProvider` **antes** de pasar a
+   `Single` (`TextureImporter.spritesheet` está retirado en Unity 6: sólo tira `CS0618`).
+2. **`ParseSheet` no podía ver el rect.** Comparaba `line.TrimEnd() == "rect:"`, que nunca matchea la
+   línea indentada del `.meta`: la detección de rects stale estaba muerta, y por eso `rect-resync`
+   del cohorte REPLACE tampoco podía dispararse. Se compara por `Trim()`.
 
-`ArtMetaMigrator.cs` se verificó con un proyecto `dotnet` desechable contra stubs de
-`UnityEditor`/`UnityEngine` (0 errores, 0 warnings): sintaxis y firmas de API, no comportamiento.
+Corregido eso, el auditor vuelve **exactamente al baseline** (14 en las mismas 3 reglas, 0 de las 6
+`NEW-*`), que es lo que T-17 pide:
+
+```
+$ python tools/art/generate_placeholders.py --freeze-guid
+escrito Docs/art/placeholders-v1.csv: 33 GUID congelados desde los .meta      # 33/33, únicos
+$ python tools/art/generate_placeholders.py --check
+INFO  4 filas sin guid congelado: ...                    # las 4 BLOCKED_*, sin .meta por diseño
+RESULTADO   PASS  (33 GENERATED, 4 bloqueadas, 0 hallazgos)                   # exit 0
+$ python tools/art/generate_placeholders.py --manifest | tail -1
+AGREGADO  eafea6fcfc8e54a5bf3e122dff6723c2d0219c5c630908efe613bbb6a967d6e5  33/33
+$ python tools/art/audit_art_manifest.py
+LEDGER NEW  37 filas | 33 GENERATED registradas en el auditor
+VIOLACIONES 14 en 3 reglas                     # baseline pre-cambio, NEW-* 0
+```
+
+**Contrato medido en los 33** (`NEW-META` en 0): `textureType: 8`; `spriteMode: 1`; `spriteBorder` =
+`border` de §9 al píxel (p. ej. `bubble_body` `{48,56,48,56}`, `btn_primary` `{7,6,5,7}`);
+`spritePixelsToUnits: 100`; `maxTextureSize: 2048`; `spritePivot` por §9; `alphaIsTransparency: 1`;
+`rect` = lienzo completo; GUID de 32 hex, **33 distintos**, ausentes del índice pre-cambio.
+
+**Idempotencia**: una segunda (y tercera) corrida del cohorte `new` deja los 33 `.meta`
+**byte-idénticos** (sha256 del archivo, 33/33) y el ledger sin cambios — no hay round-trip de modo
+cuando el `rect` ya es el lienzo.
+
+**Excepción declarada de presupuesto de review**: los 33 `.meta` (~2.2 k líneas) son salida de
+`TextureImporter`, van en el commit y se revisan por muestreo + `NEW-META`/`NEW-GUID`, nunca línea a
+línea (tasks, *Presupuesto*).
 
 ---
 
