@@ -26,9 +26,15 @@ este archivo existe para personas y no se parsea.
 
 - `selectable_state` **es** la excepción `spriteswap` (APW-4b): permite `m_Transition 1→2` y
   `m_SpriteState.m_PressedSprite` / `m_DisabledSprite`. `m_ColorBlock` no se toca y queda como
-  vía de reversión. Costo: esos Selectables pierden el feedback de tinte al presionar.
+  vía de reversión. Costo declarado: esos Selectables pierden **todo** el feedback de tinte —
+  con `m_Transition: 2` el `m_ColorBlock` no se aplica, así que el press y el hover dejan de
+  tintarse, y ninguno de los 7 tiene `m_HighlightedSprite`: el estado `Highlighted` queda
+  idéntico al normal. Lo que el gate no admite es un press **mudo**: toda fila
+  `selectable_state` tiene que llevar un `m_PressedSprite` no vacío.
 - `image+alfa_host`: el host tiene alfa < 1 por diseño (`SkipButton` 0.9, `ContinueButton` 0.95,
-  `RetryButton` 0.95, `DangerStrip` 0.12). Se cablea el sprite y **no** se toca el alfa.
+  `RetryButton` 0.95, `DangerStrip` 0.12). Se cablea el sprite y **no** se toca el alfa; el RGB
+  sí se normaliza a `(1,1,1)` cuando la luminancia WCAG del `m_Color` original baja de 0.25
+  (APW-3), y el valor previo queda en `tint_original`.
 - `image+tinte_design`: las dos piezas `flat4` son relleno blanco de 4×4 que se estira a pantalla
   completa; su `m_Color` oscuro **es** el efecto (`Dim` = velo negro, `zone_veil` = velo del
   countdown). Se cablea el sprite y **no** se normaliza el tinte: normalizarlo convertiría un
@@ -52,6 +58,13 @@ de un host que no las muestra). Se corrige **la celda**, no el código:
 | `ui_common_btn_primary_pressed_01` | `Canvas/Configuration/Contenedor/SubContainer/Button_Audio` | `Selectable` con `m_Transition: 1` y `m_Sprite` = `Button_UI`: es el caso exacto de la variante `pressed` |
 | `ui_common_btn_primary_disabled_01` | `Canvas/Configuration/Contenedor/SubContainer/Button_Name` | ídem para `m_DisabledSprite` |
 
+`Button_Name` lleva **además** `m_SpriteState.m_PressedSprite` = la variante `pressed` del maestro
+(el mismo GUID que `Button_Audio`). No es una segunda fila: es la condición para que el botón no
+quede con el press mudo — con `m_Transition: 2` y sólo `m_DisabledSprite`, presionarlo no cambiaba
+nada. La fila sigue declarando el campo que le toca (`m_DisabledSprite`) y el gate verifica, para
+toda fila `selectable_state`, que el press no esté vacío. Entre los dos botones quedan cubiertas
+las dos variantes y los dos estados.
+
 **Alcance y costo, medidos**: el costo que APW-4b declara ("19 botones pierden el tinte") **no se
 materializa** en este slice: quedan 7 `Selectable` con `m_Transition: 2` (skip, continue, retry,
 settings, play, audio, name), no 19. Los otros 13 consumidores de `Button_UI` siguen en `ColorTint`
@@ -65,10 +78,14 @@ toca código) y el gate las empieza a admitir.
 y `.../CalloutRight/Hand` ya son `hand_point_left/right`) y `ui_tutorial_icon_star_01` no tiene
 nodo badge: las cuatro van `sin_slot`. Crear el nodo es diseño de UI, no cableado (APW-1).
 
-`game_board_zone_veil_01` se cablea en el velo del
-countdown de `Game.unity` (`TimeLineToStart/Canva/Canvas/Image/Image`, negro a 0.298): es el
-único Image de pantalla completa con `m_Color` oscuro del tablero. Si el dueño de la UI
-pretendía otro velo, se corrige esa celda y el checker vuelve a pasar sin tocar código.
+`game_board_zone_veil_01` se cablea en `TimeLineToStart/Canva/Canvas/Image/Image` de `Game.unity`,
+el Image del **countdown**: medido, `m_SizeDelta` **286.2×144.69**, anclas `0.5/0.5` y `m_Color`
+negro a `0.29803923`. **No** es de pantalla completa — el Image de pantalla completa es su padre
+(`TimeLineToStart/Canva/Canvas/Image`, anclas `0/1`, `m_Color` blanco, sprite real). Así que el
+cable oscurece una franja centrada de 286×145 dentro del countdown, no el tablero: el recorte mide
+exactamente eso. Es un cable real a un nodo declarado, capturado y reversible con una celda, pero
+la intención ("velo de zona del tablero") no está confirmada por el dueño de la UI: si pretendía
+otro velo, se corrige esa celda y el checker vuelve a pasar sin tocar código.
 
 ```csv
 pieza,slot_tipo,asset,nodo,componente,campo,estado,tint_original,transition_original,captura
@@ -137,12 +154,14 @@ Tres decisiones del rig, declaradas porque afectan lo que se ve:
    play mode no escribe la escena.
 
 **Firma visual, en las capturas**: el marco `#FF00FF` y la etiqueta se ven en `bubble`, `skip`,
-`panel_retry`, `btn_primary_*`, `play` y `settings`. En `continue`/`retry` el tinte del host
-(`0.16/0.55/0.35`) **mata el magenta** (255×0.55 en G, 255×0.16 en R): el marco queda verde y la
-firma no pasa el umbral de APA-2. Es la consecuencia medida de no normalizar hosts con luminancia
-> 0.25 (APW-3); la pieza sigue siendo inconfundible por la placa `SIN ARTE`. En `dim` y `zone_veil`
-> la firma no existe por diseño (`flat4`, `except: sin_firma`), y en `danger` (alfa 0.12) y en los
-> dots (alfa 0.25/0.55) el alfa del host baja el magenta bajo el umbral sin cambiarlo de tono.
+`panel_retry`, `continue`, `retry`, `btn_primary_*`, `play` y `settings`. `continue`/`retry`
+tenían el host en `0.16/0.55/0.35`: con esa luminancia la firma medía **`L = 0.1995 < 0.25`** y el
+magenta se apagaba a verde, así que no era una excepción legítima — eran dos hosts que APW-3 manda
+normalizar y se habían quedado afuera por leer la luma (`0.411`) en vez de la luminancia WCAG. Se
+normalizaron a `(1,1,1)` con el alfa intacto (`0.95`) y **se volvieron a capturar los 4 recortes**
+(`continue` y `retry`, normal y pressed). En `dim` y `zone_veil` la firma no existe por diseño
+(`flat4`, `except: sin_firma`), y en `danger` (alfa 0.12) y en los dots (alfa 0.25/0.55) el alfa
+del host baja el valor del magenta sin cambiarle el tono.
 
 ## Reversión
 
