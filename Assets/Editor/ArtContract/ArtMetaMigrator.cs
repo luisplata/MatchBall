@@ -23,10 +23,20 @@
 //   Unity -batchmode -quit -executeMethod ...BatchDryRun -artCohort s2a | -artPieces "game_board_*"
 //
 // Seleccion (design §10: S2 se parte por grupo de assets, no por tipo de cambio):
-//   cohort = all | s2a | s2b | s2c   (s2a = game_board_*, s2b = avatares+heroes,
-//   s2c = el resto). `pieces` (glob separado por comas) reemplaza al cohorte, igual que
-//   ArtSyntheticBatch.SelectTargets. NO hay default: sin cohorte ni pieces se aborta (2).
+//   cohort = all | s2a | s2b | s2c | new
+//   (s2a = game_board_*, s2b = avatares+heroes, s2c = el resto, new = los placeholders
+//   GENERATED de Docs/art/placeholders-v1.csv). `pieces` (glob separado por comas)
+//   reemplaza al cohorte, igual que ArtSyntheticBatch.SelectTargets.
+//   NO hay default: sin cohorte ni pieces se aborta (2).
 //   OJO: el cohorte `world` del harness sintetico NO es s2a — mete ball_shadow_01, que es s2c.
+//   OJO 2: `new` es el unico cohorte que lee el LEDGER y no la sec.9: la lista de bloqueadas
+//   vive en un solo lugar (el generador), y las NEW no tienen `origen` en la sec.9.
+//
+// Guard v2 (obligatorio para `new`): el guard original aborta si `git status --porcelain --
+// Assets` no esta vacio, y los 33 PNG recien generados lo estan. Se reemplaza por: todo path
+// sucio tiene que pertenecer al conjunto {PNG, PNG.meta} del ledger; cualquier otro path sucio
+// sigue abortando. Mantiene la promesa de rollback (`git checkout -- Assets` + borrar los
+// untracked del ledger).
 //
 // Orden de apply por pieza (una sola operacion, en este orden):
 //   1. rect-resync (solo si la pieza queda en Multiple; ver BuildPlan)
@@ -55,6 +65,7 @@ namespace DarkVoid.ArtContract
     public static class ArtMetaMigrator
     {
         public const string ManifestPath = "Docs/art/manifest-refresh-visual-v1.md";
+        public const string LedgerPath = "Docs/art/placeholders-v1.csv";
         public const string ReportDir = "Temp/art-contract/reports";
 
         const string MenuRoot = "Tools/Art Contract/Meta Migrator/";
@@ -90,12 +101,36 @@ namespace DarkVoid.ArtContract
                 "ArtMetaMigrator",
                 "Vas a reescribir .meta y referencias fileID de TODAS las piezas planificadas (cohort=all).\n\n" +
                 "Precondicion: arbol limpio en Assets/. El dry-run del cohorte ya tiene que estar revisado.\n" +
-                "Para un solo grupo usar DryRun/Apply con cohorte (s2a|s2b|s2c) o `pieces`.",
+                "Para un solo grupo usar DryRun/Apply con cohorte (s2a|s2b|s2c|new) o `pieces`.",
                 "Aplicar",
                 "Cancelar");
             if (confirmed)
             {
                 Apply("all", null, false);
+            }
+        }
+
+        [MenuItem(MenuRoot + "Print Plan — new placeholders (dry-run)", false, 2002)]
+        public static void PrintPlanNewMenu()
+        {
+            DryRun("new", null);
+        }
+
+        // R6: fallback cuando no hay licencia ni batchmode. Hace exactamente lo mismo que
+        // `-executeMethod ...BatchApply -artCohort new`.
+        [MenuItem(MenuRoot + "Apply Plan — new placeholders (escribe)", false, 2011)]
+        public static void ApplyPlanNewMenu()
+        {
+            bool confirmed = EditorUtility.DisplayDialog(
+                "ArtMetaMigrator",
+                "Vas a escribir el .meta de las piezas GENERATED de " + LedgerPath + " (cohort=new).\n\n" +
+                "Precondicion: los PNG ya estan en Assets/Sprites/ y el arbol sucio solo los toca a ellos\n" +
+                "(guard v2). Despues: python tools/art/generate_placeholders.py --freeze-guid",
+                "Aplicar",
+                "Cancelar");
+            if (confirmed)
+            {
+                Apply("new", null, false);
             }
         }
 
@@ -165,12 +200,23 @@ namespace DarkVoid.ArtContract
             }
             else if (dirty)
             {
-                LogWarning("Assets/ tiene cambios sin commitear:\n" + Indent(porcelain) +
-                           "\n  -> el rollback (`git checkout -- Assets`) borraria ese trabajo");
-                if (apply && !allowDirty)
+                // Guard v2: lo sucio tiene que ser del cohorte declarado (PNG + .meta del ledger).
+                HashSet<string> allowed = LedgerAllowlist();
+                string offending;
+                if (OnlyAllowedDirty(porcelain, allowed, out offending))
                 {
-                    LogError("apply rechazado por el guard (allowDirty=false). Commitear o stashear primero.");
-                    return 3;
+                    Log("guard v2 ok: lo sucio en Assets/ es del cohorte (" + allowed.Count / 2 + " piezas del ledger)");
+                }
+                else
+                {
+                    LogWarning("Assets/ tiene cambios que no son del cohorte:\n" + Indent(porcelain) +
+                               "\n  -> el rollback (`git checkout -- Assets`) borraria ese trabajo; primer path ajeno: " +
+                               offending);
+                    if (apply && !allowDirty)
+                    {
+                        LogError("apply rechazado por el guard (allowDirty=false). Commitear o stashear primero.");
+                        return 3;
+                    }
                 }
             }
             else
@@ -189,10 +235,28 @@ namespace DarkVoid.ArtContract
                 return 2;
             }
 
+            List<LedgerRow> ledger;
+            try
+            {
+                ledger = LoadLedger();
+            }
+            catch (Exception error)
+            {
+                LogError("no se pudo leer el ledger " + LedgerPath + ": " + error.Message);
+                return 2;
+            }
+
             List<PiecePlan> plan;
             try
             {
-                plan = BuildPlan(SelectRows(rows, cohort, pieces));
+                List<Row> selected = SelectRows(rows, ledger, cohort, pieces);
+                if (UsesCohort(cohort, pieces, "new"))
+                {
+                    // Los PNG recien escritos tienen que existir como assets para que haya
+                    // TextureImporter y GUID: el generador no escribe .meta (D1/D8).
+                    AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                }
+                plan = BuildPlan(selected, ledger);
             }
             catch (Exception error)
             {
@@ -238,18 +302,61 @@ namespace DarkVoid.ArtContract
         }
 
         /// <summary>
-        /// Filtra las filas REPLACE antes de planificar. Es el unico punto donde se decide el
+        /// Filtra las filas antes de planificar. Es el unico punto donde se decide el
         /// alcance: BuildPlan y Execute no saben de cohortes, solo reciben menos filas. Un glob
         /// que no matchea nada aborta (no hay plan vacio "exitoso" por error de tipeo).
+        ///
+        /// `new` es el unico cohorte que sale del ledger: las NEW no tienen `origen` en la sec.9
+        /// (su path lo deriva el generador) y las bloqueadas no se importan nunca.
         /// </summary>
-        static List<Row> SelectRows(List<Row> rows, string cohort, string pieces)
+        static List<Row> SelectRows(List<Row> rows, List<LedgerRow> ledger, string cohort, string pieces)
         {
             bool hasPieces = !string.IsNullOrEmpty(pieces) && pieces.Trim().Length > 0;
             string name = string.IsNullOrEmpty(cohort) ? null : cohort.Trim().ToLowerInvariant();
             if (!hasPieces && string.IsNullOrEmpty(name))
             {
                 throw new InvalidOperationException(
-                    "seleccion obligatoria: pasar cohorte (all|s2a|s2b|s2c) o `pieces` (glob). cohort=all aplica las 85 REPLACE.");
+                    "seleccion obligatoria: pasar cohorte (all|s2a|s2b|s2c|new) o `pieces` (glob). " +
+                    "cohort=all aplica las 85 REPLACE.");
+            }
+
+            if (string.Equals(name, "new", StringComparison.Ordinal) && !hasPieces)
+            {
+                var generated = new Dictionary<string, LedgerRow>(StringComparer.Ordinal);
+                foreach (LedgerRow entry in ledger)
+                {
+                    if (string.Equals(entry.Estado, "GENERATED", StringComparison.Ordinal))
+                    {
+                        generated[entry.Pieza] = entry;
+                    }
+                }
+                if (generated.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "el ledger no tiene filas GENERATED: " + LedgerPath + " (correr el generador)");
+                }
+                var fromLedger = new List<Row>();
+                foreach (Row row in rows)
+                {
+                    if (!string.Equals(row.Estado, "NEW", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                    LedgerRow entry;
+                    if (!generated.TryGetValue(row.Pieza, out entry))
+                    {
+                        continue; // BLOCKED_*: no hay PNG ni .meta que escribir
+                    }
+                    row.Origen = entry.Path;
+                    fromLedger.Add(row);
+                }
+                if (fromLedger.Count != generated.Count)
+                {
+                    throw new InvalidOperationException(
+                        "el ledger declara " + generated.Count + " GENERATED y la sec.9 nombra " + fromLedger.Count +
+                        ": las dos tablas no coinciden");
+                }
+                return fromLedger;
             }
 
             Regex pattern = hasPieces ? BuildGlob(pieces.Trim()) : null;
@@ -273,9 +380,15 @@ namespace DarkVoid.ArtContract
             {
                 throw new InvalidOperationException(pattern != null
                     ? "`pieces` no matcheo ninguna pieza REPLACE: " + pieces
-                    : "cohorte desconocido o vacio: " + cohort + " (validos: all, s2a, s2b, s2c)");
+                    : "cohorte desconocido o vacio: " + cohort + " (validos: all, s2a, s2b, s2c, new)");
             }
             return selected;
+        }
+
+        static bool UsesCohort(string cohort, string pieces, string wanted)
+        {
+            bool hasPieces = !string.IsNullOrEmpty(pieces) && pieces.Trim().Length > 0;
+            return !hasPieces && string.Equals((cohort ?? string.Empty).Trim(), wanted, StringComparison.OrdinalIgnoreCase);
         }
 
         static bool MatchesCohort(string cohort, Row row)
@@ -338,6 +451,122 @@ namespace DarkVoid.ArtContract
             public string ModeTarget;
             public string Border;
             public string MaxTex;
+            public Vector2 Pivot;
+            public float Ppu;
+        }
+
+        sealed class LedgerRow
+        {
+            public string Pieza;
+            public string Estado;
+            public string Path;
+            public string Guid;
+            public string Sha;
+        }
+
+        static List<LedgerRow> LoadLedger()
+        {
+            string ledger = System.IO.Path.Combine(ProjectRoot(), LedgerPath);
+            if (!File.Exists(ledger))
+            {
+                return new List<LedgerRow>(); // sin ledger el cohorte `new` aborta al seleccionar
+            }
+            string[] lines = File.ReadAllLines(ledger, Encoding.UTF8);
+            if (lines.Length < 2)
+            {
+                throw new InvalidDataException(LedgerPath + " esta vacio");
+            }
+            string[] header = SplitCsv(lines[0]);
+            int iPieza = IndexOf(header, "pieza");
+            int iEstado = IndexOf(header, "estado");
+            int iPath = IndexOf(header, "path");
+            int iGuid = IndexOf(header, "guid");
+            int iSha = IndexOf(header, "sha256");
+            if (iPieza < 0 || iEstado < 0 || iPath < 0 || iGuid < 0 || iSha < 0)
+            {
+                throw new InvalidDataException("columnas inesperadas en " + LedgerPath + ": " + string.Join(",", header));
+            }
+            var rows = new List<LedgerRow>();
+            for (int i = 1; i < lines.Length; i++)
+            {
+                if (lines[i].Length == 0)
+                {
+                    continue;
+                }
+                string[] cells = SplitCsv(lines[i]);
+                if (cells.Length != header.Length)
+                {
+                    throw new InvalidDataException("fila " + (i + 1) + " de " + LedgerPath + " con " + cells.Length + " columnas");
+                }
+                rows.Add(new LedgerRow
+                {
+                    Pieza = cells[iPieza],
+                    Estado = cells[iEstado],
+                    Path = cells[iPath],
+                    Guid = cells[iGuid],
+                    Sha = cells[iSha],
+                });
+            }
+            return rows;
+        }
+
+        /// <summary>Paths que el guard v2 tolera sucios: PNG del ledger y su .meta.</summary>
+        static HashSet<string> LedgerAllowlist()
+        {
+            var allowed = new HashSet<string>(StringComparer.Ordinal);
+            List<LedgerRow> ledger;
+            try
+            {
+                ledger = LoadLedger();
+            }
+            catch (Exception)
+            {
+                return allowed; // sin ledger legible no se tolera nada sucio
+            }
+            foreach (LedgerRow row in ledger)
+            {
+                if (!string.Equals(row.Estado, "GENERATED", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (string.IsNullOrEmpty(row.Path) || row.Path == "-")
+                {
+                    continue;
+                }
+                allowed.Add(row.Path);
+                allowed.Add(row.Path + ".meta");
+            }
+            return allowed;
+        }
+
+        static bool OnlyAllowedDirty(string porcelain, HashSet<string> allowed, out string offending)
+        {
+            offending = null;
+            if (allowed.Count == 0)
+            {
+                offending = "(sin allowlist)";
+                return false;
+            }
+            foreach (string raw in porcelain.Split('\n'))
+            {
+                string line = raw.TrimEnd('\r');
+                if (line.Length < 4)
+                {
+                    continue;
+                }
+                string path = line.Substring(3).Trim().Trim('"').Replace('\\', '/');
+                int arrow = path.IndexOf(" -> ", StringComparison.Ordinal);
+                if (arrow >= 0)
+                {
+                    path = path.Substring(arrow + 4).Trim();
+                }
+                if (!allowed.Contains(path))
+                {
+                    offending = path;
+                    return false;
+                }
+            }
+            return true;
         }
 
         static List<Row> LoadManifest()
@@ -388,8 +617,10 @@ namespace DarkVoid.ArtContract
             int iModeTarget = IndexOf(header, "mode_target");
             int iBorder = IndexOf(header, "border");
             int iMaxTex = IndexOf(header, "max_tex");
+            int iPivot = IndexOf(header, "pivot");
+            int iPpu = IndexOf(header, "ppu");
             if (header.Length != 12 || iPieza < 0 || iEstado < 0 || iOrigen < 0 || iModeTarget < 0 ||
-                iBorder < 0 || iMaxTex < 0 || iPxActual < 0)
+                iBorder < 0 || iMaxTex < 0 || iPxActual < 0 || iPivot < 0 || iPpu < 0)
             {
                 throw new InvalidDataException("columnas inesperadas en sec.9: " + string.Join(",", header));
             }
@@ -402,6 +633,19 @@ namespace DarkVoid.ArtContract
                 {
                     throw new InvalidDataException("fila " + (i + 1) + " con " + cells.Length + " columnas");
                 }
+                Vector2 pivot;
+                float ppu;
+                string[] pair = cells[iPivot].Split('/');
+                if (pair.Length != 2 ||
+                    !float.TryParse(pair[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out pivot.x) ||
+                    !float.TryParse(pair[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out pivot.y))
+                {
+                    throw new InvalidDataException("pivot '" + cells[iPivot] + "' no es x/y en " + cells[iPieza]);
+                }
+                if (!float.TryParse(cells[iPpu].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out ppu))
+                {
+                    throw new InvalidDataException("ppu '" + cells[iPpu] + "' no es numerico en " + cells[iPieza]);
+                }
                 rows.Add(new Row
                 {
                     Pieza = cells[iPieza],
@@ -411,6 +655,8 @@ namespace DarkVoid.ArtContract
                     ModeTarget = cells[iModeTarget],
                     Border = cells[iBorder],
                     MaxTex = cells[iMaxTex],
+                    Pivot = pivot,
+                    Ppu = ppu,
                 });
             }
 
@@ -471,6 +717,7 @@ namespace DarkVoid.ArtContract
             public string AssetPath;
             public string MetaPath;
             public string Guid;
+            public string Kind = "replace";
             public int ModeNow;
             public int ModeTarget;
             public int Width;
@@ -489,14 +736,34 @@ namespace DarkVoid.ArtContract
             public List<string> Notes = new List<string>();
         }
 
-        static List<PiecePlan> BuildPlan(List<Row> rows)
+        static List<PiecePlan> BuildPlan(List<Row> rows, List<LedgerRow> ledger)
         {
             var plans = new List<PiecePlan>();
             var seenAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var byGuid = new Dictionary<string, PiecePlan>(StringComparer.Ordinal);
+            var ledgerByPiece = new Dictionary<string, LedgerRow>(StringComparer.Ordinal);
+            foreach (LedgerRow entry in ledger)
+            {
+                ledgerByPiece[entry.Pieza] = entry;
+            }
 
             foreach (Row row in rows)
             {
+                if (string.Equals(row.Estado, "NEW", StringComparison.Ordinal))
+                {
+                    LedgerRow entry;
+                    if (!ledgerByPiece.TryGetValue(row.Pieza, out entry))
+                    {
+                        LogError(row.Pieza + ": NEW sin fila GENERATED en " + LedgerPath);
+                        continue;
+                    }
+                    PiecePlan fresh = BuildNewPlan(row, entry);
+                    if (fresh != null)
+                    {
+                        plans.Add(fresh);
+                    }
+                    continue;
+                }
                 if (!string.Equals(row.Estado, "REPLACE", StringComparison.Ordinal))
                 {
                     continue;
@@ -660,6 +927,96 @@ namespace DarkVoid.ArtContract
             return plans;
         }
 
+        /// <summary>
+        /// Plan de una pieza NEW: no hay flip que decidir, el .meta lo acuna Unity al importar
+        /// y el contrato (textureType, mode, border, maxTex, pivot, ppu, alpha) se escribe de una.
+        /// </summary>
+        static PiecePlan BuildNewPlan(Row row, LedgerRow entry)
+        {
+            if (string.IsNullOrEmpty(entry.Path) || entry.Path == "-")
+            {
+                LogError(row.Pieza + ": la fila del ledger no tiene path");
+                return null;
+            }
+            var importer = AssetImporter.GetAtPath(entry.Path) as TextureImporter;
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(entry.Path);
+            if (importer == null || texture == null)
+            {
+                LogError(row.Pieza + ": " + entry.Path + " no esta importado (correr el generador y reimportar)");
+                return null;
+            }
+            int modeTarget;
+            int maxTex;
+            Vector4 border;
+            if (!int.TryParse(row.ModeTarget, NumberStyles.Integer, CultureInfo.InvariantCulture, out modeTarget) ||
+                !int.TryParse(row.MaxTex, NumberStyles.Integer, CultureInfo.InvariantCulture, out maxTex) ||
+                !TryParseBorder(row.Border, out border))
+            {
+                LogError(row.Pieza + ": mode_target/max_tex/border ilegibles en sec.9");
+                return null;
+            }
+
+            var plan = new PiecePlan
+            {
+                Row = row,
+                Kind = "new",
+                AssetPath = entry.Path,
+                MetaPath = entry.Path + ".meta",
+                Width = texture.width,
+                Height = texture.height,
+                ModeNow = (int)importer.spriteImportMode,
+                ModeTarget = modeTarget,
+                Border = border,
+                MaxTex = maxTex,
+            };
+            try
+            {
+                string meta = File.ReadAllText(System.IO.Path.Combine(ProjectRoot(), plan.MetaPath), Encoding.UTF8);
+                Match guid = Regex.Match(meta, @"^guid: ([0-9a-f]{32})\s*$", RegexOptions.Multiline);
+                if (guid.Success)
+                {
+                    plan.Guid = guid.Groups[1].Value;
+                }
+            }
+            catch (Exception error)
+            {
+                LogWarning(row.Pieza + ": sin .meta todavia (" + error.Message + "): Unity lo va a acunar");
+            }
+
+            plan.Ops.Add(new PlannedOp { Kind = "textureType", Detail = importer.textureType + " -> 8 (Sprite)" });
+            plan.Ops.Add(new PlannedOp
+            {
+                Kind = "spriteMode",
+                Detail = plan.ModeNow + " -> " + modeTarget + " (Single)",
+            });
+            plan.Ops.Add(new PlannedOp
+            {
+                Kind = "spriteBorder",
+                Detail = FormatVector(importer.spriteBorder) + " -> " + row.Border,
+            });
+            plan.Ops.Add(new PlannedOp
+            {
+                Kind = "maxTextureSize",
+                Detail = importer.maxTextureSize + " -> " + maxTex,
+            });
+            plan.Ops.Add(new PlannedOp
+            {
+                Kind = "spritePixelsToUnits",
+                Detail = importer.spritePixelsPerUnit.ToString(CultureInfo.InvariantCulture) + " -> " +
+                         row.Ppu.ToString(CultureInfo.InvariantCulture),
+            });
+            plan.Ops.Add(new PlannedOp
+            {
+                Kind = "spritePivot",
+                Detail = importer.spritePivot.x.ToString("0.##", CultureInfo.InvariantCulture) + "/" +
+                         importer.spritePivot.y.ToString("0.##", CultureInfo.InvariantCulture) + " -> " +
+                         row.Pivot.x.ToString("0.##", CultureInfo.InvariantCulture) + "/" +
+                         row.Pivot.y.ToString("0.##", CultureInfo.InvariantCulture),
+            });
+            plan.Ops.Add(new PlannedOp { Kind = "alphaIsTransparency", Detail = importer.alphaIsTransparency + " -> True" });
+            return plan;
+        }
+
         static int Rank(string kind)
         {
             switch (kind)
@@ -782,7 +1139,14 @@ namespace DarkVoid.ArtContract
             int refsRemapped = 0;
             var failures = new List<string>();
 
-            AssetDatabase.StartAssetEditing();
+            // El cohorte `new` no se agrupa: cada SaveAndReimport tiene que completarse para
+            // que Unity acuñe el GUID antes del `--freeze-guid` (dentro de StartAssetEditing la
+            // importacion queda diferida y el .meta no existe todavia al salir).
+            bool batched = toApply.TrueForAll(plan => plan.Kind != "new");
+            if (batched)
+            {
+                AssetDatabase.StartAssetEditing();
+            }
             try
             {
                 foreach (PiecePlan plan in toApply)
@@ -808,7 +1172,10 @@ namespace DarkVoid.ArtContract
             }
             finally
             {
-                AssetDatabase.StopAssetEditing();
+                if (batched)
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
             }
 
             AssetDatabase.Refresh();
@@ -842,6 +1209,10 @@ namespace DarkVoid.ArtContract
 
         static bool ApplyImporter(PiecePlan plan)
         {
+            if (plan.Kind == "new")
+            {
+                return ApplyNewImporter(plan);
+            }
             if (!plan.Flip && !plan.RectResync && !plan.ApplyBorder && !plan.ApplyMaxTex)
             {
                 return false;
@@ -885,6 +1256,119 @@ namespace DarkVoid.ArtContract
             importer.SaveAndReimport();
             Log("escrito " + plan.AssetPath + ".meta (" + string.Join(", ", plan.Ops.ConvertAll(op => op.Kind).ToArray()) + ")");
             return true;
+        }
+
+        static bool ApplyNewImporter(PiecePlan plan)
+        {
+            var importer = AssetImporter.GetAtPath(plan.AssetPath) as TextureImporter;
+            if (importer == null)
+            {
+                throw new InvalidOperationException("importer nulo para " + plan.AssetPath);
+            }
+            // El rect del sub-sprite tiene que quedar en el lienzo completo ANTES de pasar a
+            // Single: el primer import de un PNG lo hace en Multiple (default del proyecto) y
+            // recorta el rect al alfa, y el flip a Single NO lo reescribe — el .meta queda con
+            // un rect stale que RECT-STALE (auditor) marca por pieza. Resync en Multiple, y
+            // recien despues el modo objetivo. En una segunda corrida el modo ya es Single y el
+            // rect ya es el lienzo: no hay round-trip y el .meta no cambia (idempotente).
+            int canvasWidth;
+            int canvasHeight;
+            importer.GetSourceTextureWidthAndHeight(out canvasWidth, out canvasHeight);
+            bool staleRect = SheetHasStaleRect(plan.MetaPath, canvasWidth, canvasHeight);
+            if (staleRect && importer.spriteImportMode != SpriteImportMode.Multiple)
+            {
+                importer.spriteImportMode = SpriteImportMode.Multiple;
+                importer.SaveAndReimport();
+            }
+            if (importer.spriteImportMode == SpriteImportMode.Multiple)
+            {
+                ResyncSpriteRects(importer, canvasWidth, canvasHeight);
+            }
+
+            // Orden: el modo Single primero; spritePivot y spriteBorder solo se aplican en Single.
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spriteBorder = plan.Border;
+            importer.spritePivot = plan.Row.Pivot;
+            importer.spritePixelsPerUnit = plan.Row.Ppu;
+            importer.maxTextureSize = plan.MaxTex;
+            importer.alphaIsTransparency = true;
+            EditorUtility.SetDirty(importer);
+            importer.SaveAndReimport();
+            Log("escrito " + plan.AssetPath + ".meta (" + string.Join(", ", plan.Ops.ConvertAll(op => op.Kind).ToArray()) + ")" +
+                (staleRect ? " [rect-resync al lienzo " + canvasWidth + "x" + canvasHeight + "]" : string.Empty));
+            return true;
+        }
+
+        /// <summary>true si el .meta serializa algun sub-sprite con rect distinto del lienzo.</summary>
+        static bool SheetHasStaleRect(string metaPath, int width, int height)
+        {
+            if (string.IsNullOrEmpty(metaPath) || !File.Exists(System.IO.Path.Combine(ProjectRoot(), metaPath)))
+            {
+                return false; // .meta todavia no existe: Unity lo acuna al importar, sin rect stale
+            }
+            try
+            {
+                Sheet sheet = ParseSheet(File.ReadAllText(System.IO.Path.Combine(ProjectRoot(), metaPath), Encoding.UTF8));
+                foreach (SheetSprite sprite in sheet.Sprites)
+                {
+                    if (sprite.Rect.width > 0f && sprite.Rect.height > 0f &&
+                        sprite.Rect != new Rect(0f, 0f, width, height))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception error)
+            {
+                LogWarning(metaPath + ": no se pudo leer el rect serializado (" + error.Message + ")");
+            }
+            return false;
+        }
+
+        /// <summary>Lleva todos los rects al lienzo completo usando el data provider 2D (TextureImporter.spritesheet esta retirado en Unity 6).</summary>
+        static void ResyncSpriteRects(TextureImporter importer, int width, int height)
+        {
+            var rects = importer.spriteImportMode == SpriteImportMode.Multiple ? ReadSpriteRects(importer) : null;
+            if (rects == null || rects.Length == 0)
+            {
+                return;
+            }
+            var target = new Rect(0f, 0f, width, height);
+            var changed = false;
+            for (int i = 0; i < rects.Length; i++)
+            {
+                if (rects[i].rect != target)
+                {
+                    rects[i].rect = target;
+                    changed = true;
+                }
+            }
+            if (!changed)
+            {
+                return;
+            }
+            WriteSpriteRects(importer, rects);
+            Log("rect-resync " + importer.assetPath + " -> " + width + "x" + height);
+        }
+
+        static SpriteRect[] ReadSpriteRects(TextureImporter importer)
+        {
+            var factories = new UnityEditor.U2D.Sprites.SpriteDataProviderFactories();
+            factories.Init();
+            var dataProvider = factories.GetSpriteEditorDataProviderFromObject(importer);
+            dataProvider.InitSpriteEditorDataProvider();
+            return dataProvider.GetSpriteRects();
+        }
+
+        static void WriteSpriteRects(TextureImporter importer, SpriteRect[] rects)
+        {
+            var factories = new UnityEditor.U2D.Sprites.SpriteDataProviderFactories();
+            factories.Init();
+            var dataProvider = factories.GetSpriteEditorDataProviderFromObject(importer);
+            dataProvider.InitSpriteEditorDataProvider();
+            dataProvider.SetSpriteRects(rects);
+            dataProvider.Apply();
         }
 
         static void RemapRefs(PiecePlan plan, out int filesWritten, out int refsRemapped)
@@ -1126,7 +1610,7 @@ namespace DarkVoid.ArtContract
                     }
                     continue;
                 }
-                if (line.TrimEnd() == "rect:")
+                if (line.Trim() == "rect:")
                 {
                     int indent = line.Length - line.TrimStart(' ').Length;
                     float x = 0f, y = 0f, width = 0f, height = 0f;

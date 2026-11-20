@@ -198,3 +198,119 @@ $ echo $?
   sí difieren. En 2b la captura de cada una sale de su nodo, no del otro.
 - `except: sin_firma` de las dos `flat4` se registra como `familia=flat4` en el ledger (el
   encabezado congelado por T-07 no tiene columna `except`).
+
+---
+
+## §1b — los 33 bytes, el ledger y las reglas `NEW-*` del auditor
+
+**Entregado**: 33 PNG en `Assets/Sprites/` + `Docs/art/placeholders-v1.csv` (37 filas) +
+`Docs/art/deliveries-v1.csv` (sólo encabezado) + cohorte `new` y guard v2 en
+`ArtMetaMigrator.cs` + 6 reglas `NEW-*` en `audit_art_manifest.py`.
+
+**No entregado, y es el único hueco**: los **33 `.meta`**. Los escribe `TextureImporter` vía
+Unity (`ArtMetaMigrator`, cohorte `new`) y en esta máquina no hay editor instalado. Ese paso es
+una puerta de una sola dirección (33 GUID) y queda declarado abajo con el comando exacto; el
+ledger deja la columna `guid` **vacía a propósito** hasta que corra, y el gate lo reporta como
+`NEW-PENDING` en vez de inventar un GUID (D1: un solo escritor de `.meta`).
+
+### 1b.1 Generación sobre `Assets/Sprites/`
+
+```
+$ python tools/art/generate_placeholders.py
+escritos 33 PNG en Assets/Sprites y el ledger Docs/art/placeholders-v1.csv
+$ ls Assets/Sprites/ui_tutorial_*.png | wc -l   # + ui_hud_*, ball_state_*, game_board_zone_veil_01
+33
+```
+
+Ninguna `BLOCKED_*` tiene archivo: `ui_tutorial_bubble_tail_left_01.png`,
+`ui_tutorial_caption_pill_01.png`, `ui_tutorial_spotlight_fill_01.png` y
+`ball_state_frozen_01.png` no existen en disco (APH-1).
+
+### 1b.2 Gate del generador
+
+```
+$ python tools/art/generate_placeholders.py --check
+INFO  37 filas sin guid congelado: los .meta los escribe Unity (cohorte new) y --freeze-guid los congela
+RESULTADO   PASS  (33 GENERATED, 4 bloqueadas, 0 hallazgos)
+$ echo $?
+0
+```
+
+### 1b.3 `--manifest` contra el ledger (APH-9)
+
+```
+manifest lines 33 | ledger GENERATED 33
+iguales: 33 / 33        diferencias: []
+AGREGADO  eafea6fcfc8e54a5bf3e122dff6723c2d0219c5c630908efe613bbb6a967d6e5  33/33
+```
+
+### 1b.4 Tamper: un canal, un píxel (APH-8)
+
+```
+$ (bajar G de (17,20) de 29 a 28 en Assets/Sprites/ui_hud_score_pill_player_01.png)
+$ python tools/art/generate_placeholders.py --check
+ui_hud_score_pill_player_01.png          PIXEL: (17,20) canal G 29->28
+RESULTADO   FAIL  (33 GENERATED, 4 bloqueadas, 1 hallazgos)
+$ echo $?
+1
+```
+
+Restaurado: `PASS`. El reporte nombra pieza, coordenada, canal y ambos valores; ninguna otra
+pieza aparece.
+
+### 1b.5 Auditor: 6 reglas `NEW-*`, sin violaciones nuevas (T-15, G-02)
+
+```
+$ python tools/art/audit_art_manifest.py --no-refs
+FILAS       122  (REPLACE 85 | NEW 37 | addresses 11)
+LEDGER NEW  37 filas | 33 GENERATED registradas en el auditor
+VIOLACIONES 14 en 3 reglas          # FORMAT-JPG 3 · MODE-TARGET 1 · RECT-STALE 10
+...
+  NEW-LEDGER  37 filas: 33 GENERATED, 4 bloqueadas, 0 guid congelados
+  NEW-PENDING  33 piezas sin guid congelado: los .meta los escribe Unity ...
+```
+
+Antes del cambio el auditor daba **14 violaciones en las mismas 3 reglas** (`FORMAT-JPG` 3 ·
+`MODE-TARGET` 1 · `RECT-STALE` 10): el cambio agrega **0**. Las 33 `GENERATED` entran al dict
+`pieces` con `path` del ledger, así que heredan `MODE-TARGET`/`BORDER-META`/`MAX-TEX`/`PIVOT`/
+`PPU` sin duplicar una línea de regla (D5), y `NEW-META` sólo agrega los dos campos que las
+heredadas no miran: `textureType 8` y `alphaIsTransparency 1`.
+
+Cada regla se probó rompiendo el corpus a propósito y restaurándolo:
+
+| Regla | Cómo se forzó | Resultado |
+|---|---|---|
+| `NEW-BLOCKED` | copiar un PNG con el nombre de `ui_tutorial_spotlight_fill_01` | +1 violación, pieza nombrada |
+| `NEW-ORPHAN` | dejar `ui_tutorial_stray_badge_01.png` suelto | +1 violación, path nombrado |
+| `NEW-SHA` | bajar 1 canal de 1 píxel de `ui_hud_score_pill_ai_01` | +1 violación con sha del ledger y de disco |
+| `NEW-LEDGER` | duplicar la fila de `ui_tutorial_dim_01` | +2 violaciones (duplicado y 38 filas) |
+| `NEW-GUID` | congelar un guid sin `.meta` | +1 violación (ledger con guid, `.meta` ausente) |
+
+Y el caso de APA-1, arte real: el mismo píxel torcido **con** una fila
+`ui_tutorial_dim_01.png,<sha>,arte-test,2026-11-20` en `deliveries-v1.csv` pasa a
+`NEW-DELIVERY` (INFO) y el auditor vuelve a 14: el sha distinto queda reconocido, no silenciado.
+
+### 1b.6 El paso pendiente: los 33 `.meta` (bloqueado, sin Unity en esta máquina)
+
+El orden de D1 no se puede acortar. Con el editor disponible (batchmode o el ítem de menú R6):
+
+```
+python tools/art/generate_placeholders.py                                    # 1. PNG + ledger
+Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtMetaMigrator.BatchApply -artCohort new
+python tools/art/generate_placeholders.py --freeze-guid                      # 3. GUID al ledger
+python tools/art/generate_placeholders.py --check                            # 4. gate, ya con GUID
+python tools/art/audit_art_manifest.py                                       # 5. NEW-GUID / NEW-META 0
+```
+
+Alternativa sin licencia (R6): `Tools > Art Contract > Meta Migrator > Apply Plan — new placeholders
+(escribe)`, que hace exactamente lo mismo. **Nunca** un escritor Python de `.meta` (D1 rechaza el
+segundo escritor).
+
+El guard v2 ya está preparado para ese momento: con los 33 PNG sucios en `Assets/`, tolera
+exactamente `{PNG, PNG.meta}` del ledger y aborta (3) con el primer path ajeno. El migrador no
+agrupa el cohorte `new` con `StartAssetEditing`, para que cada `SaveAndReimport` acuñe el GUID
+antes de que `--freeze-guid` lo lea.
+
+`ArtMetaMigrator.cs` se verificó con un proyecto `dotnet` desechable contra stubs de
+`UnityEditor`/`UnityEngine` (0 errores, 0 warnings): sintaxis y firmas de API, no comportamiento.
+

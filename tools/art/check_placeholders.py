@@ -246,6 +246,11 @@ def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None) -> int:
     if not ledger:
         print("INFO  sin ledger en %s: se compara solo contra el render derivado"
               % gen.display(ledger_path))
+    else:
+        pending = sum(1 for row in ledger.values() if not (row.get("guid") or "").strip())
+        if pending:
+            print("INFO  %d filas sin guid congelado: los .meta los escribe Unity (cohorte new)"
+                  " y --freeze-guid los congela" % pending)
     rendered = gen.render_all(entries)
     for entry in entries:
         pieza = entry.row.pieza

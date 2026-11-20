@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import struct
@@ -61,6 +62,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = REPO_ROOT / "Docs" / "art" / "manifest-refresh-visual-v1.md"
 ASSETS_ROOT = REPO_ROOT / "Assets"
 ADDRESSABLES_GROUPS = ASSETS_ROOT / "AddressableAssetsData" / "AssetGroups"
+LEDGER = REPO_ROOT / "Docs" / "art" / "placeholders-v1.csv"
+DELIVERIES = REPO_ROOT / "Docs" / "art" / "deliveries-v1.csv"
+SPRITES_DIR = ASSETS_ROOT / "Sprites"
 
 CONSUMER_SUFFIXES = (".unity", ".prefab", ".asset", ".mat", ".controller")
 CONSUMER_BACKUP_MARKER = "_Recovery"
@@ -80,6 +84,17 @@ COLUMNS = (
     "ppu",
     "address",
 )
+
+# Cohort de placeholders (sec.9 estado=NEW). El ledger es derivado; estas son las unicas
+# reglas que pueden leerlo, y su namespace es el de las 37 piezas NEW: un archivo suelto
+# fuera de ese namespace no es atribuible al cohorte (Assets/Sprites/ es plana y convive
+# con assets legados que sec.9 no nombra).
+LEDGER_COLUMNS = ("pieza", "estado", "px", "border", "familia", "path", "guid", "sha256", "motivo")
+DELIVERY_COLUMNS = ("pieza", "sha256", "autor", "fecha")
+NEW_EXPECTED_ROWS = 37
+NEW_PREFIXES = ("ui_tutorial_", "ui_hud_", "ui_common_", "ui_menu_", "ball_state_", "game_board_")
+GENERATED = "GENERATED"
+BLOCKED_ESTADOS = ("BLOCKED_PX", "BLOCKED_BY_DESIGN")
 
 NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$")
 GUID_RE = re.compile(r"^guid: ([0-9a-f]{32})\s*$", re.MULTILINE)
@@ -105,6 +120,8 @@ class Meta:
     max_texture_size: int | None
     pivot: tuple[float, float] | None
     ppu: float | None
+    texture_type: int | None = None
+    alpha_is_transparency: int | None = None
     sprites: list[dict] = field(default_factory=list)  # {name, rect, internal_id}
     sheet_ids: list[int] = field(default_factory=list)
 
@@ -276,6 +293,8 @@ def read_meta(path: Path) -> Meta | None:
         max_texture_size=max_tex,
         pivot=pivot,
         ppu=ppu,
+        texture_type=_first_int(text, r"^  textureType: (-?\d+)$"),
+        alpha_is_transparency=_first_int(text, r"^  alphaIsTransparency: (-?\d+)$"),
         sprites=sprites,
         sheet_ids=sheet_ids,
     )
@@ -434,6 +453,41 @@ def collect_addresses() -> dict[str, str]:
     return addresses
 
 
+# ------------------------------------------------ cohorte NEW (ledger derivado, APH-10)
+
+
+def read_ledger() -> list[dict]:
+    """Filas de `Docs/art/placeholders-v1.csv` (derivado del generador, nunca a mano)."""
+    if not LEDGER.is_file():
+        return []
+    with LEDGER.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if rows and tuple(rows[0].keys()) != LEDGER_COLUMNS:
+        raise ToolError("%s tiene columnas %s, se esperan %s"
+                        % (LEDGER.relative_to(REPO_ROOT), tuple(rows[0].keys()), LEDGER_COLUMNS))
+    return rows
+
+
+def read_deliveries() -> dict[tuple[str, str], dict]:
+    """`(pieza, sha256) -> fila` de la unica declaracion manual de arte entregado."""
+    if not DELIVERIES.is_file():
+        return {}
+    with DELIVERIES.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if rows and tuple(rows[0].keys()) != DELIVERY_COLUMNS:
+        raise ToolError("%s tiene columnas %s, se esperan %s"
+                        % (DELIVERIES.relative_to(REPO_ROOT), tuple(rows[0].keys()), DELIVERY_COLUMNS))
+    return {(row["pieza"].strip(), row["sha256"].strip()): row for row in rows}
+
+
+def sha256_of(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 # ------------------------------------------------------------------------ auditor
 
 
@@ -519,8 +573,103 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             sliced_pieces.add(guids[guid])
             sliced_instances += modes[DRAW_MODE_SLICED] + modes[DRAW_MODE_TILED]
 
+    # cohorte NEW: el ledger es la unica declaracion (APH-9, APH-10, APH-11)
+    new_by_pieza = {row["pieza"]: row for row in new_rows}
+    new_pieces: dict[str, Piece] = {}
+    ledger_rows = read_ledger()
+    if not ledger_rows:
+        info.append("NEW-LEDGER  sin %s: el cohorte NEW no esta declarado todavia"
+                    % LEDGER.relative_to(REPO_ROOT).as_posix())
+    else:
+        deliveries = read_deliveries()
+        declared = Counter(row["pieza"] for row in ledger_rows)
+        for pieza, count in sorted(declared.items()):
+            if count > 1:
+                fail("NEW-LEDGER", pieza, "%d filas en el ledger" % count)
+        if len(ledger_rows) != NEW_EXPECTED_ROWS:
+            fail("NEW-LEDGER", "-", "%d filas en el ledger, el cohorte congela %d"
+                 % (len(ledger_rows), NEW_EXPECTED_ROWS))
+        for pieza in sorted(set(new_by_pieza) - set(declared)):
+            fail("NEW-LEDGER", pieza, "NEW de sec.9 sin fila en el ledger")
+        for pieza in sorted(set(declared) - set(new_by_pieza)):
+            fail("NEW-LEDGER", pieza, "fila del ledger que no es NEW de sec.9")
+        frozen: list[str] = []
+        pending = 0
+        for row in ledger_rows:
+            pieza = row["pieza"]
+            if row["estado"] in BLOCKED_ESTADOS:
+                if row["path"] not in ("-", ""):
+                    fail("NEW-LEDGER", pieza, "BLOCKED_* con path '%s'" % row["path"])
+                if not row["motivo"]:
+                    fail("NEW-LEDGER", pieza, "BLOCKED_* sin motivo (APH-11)")
+                if (SPRITES_DIR / pieza).exists():
+                    fail("NEW-BLOCKED", pieza, "la pieza esta bloqueada y hay PNG en disco")
+                continue
+            if row["estado"] != GENERATED:
+                fail("NEW-LEDGER", pieza, "estado '%s' desconocido" % row["estado"])
+                continue
+            source = REPO_ROOT / row["path"] if row["path"] not in ("-", "") else None
+            if source is None or not source.is_file():
+                fail("NEW-LEDGER", pieza, "FALTA el PNG declarado (%s)" % (row["path"] or "-"))
+                continue
+            disk_sha = sha256_of(source)
+            if row["sha256"] != disk_sha:
+                if (pieza, disk_sha) in deliveries:
+                    info.append("NEW-DELIVERY  %s: sha distinto del ledger, declarado en deliveries-v1.csv"
+                                % pieza)
+                else:
+                    fail("NEW-SHA", pieza, "ledger %s != disco %s (sin fila en deliveries-v1.csv)"
+                         % (row["sha256"] or "(vacio)", disk_sha))
+            piece = Piece(row=new_by_pieza.get(pieza) or {"pieza": pieza})
+            piece.size, piece.kind = image_size(source)
+            piece.meta_path = Path(str(source) + ".meta")
+            if piece.meta_path.is_file():
+                piece.meta = read_meta(piece.meta_path)
+            guid = (row["guid"] or "").strip()
+            if not guid:
+                pending += 1
+            else:
+                frozen.append(guid)
+                if not re.fullmatch(r"[0-9a-f]{32}", guid):
+                    fail("NEW-GUID", pieza, "'%s' no es 32 hex" % guid)
+                elif piece.meta is None:
+                    fail("NEW-GUID", pieza, "el ledger congela guid y falta/ilegible %s.meta" % pieza)
+                elif piece.meta.guid != guid:
+                    fail("NEW-GUID", pieza, "ledger %s != .meta %s" % (guid, piece.meta.guid))
+                if piece.meta is not None:
+                    if piece.meta.texture_type != 8:
+                        fail("NEW-META", pieza, "textureType %s != 8 (Sprite)"
+                             % piece.meta.texture_type)
+                    if piece.meta.alpha_is_transparency != 1:
+                        fail("NEW-META", pieza, "alphaIsTransparency %s != 1"
+                             % piece.meta.alpha_is_transparency)
+            new_pieces[pieza] = piece
+        for guid, count in sorted(Counter(frozen).items()):
+            if count > 1:
+                fail("NEW-GUID", "-", "guid %s congelado en %d filas" % (guid, count))
+        if frozen:
+            index = collect_guid_index(ASSETS_ROOT)
+            for row in ledger_rows:
+                owner = index.get((row["guid"] or "").strip())
+                if owner and owner != row["path"]:
+                    fail("NEW-GUID", row["pieza"], "guid tambien usado por %s" % owner)
+        legal_names = set(new_by_pieza) | set(declared)
+        for path in sorted(SPRITES_DIR.glob("*.png")):
+            if path.name.startswith(NEW_PREFIXES) and path.name not in legal_names:
+                fail("NEW-ORPHAN", path.name, "PNG del namespace del cohorte sin fila en el ledger")
+        info.append("NEW-LEDGER  %d filas: %d GENERATED, %d bloqueadas, %d guid congelados"
+                    % (len(ledger_rows),
+                       sum(1 for row in ledger_rows if row["estado"] == GENERATED),
+                       sum(1 for row in ledger_rows if row["estado"] in BLOCKED_ESTADOS),
+                       len(frozen)))
+        if pending:
+            info.append("NEW-PENDING  %d piezas sin guid congelado: los .meta los escribe Unity "
+                        "(cohorte new) y --freeze-guid los congela" % pending)
+    checked = dict(pieces)
+    checked.update(new_pieces)
+
     # reglas meta vs fila
-    for name, piece in pieces.items():
+    for name, piece in checked.items():
         row, meta = piece.row, piece.meta
         if "_bad_columns" in row:
             continue
@@ -626,6 +775,8 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             "replace": len(replace_rows),
             "new": len(new_rows),
             "addresses": len(address_rows),
+            "ledger": len(ledger_rows),
+            "generated": len(new_pieces),
         },
     }
 
@@ -743,6 +894,10 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "FILAS       %d  (REPLACE %d | NEW %d | addresses %d)"
         % (counts["rows"], counts["replace"], counts["new"], counts["addresses"])
     )
+    print(
+        "LEDGER NEW  %d filas | %d GENERATED registradas en el auditor"
+        % (counts["ledger"], counts["generated"])
+    )
     print("VIOLACIONES %d en %d reglas" % (len(violations), len(by_rule)))
     print("")
 
@@ -767,6 +922,12 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "PX-ENTREGA-TECHO": "max(px_entrega) <= max_tex",
         "ADDRESS-RESOLVE": "la address existe en AssetGroups",
         "ADDRESS-PATH": "address -> guid -> path == origen",
+        "NEW-LEDGER": "37 filas derivadas, sin duplicados, == sec.9 NEW",
+        "NEW-ORPHAN": "PNG del namespace del cohorte sin fila en el ledger",
+        "NEW-BLOCKED": "una BLOCKED_* con PNG en disco",
+        "NEW-SHA": "sha distinto del ledger sin fila en deliveries-v1.csv",
+        "NEW-GUID": "guid 32 hex, unico, == .meta",
+        "NEW-META": "textureType 8 y alphaIsTransparency 1",
     }
     for rule in sorted(by_rule):
         print("%-18s %7d  %s" % (rule, len(by_rule[rule]), descriptions.get(rule, "")))
