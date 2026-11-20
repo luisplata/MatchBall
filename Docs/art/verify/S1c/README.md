@@ -2,7 +2,7 @@
 
 **Change**: `organizar-pantallas-para-arte` · slice **S1c** · batches **PR 5** (`Game`) y **PR 6** (los 4 canvas de escena restantes)
 **Cambio aplicado**: `ScreenSpaceOverlay` → `ScreenSpaceCamera`, con la cámara y el plano declarados para cada escena.
-**30 PNG** (5 escenas × 3 aspectos × before/after). Cada uno verificado contra su cabecera IHDR (ancho/alto exactos), no contra la intención.
+**35 PNG** = 30 de A/B (5 escenas × 3 aspectos × before/after) + 5 de evidencia dirigida (§7: 3 `MainMenu-dialog_*` con el dialog abierto, `Game-hud_900x1900` y `Game-result_900x1900`). Los 35 verificados contra su cabecera IHDR (ancho/alto exactos), no contra la intención.
 
 ---
 
@@ -106,7 +106,7 @@ Promedio de las barras = **0.0/255** (negro puro): son matte, no contenido.
 
 ### F-S1c-5 — `transition` está activo con un negro opaco a pantalla completa
 
-En `Matching` la instancia del prefab `transition` (order 90) tiene un `Image` negro opaco **activo**: la pantalla de Matching se ve **negra entera** en la escena, hoy, con o sin este cambio. No lo arregla S1c (es T-07b) pero conviene saberlo: cualquier captura de esa escena sin desactivarlo miente. En `Lobby`/`PvPPowerUps` ese root está inactivo; en `MainMenu` la instancia está inactiva también.
+En `Matching` la instancia del prefab `transition` (order 90) tiene un `Image` negro opaco **activo**: la pantalla de Matching se ve **negra entera** en la escena, hoy, con o sin este cambio. No lo arregla S1c (es T-07b) pero conviene saberlo: cualquier captura de esa escena sin desactivarlo miente. En `Lobby`/`PvPPowerUps` ese root está inactivo; en `MainMenu` la instancia está inactiva también. **Resuelto en T-07b (PR 7)**: el `CanvasGroup` del prefab quedó en `m_Alpha: 0` (su estado de reposo real, el mismo que `TransitionService.Awake` impone) y `Matching` se capturó por primera vez sin trucos de sesión — ver `Docs/art/verify/S1c-T07b/README.md`.
 
 ### F-S1c-6 — canvas anidados que "cambian solos"
 
@@ -120,7 +120,7 @@ En `Matching` la instancia del prefab `transition` (order 90) tiene un `Image` n
 - **Al guardar, Unity normaliza**. Medido en este batch: `Lobby` +64/−1 líneas (overrides de anchors de la instancia `PowerUpsSelectorPanel` + un float `-293.81198→-293.81195`), `Matching` +2/−1 (`m_characterHorizontalScale` de TMP y un `m_Version` reubicado), `PvPPowerUps` +13/−1. **Ninguna de esas líneas es del cambio.** En los tres casos el archivo se revirtió a `HEAD` y se reescribió la línea mínima; el resultado entregado es 1 línea por escena.
 - Copias de las versiones normalizadas (no versionadas), por si alguien reclama esa normalización: `C:/Users/luis_/AppData/Local/Temp/opencode/{Lobby,Matching,PvPPowerUps}.unity.S1c-normalized-backup`.
 - `MainMenu` **no se guardó** desde el Editor: se recargó desde disco para descartar el estado artificial de captura (dialog activo, sort order de diagnóstico) y los 2 cambios se aplicaron por script. Se validó **recargando la escena en Unity desde el archivo entregado**: el Editor reporta `CanvasDialog` en `ScreenSpaceCamera`, con la Main Camera de la escena y plano 100.
-- Verificación final del árbol: `git diff` de `Assets/Scenes` = 7 líneas (`m_RenderMode` ×5 escenas, `m_Camera` ×1), cero `m_SizeDelta`, `m_Anchor*`, `m_Pivot`, `m_AnchoredPosition`, `m_LocalScale`, `m_SortingOrder`, `m_ReferenceResolution` ni `m_NormalizedViewPortRect`.
+- Verificación final del árbol **al cierre del commit de escenas de PR 6**, antes del commit extra de §7: `git diff` de `Assets/Scenes` = 7 líneas (`m_RenderMode` ×6 — 2 en `Game`, 1 en cada una de las otras 4 escenas —, `m_Camera` ×1), cero `m_SizeDelta`, `m_Anchor*`, `m_Pivot`, `m_AnchoredPosition`, `m_LocalScale`, `m_SortingOrder`, `m_ReferenceResolution` ni `m_NormalizedViewPortRect`. Con el commit extra de §7, **HEAD suma 2 `m_SortingOrder`**: el diff final es de **9 líneas** con 2 `m_SortingOrder` (50→51 y 0→1).
 
 ---
 
@@ -149,7 +149,7 @@ Evidencia dura de qué contiene cada canvas (leída de la escena, no de los nomb
 | `Canvas_BG` (−1) | `bg` | fondo |
 | `TimeLineToStart/Canva/Canvas` (20) | `Image` | transición de inicio |
 
-Los paneles de resultado viven en `Canvas_UI` y el HUD en `Canvas_UI_In_Game`; con ambos en 50 el empate dejaba el orden a merced del traversal. Se sube **solo `Canvas_UI` a 51**: la capa modal queda arriba del HUD y debajo de `Canvas_BG`/`Canvas` no cambia nada (siguen −1 y 20). El canvas `Canvas` del prefab `transition` (90, inactivo) no se toca (T-07b).
+Los paneles de resultado viven en `Canvas_UI` y el HUD en `Canvas_UI_In_Game`; con ambos en 50 el empate dejaba el orden a merced del traversal. Se sube **solo `Canvas_UI` a 51**: la capa modal queda arriba del HUD, y **por debajo de la modal** no cambia nada (`Canvas` sigue en 20 y `Canvas_BG` en −1, o sea los dos quedan por debajo de 51). El canvas `Canvas` del prefab `transition` (90, inactivo) no se toca (T-07b).
 
 - **Prueba de la semántica del orden** (diagnóstico en memoria, nunca guardado): con `MessagesUI/Panel` estirado a pantalla completa y opaco, `Canvas_UI = 51` → HUD **tapado** por completo; `Canvas_UI = 49` → el HUD **se dibuja encima** del panel. Guardadas en `C:/Users/luis_/AppData/Local/Temp/opencode/Game_order51_modal_over_hud.png` y `..._order49_hud_over_modal.png`.
 - **Capturas entregadas**: `Game-hud_900x1900_after.png` (HUD solo) y `Game-result_900x1900_after.png` (`WinPanel` activado **en memoria**; no se puede llegar al resultado sin jugar un partido). Ambas 900×1900 verificadas por IHDR. Hoy los paneles no se solapan con el HUD en 9:19, así que el cambio es **latente en píxeles** (A/B 51 vs 49 sobre el resultado real: 63 px distintos, bbox 20×4): lo que garantiza es el orden, no un delta visible.
