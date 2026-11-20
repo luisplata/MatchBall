@@ -16895,18 +16895,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Spaguetti.Hero.HeroController
   heroCardPrefab: {fileID: 4953309306552375979, guid: 7e91e184326f1e346b32ec48d91959fc, type: 3}
   cardsParent: {fileID: 986348771}
-  defaultProfilePicture: {fileID: -6369504855698502937, guid: aa48d609dc0280e47bcb8867e0f45604, type: 3}
+  defaultProfilePicture: {fileID: 21300000, guid: aa48d609dc0280e47bcb8867e0f45604, type: 3}
   spritesImages:
   - image: neutral
-    sprite: {fileID: 4501473769023296242, guid: c385d6896bfd3e04e919ebc124d6b4ee, type: 3}
+    sprite: {fileID: 21300000, guid: c385d6896bfd3e04e919ebc124d6b4ee, type: 3}
   - image: enojo
-    sprite: {fileID: 2570779558932556528, guid: 3617c5dfa6f6e9a4f910347fbaa75fa1, type: 3}
+    sprite: {fileID: 21300000, guid: 3617c5dfa6f6e9a4f910347fbaa75fa1, type: 3}
   - image: determinacion
-    sprite: {fileID: 5945098726244164508, guid: 7eff919c860052f498742cbaa5faecb4, type: 3}
+    sprite: {fileID: 21300000, guid: 7eff919c860052f498742cbaa5faecb4, type: 3}
   - image: alegre
-    sprite: {fileID: 1618486498139659625, guid: 7c968f1d484f63d4d97eba7f28d1fb45, type: 3}
+    sprite: {fileID: 21300000, guid: 7c968f1d484f63d4d97eba7f28d1fb45, type: 3}
   - image: sorpresa
-    sprite: {fileID: -6446150744945478788, guid: c275f44f572fa0e4ea521a65c2eff1be, type: 3}
+    sprite: {fileID: 21300000, guid: c275f44f572fa0e4ea521a65c2eff1be, type: 3}
 --- !u!1 &1706987626
 GameObject:
   m_ObjectHideFlags: 0
@@ -18583,7 +18583,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 1618486498139659625, guid: 7c968f1d484f63d4d97eba7f28d1fb45, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 7c968f1d484f63d4d97eba7f28d1fb45, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1

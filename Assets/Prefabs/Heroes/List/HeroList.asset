@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: HeroList
   m_EditorClassIdentifier: Assembly-CSharp::Spaguetti.Hero.HeroList
   heroes:
-  - art: {fileID: 6343446867228487132, guid: aa48d609dc0280e47bcb8867e0f45604, type: 3}
+  - art: {fileID: 21300000, guid: aa48d609dc0280e47bcb8867e0f45604, type: 3}
     id: hero-nova
