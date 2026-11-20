@@ -370,4 +370,43 @@ Un `.cs` en el diff falla por sí solo (APW-6), y cualquier asset que no esté e
 | `btn_primary_pressed/disabled` con `nodo=-` | `cableado` | Son variantes de estado del sprite maestro `Button_UI` (124×25, border 7/6/5/7, el mismo contrato que su REPLACE). El slot es el sprite, no un nodo: el checker cuenta referencias `m_SpriteState` al GUID en vez de resolver un path. |
 | `dim` y `zone_veil` con `image+tinte_design` | `cableado` | APW-3 manda normalizar todo host con luminancia < 0.25, pero estas dos son relleno blanco 4×4 estirado a pantalla completa: su `m_Color` oscuro **es** el efecto (velo negro). Normalizarlo lo volvería un flash blanco. Es la única desviación declarada de APW-3 y está escrita **en la fila**. |
 
+---
+
+## §2b — cableado y capturas: **bloqueado, no implementado**
+
+El slice 2b no se puede ejecutar en este entorno, y no por falta de tiempo: le faltan dos
+insumos que sólo produce Unity.
+
+1. **Las 33 referencias necesitan los 33 GUID.** `m_Sprite: {fileID: 21300000, guid: 8febf562…}`
+   sólo se puede escribir con el GUID que Unity acuña al importar el PNG. El ledger tiene la
+   columna `guid` vacía porque los `.meta` no existen (§1b.6). Inventar un GUID produce una
+   referencia colgada y, cuando el `.meta` real aparezca, `NEW-GUID` falla con el valor inventado.
+   Cablear "a medias" con `fileID: 0` es exactamente el estado que este change viene a sacar.
+2. **Las 24 capturas (APW-5) salen de la escena corriendo**, a 900×1900. Sin editor no hay captura,
+   y sin captura el gate de 2b (`--require-captures`) no puede pasar por diseño.
+
+Escribir el YAML sin esos dos insumos dejaría el repo peor que antes: 20 referencias rotas y un
+mapa que dice `cableado` sobre algo que no se ve. Por eso **no se tocó ningún archivo de `Assets/`**.
+
+Cuando haya editor, la secuencia completa (los tres slices en orden) es:
+
+```
+python tools/art/generate_placeholders.py                                    # 1. PNG + ledger
+Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtMetaMigrator.BatchApply -artCohort new
+python tools/art/generate_placeholders.py --freeze-guid                      # 3. 33 GUID al ledger
+# --- acá existe lo que 2b necesita ---
+# 4. cableado: m_Sprite por GUID en las 20 filas del mapa, m_Color n/n/n donde APW-3 lo pide,
+#    m_Transition 1->2 + m_SpriteState en las 7 selectable_state. Sólo esos campos.
+python tools/art/check_placeholder_wiring.py --diff HEAD                     # 5. diff ⊆ allowlist
+# 6. capturas: 20 recortes + 4 panorámicas en Docs/art/captures/placeholders-v1/ y la columna
+#    `captura` del mapa completa
+python tools/art/check_placeholder_wiring.py --require-captures              # 7. 20/20 con captura
+python tools/art/generate_placeholders.py --check                            # 8. SURVIVE ya con host real
+python tools/art/audit_art_manifest.py                                       # 9. NEW-* en 0
+```
+
+El mapa ya tiene las 20 filas con su nodo, su campo y su `tint_original`/`transition_original`:
+el paso 4 es mecánico y el paso 5 lo puede rechazar si alguien toca una clave de más.
+
+
 
