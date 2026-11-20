@@ -216,7 +216,7 @@ origen, **el px cambia con él** (Lead 206×204 → 191×191, Joker 191×191 →
 | `ui_menu_picture_profile_01.png` | 48×48 | REPLACE | — | origen: `Assets/Sprites/PictureProfile.png` |
 | `ui_menu_rules_illustration_01.png` | 1024×1024 | REPLACE | — | origen: `Assets/Sprites/profileRules.png` |
 | `ui_menu_icon_vs_01.png` | 31×18 | REPLACE | — | origen: `Assets/Sprites/VS.png` |
-| `ui_login_bg_01.png` | 1024×1024 | REPLACE | — | hoy JPG: entregar PNG al MISMO px · origen: `Assets/Sprites/BG_V2.jpg` |
+| `ui_login_bg_01.png` | 1024×1024 | REPLACE | — | migrado a PNG en S2c-format (mismo px, RGBA8) · origen: `Assets/Sprites/BG_V2.png` |
 | `ui_matching_bg_01.png` | 2048×2048 | REPLACE | — | hoy JPG: entregar PNG al MISMO px · origen: `Assets/Sprites/BG_Search_Single.jpeg` |
 | `ui_result_win_01.png` | 360×800 | REPLACE | — | origen: `Assets/Sprites/YouWin.png` |
 | `ui_result_lose_01.png` | 360×800 | REPLACE | — | origen: `Assets/Sprites/GameOver.png` |
@@ -232,7 +232,7 @@ origen, **el px cambia con él** (Lead 206×204 → 191×191, Joker 191×191 →
 | `hero_rojo_portrait_determined_01.png` | 1024×1024 | REPLACE | — | origen: `Assets/Sprites/Heroes/rojo_determinacion.png` |
 | `hero_rojo_portrait_surprised_01.png` | 1024×1024 | REPLACE | — | origen: `Assets/Sprites/Heroes/rojo_sorpresa.png` |
 | `hero_rojo_banner_01.png` | 1344×768 | REPLACE | — | origen: `Assets/Sprites/Heroes/HeroeRojo.png` |
-| `hero_dialog_bg_01.png` | 1344×768 | REPLACE | — | hoy JPG: entregar PNG al MISMO px · origen: `Assets/Sprites/Heroes/conversacion_bg_1.jpg` |
+| `hero_dialog_bg_01.png` | 1344×768 | REPLACE | — | migrado a PNG en S2c-format (mismo px, RGBA8) · origen: `Assets/Sprites/Heroes/conversacion_bg_1.png` |
 
 **Nota de reclasificación (verify #3703, W-3 / RT-8).** Cinco filas del grupo A —
 `ui_tutorial_dim_01`, `ui_tutorial_btn_skip_normal_01`, `ui_tutorial_btn_continue_normal_01`,
@@ -275,7 +275,7 @@ estado: S2 los resuelve llevando el asset a `spriteMode: 1`, con lo cual el rect
 
 | Requisito | Valor |
 |---|---|
-| Formato | PNG-24 + canal alfa (RGBA8). **Nada de JPG**: hoy hay 5 JPG a reemplazar (`BG.jpeg`, `Matchballance.jpg`, `BG_V2.jpg`, `BG_Search_Single.jpeg`, `Heroes/conversacion_bg_1.jpg`) |
+| Formato | PNG-24 + canal alfa (RGBA8). **Nada de JPG**: de los 5 JPG originales, 2 ya migraron (`BG_V2` y `Heroes/conversacion_bg_1`, slice S2c-format) y quedan 3 (`BG.jpeg`, `Matchballance.jpg`, `BG_Search_Single.jpeg`) |
 | Color | sRGB, sin perfil ICC embebido, sin alpha premultiplicado |
 | PPU | **100** en todo el proyecto (verificado en los `.meta`) |
 | Canvas de mundo | `game_*` y `ball_*` conservan **exactamente** el px actual: las bolas miden 416/417 px = 4.16 u; entregar 512 px cambia el tamaño de mundo y rompe el alineado con los 33 slots (0.6 u) y los `BoxCollider2D` |
@@ -549,7 +549,7 @@ ui_menu_panel_profile_01.png,REPLACE,Assets/Sprites/Heroes/BGProfile.png,1920x10
 ui_menu_picture_profile_01.png,REPLACE,Assets/Sprites/PictureProfile.png,48x48,48x48,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ui_menu_rules_illustration_01.png,REPLACE,Assets/Sprites/profileRules.png,1024x1024,1024x1024,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ui_menu_icon_vs_01.png,REPLACE,Assets/Sprites/VS.png,31x18,31x18,1,1,0/0/0/0,2048,0.5/0.5,100,-
-ui_login_bg_01.png,REPLACE,Assets/Sprites/BG_V2.jpg,1024x1024,1024x1024,1,2,0/0/0/0,2048,0.5/0.5,100,-
+ui_login_bg_01.png,REPLACE,Assets/Sprites/BG_V2.png,1024x1024,1024x1024,1,2,0/0/0/0,2048,0.5/0.5,100,-
 ui_matching_bg_01.png,REPLACE,Assets/Sprites/BG_Search_Single.jpeg,2048x2048,2048x2048,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ui_result_win_01.png,REPLACE,Assets/Sprites/YouWin.png,360x800,360x800,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ui_result_lose_01.png,REPLACE,Assets/Sprites/GameOver.png,360x800,360x800,1,1,0/0/0/0,2048,0.5/0.5,100,-
@@ -560,7 +560,7 @@ hero_rojo_portrait_angry_01.png,REPLACE,Assets/Sprites/Heroes/rojo_enojo.png,102
 hero_rojo_portrait_determined_01.png,REPLACE,Assets/Sprites/Heroes/rojo_determinacion.png,1024x1024,1024x1024,1,2,0/0/0/0,2048,0.5/0.5,100,-
 hero_rojo_portrait_surprised_01.png,REPLACE,Assets/Sprites/Heroes/rojo_sorpresa.png,1024x1024,1024x1024,1,2,0/0/0/0,2048,0.5/0.5,100,-
 hero_rojo_banner_01.png,REPLACE,Assets/Sprites/Heroes/HeroeRojo.png,1344x768,1344x768,1,2,0/0/0/0,2048,0.5/0.5,100,-
-hero_dialog_bg_01.png,REPLACE,Assets/Sprites/Heroes/conversacion_bg_1.jpg,1344x768,1344x768,1,2,0/0/0/0,2048,0.5/0.5,100,-
+hero_dialog_bg_01.png,REPLACE,Assets/Sprites/Heroes/conversacion_bg_1.png,1344x768,1344x768,1,2,0/0/0/0,2048,0.5/0.5,100,-
 ```
 
 **Pendientes declarados.** Dos NEW todavía no tienen canvas en el §3 y por eso quedan en `TBD`:

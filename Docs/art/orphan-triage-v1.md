@@ -126,7 +126,7 @@ que nadie puede borrar sin que el cliente lo confirme.
 | 41 | `V3_images/sombra larga 1.png` | 106×2111 | Tablero sobrante | **delete** | — | 0 referencias por GUID · la usada es sombra 1.png → game_board_shadow_long_01 (promovida) |
 | 42 | `WinScreen.png` | 3102×3087 | Resultados | **delete** | — | 0 referencias por GUID · pantalla de resultado vieja: las vivas son YouWin.png / GameOver.png |
 | 43 | `balance_img.png` | 66×23 | Fondos | **delete** | — | 0 referencias por GUID · sin consumidor |
-| 44 | `bg_login.png` | 291×580 | Fondos | **delete** | — | 0 referencias por GUID · el login usa BG_V2.jpg → ui_login_bg_01 |
+| 44 | `bg_login.png` | 291×580 | Fondos | **delete** | — | 0 referencias por GUID · el login usa BG_V2.png → ui_login_bg_01 |
 | 45 | `gold.png` | 120×76 | Fondos | **delete** | — | 0 referencias por GUID · el address `gold` apunta a BALLPASS1.png, no a este archivo |
 | 46 | `personajes y banner basicos png/PRUEBA.png` | 4266×4267 | Personajes / banners | **keep** | — | 0 referencias por GUID · hoja maestra: no se borra antes de que el cliente confirme (es la única evidencia de ese arte) |
 | 47 | `personajes y banner basicos png/banner id.png` | 2759×1120 | Personajes / banners | **keep** | — | 0 referencias por GUID · candidato a banner de héroe; el manifiesto ya usa Heroes/HeroeRojo.png |
