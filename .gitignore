@@ -75,3 +75,7 @@ crashlytics-build.properties
 .idea/
 /.utmp
 /.vscode
+
+# Python (tools/art importa sus propios modulos)
+__pycache__/
+*.pyc
