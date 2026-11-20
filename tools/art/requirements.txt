@@ -1,0 +1,11 @@
+# Placeholders de la sec.9 del contrato de arte (change placeholders-arte-v2).
+#
+# Uso:
+#   python -m pip install -r tools/art/requirements.txt
+#   python tools/art/generate_placeholders.py --check
+#
+# Pillow fija la version a proposito: las siluetas y las etiquetas se dibujan con la
+# Aileron embebida en el wheel y con el zlib de la maquina. Cambiar la version puede
+# cambiar los bytes (APH-7): el gate detecta el drift por sha256 aunque los pixeles no
+# cambien, y el reconocimiento es explicito (--ack-sha <pieza>).
+Pillow==13.0.0
