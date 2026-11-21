@@ -13,11 +13,21 @@ Que declara (regla -> req):
     EXPECTED_ROWS        122 filas en la sec.9 del contrato (la identidad 122 = R + N)
     PX_ENTREGA_PENDING   las 6 piezas de §4 cuyo header sigue en `px_actual`; una septima
                          exige diff de codigo y review
+    PROVENANCE           `Docs/art/provenance-v1.csv`: la procedencia CONGELADA de las
+                         REPLACE (86 filas). Archivo SEPARADO del ledger a proposito
+    ORPHAN_MOTIVO        las 4 REPLACE sin consumidor de PRV-4, con su motivo escrito
     read_ledger          filas del ledger (columnas exactas)
     read_deliveries      filas de `deliveries-v1.csv` (pieza, sha256, autor, fecha)
     delivery_rows        las filas que declaran una entrega concreta (autor no vacio)
+    read_provenance      filas de `provenance-v1.csv` (baseline congelado de cada REPLACE)
+    write_provenance     escribe o APPENDEA una fila por pieza, sin re-basar las existentes
     sha256_of            sha256 de un archivo, por bloques de 1 MiB
     git_tracked          `git ls-files --error-unmatch`: la evidencia versionada existe
+
+Por que DOS archivos y no uno (design D-A): `generate_placeholders.ledger_text()` reescribe
+el ledger entero desde disco en cada corrida, asi que un sha de REPLACE guardado ahi se
+auto-sanaria y `REPLACE-SHA` (PRV-2) no podria observar nunca un reemplazo. `deliveries-v1.csv`
+dice quien y cuando; `provenance-v1.csv` dice que bytes son el baseline (y no se reescribe).
 
 Uso:
     python -c "import sys;sys.path.insert(0,'tools/art');import art_ledger as a;print(len(a.PX_ENTREGA_PENDING))"
@@ -33,11 +43,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LEDGER = REPO_ROOT / "Docs" / "art" / "placeholders-v1.csv"
 DELIVERIES = REPO_ROOT / "Docs" / "art" / "deliveries-v1.csv"
+PROVENANCE = REPO_ROOT / "Docs" / "art" / "provenance-v1.csv"
 SPRITES_DIR = REPO_ROOT / "Assets" / "Sprites"
 
 LEDGER_COLUMNS = ("pieza", "estado", "px", "border", "familia", "path", "guid", "sha256",
                   "motivo")
 DELIVERY_COLUMNS = ("pieza", "sha256", "autor", "fecha")
+PROVENANCE_COLUMNS = ("pieza", "origen", "guid", "sha256", "px_actual", "px_entrega", "rol",
+                      "motivo")
 
 EXPECTED_ROWS = 122
 
@@ -57,6 +70,35 @@ PX_ENTREGA_PENDING = {
     "ui_pass_reward_background_01.png": "2048x831",
     "ui_pass_reward_background_02.png": "2048x831",
     "game_board_backdrop_01.png": "921x2048",
+}
+
+# PRV-4: `rol` de una fila de procedencia. Solo `sin_pantalla` se mide: es la declaracion de
+# que la pieza no tiene consumidor, y el auditor la contrasta contra el barrido GUID->YAML.
+ROLE_SCREEN = "con_pantalla"
+ROLE_NO_SCREEN = "sin_pantalla"
+ROLES = (ROLE_SCREEN, ROLE_NO_SCREEN)
+
+# PRV-4: las 4 REPLACE con cero consumidores, con su motivo escrito. Lista CERRADA por la misma
+# razon que PX_ENTREGA_PENDING: una quinta huerfana es un diff de codigo (y su review), no una
+# fila nueva del CSV que nadie mira. `--capture-provenance` se niega a escribir si lo medido no
+# es exactamente este conjunto: el baseline de procedencia se congela sobre un hecho declarado.
+ORPHAN_MOTIVO = {
+    "game_board_balance_base_01.png":
+        "0 referencias por GUID: el tablero arma la barra con balance_bar_left/right_01 y "
+        "ningun prefab dibuja la base de la balanza. La consumiria el prefab de la balanza "
+        "cuando la use como fondo; hasta entonces no cuenta como cobertura.",
+    "game_board_shadow_long_01.png":
+        "0 referencias por GUID: la sombra viva de la linea es game_board_line_shadow_01 y la "
+        "sombra larga no esta cableada en ningun prefab. La consumiria el tablero si separa la "
+        "sombra de la barra; hasta entonces no cuenta como cobertura.",
+    "ui_pass_state_lock_01.png":
+        "0 referencias por GUID: el estado bloqueado del pase no tiene pantalla (el panel de "
+        "pase no existe en Game.unity). Lo consumiria ese panel cuando se construya; hasta "
+        "entonces no cuenta como cobertura.",
+    "ui_common_divider_01.png":
+        "0 referencias por GUID: Separador.png entra al manifiesto sin slot y ningun prefab de "
+        "MainMenu lo dibuja. Lo consumiria un divisor de panel cuando el diseno lo pida; hasta "
+        "entonces no cuenta como cobertura.",
 }
 
 
@@ -116,6 +158,42 @@ def delivery_rows(rows: list[dict], pieza: str, sha: str | None = None) -> list[
             continue
         matches.append(row)
     return matches
+
+
+def read_provenance(path: Path = PROVENANCE) -> list[dict]:
+    """Filas de `provenance-v1.csv`: el baseline congelado de cada REPLACE (PRV-1).
+
+    Un archivo AUSENTE devuelve [] (el gate decide que hacer con eso); un archivo con otro
+    encabezado es un error del contrato y no se adivina.
+    """
+    if not path.is_file():
+        return []
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if rows and tuple(rows[0].keys()) != PROVENANCE_COLUMNS:
+        raise LedgerError("%s tiene columnas %s, se esperan %s"
+                          % (path.name, tuple(rows[0].keys()), PROVENANCE_COLUMNS))
+    return rows
+
+
+def provenance_index(rows: list[dict]) -> dict[str, dict]:
+    return {row["pieza"]: row for row in rows}
+
+
+def write_provenance(rows: list[dict], path: Path, append: bool = False) -> None:
+    """Escribe (o appendea) sin re-basar: las filas existentes no se tocan. PRV-1.
+
+    `append=False` es la corrida one-shot completa; `append=True` agrega las filas dadas al
+    final de un archivo que ya existe (o lo crea con encabezado si no esta).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.is_file() and path.stat().st_size > 0
+    with path.open("a" if append and exists else "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        if not (append and exists):
+            writer.writerow(PROVENANCE_COLUMNS)
+        for row in rows:
+            writer.writerow([row.get(column, "") for column in PROVENANCE_COLUMNS])
 
 
 def sha256_of(path: Path) -> str:

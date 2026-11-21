@@ -36,6 +36,12 @@ Cohorte NEW (ledger derivado, `tools/art/art_ledger.py`):
   EXCLUDED-PNG      una EXCLUDED no puede tener PNG en disco
   COHORT-SUM        122 = R + N y N = la suma de las cinco etiquetas (ART-3)
 
+`provenance-v1.csv` es un archivo SEPARADO del ledger derivado y por una razon dura: el
+generador reescribe `placeholders-v1.csv` entero desde disco en cada corrida, asi que un sha de
+REPLACE guardado ahi se auto-sanaria y REPLACE-SHA no podria observar nunca un reemplazo. Se
+congela UNA vez (`--capture-provenance`) y despues es de solo lectura: solo `--add PIEZA`
+appendea una fila que falto.
+
 `mode_actual` NO es una regla: es el snapshot del escaneo con el que se congelo la sec.9
 ("como estaba el arte el 2026-11-11"). Perseguirlo como estado vivo hace que cada pieza
 migrada produzca una violacion nueva (F-S2a-2), por eso solo se reporta como INFO
@@ -51,6 +57,7 @@ Uso:
     python tools/art/audit_art_manifest.py --verbose --no-refs
     python tools/art/audit_art_manifest.py --plan                # plan del migrador (dry-run)
     python tools/art/audit_art_manifest.py --plan --plan-piece game_board_
+    python tools/art/audit_art_manifest.py --capture-provenance  # one-shot de PRV-1
 
 `--plan` NO escribe: proyecta, pieza por pieza, las operaciones que ejecutaria
 `Assets/Editor/ArtContract/ArtMetaMigrator.cs` en modo dry-run. El migrador es el
@@ -77,6 +84,7 @@ ASSETS_ROOT = REPO_ROOT / "Assets"
 ADDRESSABLES_GROUPS = ASSETS_ROOT / "AddressableAssetsData" / "AssetGroups"
 LEDGER = ledger_mod.LEDGER
 DELIVERIES = ledger_mod.DELIVERIES
+PROVENANCE = ledger_mod.PROVENANCE
 SPRITES_DIR = ASSETS_ROOT / "Sprites"
 
 CONSUMER_SUFFIXES = (".unity", ".prefab", ".asset", ".mat", ".controller")
@@ -488,6 +496,160 @@ def read_deliveries() -> list[dict]:
 
 def sha256_of(path: Path) -> str:
     return ledger_mod.sha256_of(path)
+
+
+# ------------------------------- cohorte REPLACE (procedencia congelada, PRV-1..4)
+
+# Barrido de consumidores para PRV-4: mas ancho que `scan_consumers` a proposito. Una entry de
+# Addressables declara `m_GUID:` sin `fileID`, y contar solo `fileID: N, guid: G` declararia
+# huerfanas 6 piezas que si se dibujan (2 SpriteState + 4 addresses del pase).
+ORPHAN_SUFFIXES = CONSUMER_SUFFIXES + (".anim", ".overrideController", ".json", ".txt", ".mask")
+
+
+def guid_mentions(assets_root: Path, guids) -> dict[str, set[str]]:
+    """GUID -> archivos de Assets que lo mencionan como texto. Vacio = sin consumidor (PRV-4).
+
+    `_Recovery/` queda fuera: es un backup no versionado, no un consumidor.
+    """
+    mentions: dict[str, set[str]] = {guid: set() for guid in guids if guid}
+    if not mentions:
+        return mentions
+    for path in sorted(assets_root.rglob("*")):
+        if path.suffix.lower() not in ORPHAN_SUFFIXES or not path.is_file():
+            continue
+        if CONSUMER_BACKUP_MARKER in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+        for guid, files in mentions.items():
+            if guid in text:
+                files.add(rel)
+    return mentions
+
+
+def provenance_rows(replace_rows: list[dict]) -> tuple[list[dict], list[str]]:
+    """Una fila de procedencia por REPLACE, medida en disco (PRV-1). Sin `rol` todavia.
+
+    `px_actual` es el header MEDIDO hoy (un hecho, no el eco de sec.9); `px_entrega` es el
+    valor de sec.9, que es el que manda (CTR-1). Un origen sin bytes o sin `.meta` con guid no
+    se inventa: vuelve como problema y la captura no escribe nada.
+    """
+    captured: list[dict] = []
+    problems: list[str] = []
+    for row in replace_rows:
+        pieza = row["pieza"]
+        origin = REPO_ROOT / row["origen"] if row["origen"] not in ("-", "") else None
+        if origin is None or not origin.is_file():
+            problems.append("%s: no existe el origen '%s'" % (pieza, row["origen"]))
+            continue
+        meta_path = Path(str(origin) + ".meta")
+        meta = read_meta(meta_path) if meta_path.is_file() else None
+        if meta is None:
+            problems.append("%s: falta el guid de %s.meta" % (pieza, row["origen"]))
+            continue
+        size, _ = image_size(origin)
+        if size is None:
+            problems.append("%s: no se pudo leer el header de %s" % (pieza, row["origen"]))
+            continue
+        captured.append({
+            "pieza": pieza,
+            "origen": row["origen"],
+            "guid": meta.guid,
+            "sha256": sha256_of(origin),
+            "px_actual": "%dx%d" % size,
+            "px_entrega": row["px_entrega"],
+            "rol": "",
+            "motivo": "",
+        })
+    return captured, problems
+
+
+def capture_provenance(manifest: Path, assets_root: Path, path: Path | None = None,
+                       add: str | None = None) -> int:
+    """One-shot de PRV-1: congela el baseline de las REPLACE. Se NIEGA a re-basar.
+
+    Un gate que puede reescribir su baseline es `--ack-sha` con otro nombre (design D-A). La
+    unica excepcion es `--add PIEZA`, append-only, para una pieza REPLACE de sec.9 que falto
+    en la captura (S3 la usa para la fila 86); si la pieza ya tiene fila, sale 1 sin escribir.
+    """
+    target = Path(path) if path is not None else PROVENANCE
+    try:
+        rows = read_csv_block(manifest)
+    except ToolError as error:
+        print("ERROR: %s" % error, file=sys.stderr)
+        return 2
+    replace_rows = [row for row in rows
+                    if row.get("estado") == "REPLACE" and "_bad_columns" not in row]
+    captured, problems = provenance_rows(replace_rows)
+    if problems:
+        print("CAPTURE-REFUSED  %d REPLACE no atribuibles; 0 archivos escritos" % len(problems))
+        for problem in problems:
+            print("  %s" % problem)
+        return 1
+
+    if add is not None:
+        pieza = add.strip()
+        if not pieza.endswith(".png"):
+            pieza += ".png"
+        existing = [row["pieza"] for row in ledger_mod.read_provenance(target)]
+        if pieza in existing:
+            print("ADD-REFUSED  %s ya tiene fila en %s: append-only no reescribe"
+                  % (pieza, target.name))
+            return 1
+        row = next((item for item in captured if item["pieza"] == pieza), None)
+        if row is None:
+            print("ADD-REFUSED  %s no es una REPLACE de sec.9" % pieza)
+            return 1
+        row["rol"] = ledger_mod.ROLE_NO_SCREEN if pieza in ledger_mod.ORPHAN_MOTIVO \
+            else ledger_mod.ROLE_SCREEN
+        row["motivo"] = ledger_mod.ORPHAN_MOTIVO.get(pieza, "")
+        ledger_mod.write_provenance([row], target, append=True)
+        print("ADD          %s -> %s (%s, %s)" % (pieza, target.name, row["guid"][:8],
+                                                  row["sha256"][:8]))
+        print("FILAS        %d | %s" % (len(existing) + 1, _provenance_totals(captured)))
+        return 0
+
+    if target.exists():
+        shown = target.relative_to(REPO_ROOT).as_posix() if target.is_relative_to(REPO_ROOT) \
+            else str(target)
+        print("CAPTURE-IMMUTABLE  %s ya existe: la procedencia se congela una sola vez" % shown)
+        print("             un gate que puede re-basar su baseline no mide nada; para una"
+              " pieza ausente usar --add PIEZA (append-only)")
+        return 1
+
+    mentions = guid_mentions(assets_root, {row["guid"] for row in captured})
+    measured = {row["pieza"] for row in captured if not mentions.get(row["guid"])}
+    declared = set(ledger_mod.ORPHAN_MOTIVO)
+    if measured != declared:
+        print("CAPTURE-ORPHAN  PRV-4 congela %d REPLACE sin pantalla; se midieron %d"
+              % (len(declared), len(measured)))
+        for pieza in sorted(measured - declared):
+            print("  sin declarar  %s" % pieza)
+        for pieza in sorted(declared - measured):
+            print("  declarada con consumidor  %s" % pieza)
+        print("            0 archivos escritos: el conjunto es una decision, no una medicion")
+        return 1
+
+    for row in captured:
+        row["rol"] = ledger_mod.ROLE_NO_SCREEN if row["pieza"] in declared \
+            else ledger_mod.ROLE_SCREEN
+        row["motivo"] = ledger_mod.ORPHAN_MOTIVO.get(row["pieza"], "")
+    ledger_mod.write_provenance(captured, target)
+    print("CAPTURE      %s" % target.relative_to(REPO_ROOT).as_posix())
+    print("FILAS        %d | %s" % (len(captured), _provenance_totals(captured)))
+    print("SIN PANTALLA %d REPLACE sin pantalla: %s"
+          % (len(measured), ", ".join(sorted(measured))))
+    print("RESULTADO    PASS  (baseline congelado; el gate no vuelve a correr esto)")
+    return 0
+
+
+def _provenance_totals(rows: list[dict]) -> str:
+    guids = {row["guid"] for row in rows}
+    return "%d guid distintos, %d guid compartidos por el mismo origen" % (
+        len(guids), len(rows) - len(guids))
 
 
 # ------------------------------------------------------------------------ auditor
@@ -1076,7 +1238,7 @@ def _print_refs(result: dict) -> None:
         by_fileid.update(piece.refs_by_fileid)
 
     print("")
-    print("REFERENCIAS POR GUID (85 REPLACE, .unity/.prefab/.asset/.mat/.controller)")
+
     print("  total %d referencias en %d archivos" % (total, files))
     print("  por fileID: %s" % ", ".join("%d=%d" % (key, value) for key, value in sorted(by_fileid.items(), key=lambda kv: -kv[1])))
     sprite_refs = sum(count for file_id, count in by_fileid.items() if file_id not in (2800000, 11400000))
@@ -1148,12 +1310,29 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PREFIJO",
         help="con --plan, limita a las piezas que empiezan con PREFIJO (repetible)",
     )
+    parser.add_argument(
+        "--capture-provenance",
+        action="store_true",
+        help="one-shot: congela Docs/art/provenance-v1.csv con el baseline de las REPLACE (PRV-1)",
+    )
+    parser.add_argument(
+        "--add",
+        metavar="PIEZA",
+        help="con --capture-provenance, appendea UNA pieza REPLACE de sec.9 ausente del CSV"
+             " (se niega si ya tiene fila)",
+    )
     return parser
 
 
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     manifest = args.manifest if args.manifest.is_absolute() else (REPO_ROOT / args.manifest)
+
+    if args.add is not None and not args.capture_provenance:
+        print("ERROR: --add solo tiene sentido con --capture-provenance", file=sys.stderr)
+        return 2
+    if args.capture_provenance:
+        return capture_provenance(manifest, ASSETS_ROOT, add=args.add)
 
     try:
         result = audit(manifest, ASSETS_ROOT, with_refs=not args.no_refs)
