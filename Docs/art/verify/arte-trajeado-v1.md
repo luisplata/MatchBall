@@ -399,3 +399,160 @@ PASS `20 cableado, 13 sin_slot, 4 bloqueado` · `audit_art_manifest.py` exit 1 c
   silencioso y merece su propio chequeo cuando toque una pieza mode 2.
 - El re-parse es la única prueba de que el bloque murió. Si una versión futura de Unity
   serializara el bloque desde otro estado, `SheetSpriteCount` lo ve igual (parsea el YAML).
+
+## §S2 — la procedencia de las REPLACE, congelada (T-18…T-23)
+
+Cierra PRV-1…PRV-4 sin tocar Unity ni un byte de arte. La pregunta que S2 vuelve contestable es
+una sola: **"¿esta pieza se reemplazó?"**, y la contesta para cada una de las REPLACE que hoy
+declara §9 (**85**; la 86 llega en S3 y este slice no la hardcodea).
+
+### S2.0 Dos archivos, no uno (la decisión que sostiene todo lo demás)
+
+`placeholders-v1.csv` sigue siendo **derivado**: `generate_placeholders.ledger_text()` lo
+reescribe entero desde disco en cada corrida. Un sha de REPLACE guardado ahí se **auto-sana**, y
+`REPLACE-SHA` no podría observar nunca un reemplazo: el gate diría "todo baseline" para siempre.
+Por eso el baseline vive en `Docs/art/provenance-v1.csv`, un archivo aparte que **nadie
+reescribe**:
+
+| Archivo | Quién escribe | Qué dice | Mutabilidad |
+|---|---|---|---|
+| `placeholders-v1.csv` | `generate_placeholders.py` (derivado de §9) | cohorte NEW: estado, px, guid, sha | regenerable |
+| `deliveries-v1.csv` | humano | quién entregó, cuándo | manual |
+| `provenance-v1.csv` | `audit_art_manifest.py --capture-provenance` | qué bytes son el baseline de cada REPLACE | **one-shot** |
+
+Esquema: `pieza,origen,guid,sha256,px_actual,px_entrega,rol,motivo` (86 líneas = encabezado +
+85 filas). `px_actual` es el header **medido** el día de la captura (un hecho, no el eco de §9);
+`px_entrega` es el valor de §9, que es el que manda (CTR-1).
+
+### S2.1 La captura es una sola vez (T-18)
+
+```
+$ python tools/art/audit_art_manifest.py --capture-provenance
+CAPTURE      Docs/art/provenance-v1.csv
+FILAS        85 | 83 guid distintos, 2 guid compartidos por el mismo origen
+SIN PANTALLA 4 REPLACE sin pantalla: game_board_balance_base_01.png, game_board_shadow_long_01.png, ui_common_divider_01.png, ui_pass_state_lock_01.png
+RESULTADO    PASS  (baseline congelado; el gate no vuelve a correr esto)
+
+$ python tools/art/audit_art_manifest.py --capture-provenance
+CAPTURE-IMMUTABLE  Docs/art/provenance-v1.csv ya existe: la procedencia se congela una sola vez
+             un gate que puede re-basar su baseline no mide nada; para una pieza ausente usar --add PIEZA (append-only)
+
+$ python tools/art/audit_art_manifest.py --capture-provenance --add ui_common_divider_01
+ADD-REFUSED  ui_common_divider_01.png ya tiene fila en provenance-v1.csv: append-only no reescribe
+```
+
+`--add PIEZA` es la única excepción (append-only) y existe para la fila 86 de S3. La captura
+también **se niega a escribir** si lo medido no es exactamente el conjunto declarado de huérfanas
+(`CAPTURE-ORPHAN`): el baseline se congela sobre una decisión revisada, no sobre lo que salga.
+
+### S2.2 Ningún conteo NEW se movió (T-21)
+
+Medido sobre el árbol de HEAD (`git stash` de `tools/art`, misma máquina, mismos assets) y sobre
+el árbol de este slice. **Idéntico**:
+
+| Línea | Antes (HEAD) | Después (S2) |
+|---|---|---|
+| `FILAS` | `122 (REPLACE 85 / NEW 37 / addresses 11)` | igual |
+| `LEDGER NEW` | `37 filas / 33 GENERATED, 0 DELIVERED, 0 EXCLUDED` | igual |
+| `COHORT` | `122 = 85 REPLACE + 37 NEW` | igual |
+| `COHORT-SUM` | `37 = 33 + 0 + 0 + 2 + 2` | igual |
+| `NEW-LEDGER` | `37 filas … 33 guid congelados` | igual |
+| `PX-ENTREGA-PENDING` | `6/6` | igual |
+| `REFERENCIAS` | `172 referencias en 28 archivos` | igual |
+| `VIOLACIONES` | `4 en 2 reglas` (3 `FORMAT-JPG` + 1 `MODE-TARGET`) | igual |
+| `check_placeholders.py` | PASS `33 GENERATED, 4 bloqueadas; 37 filas` | igual |
+| `check_placeholder_wiring.py` | PASS `20 cableado, 13 sin_slot, 4 bloqueado` | igual |
+| `selftest_art_gates.py` | PASS 12 casos | PASS **16** casos |
+
+Lo único que aparece es lo que S2 agrega:
+
+```
+PROCEDENCIA 85 filas REPLACE | 0/85 reemplazadas | 4 sin pantalla
+  REPLACE-LEDGER  85/85 filas con pieza+origen+guid+sha256+px (83 guid distintos)
+  REPLACE-SHA  0/85 reemplazadas (85 BASELINE, 0 DELIVERED, 0 UNKNOWN)
+  REPLACE-GUID  2 filas comparten guid por declarar el mismo origen (un archivo, dos roles): no es colision
+  ORPHAN      4 REPLACE sin pantalla: game_board_balance_base_01.png, game_board_shadow_long_01.png, ui_common_divider_01.png, ui_pass_state_lock_01.png
+```
+
+**Hallazgo declarado, no escondido**: dos pares de filas comparten GUID porque **declaran el mismo
+origen** — `ui_hud_btn_powerup_slot_{normal,active}_01` y `ui_menu_tab_powerups_{normal,active}_01`
+apuntan ambos a `PowerUpsNormal.png` / `PowerUpsClicked.png` (§9 lo dice por escrito: "un archivo,
+dos roles"). No es una colisión: la atribución es inequívoca. Sí es colisión —y falla
+`REPLACE-GUID`— que **dos orígenes distintos** reclamen el mismo guid, o que un guid de REPLACE
+aparezca en el cohorte NEW. El gate cuenta 83 guid distintos en 85 filas y lo imprime.
+
+### S2.3 Los tres estados de `REPLACE-SHA` (T-19 / T-22b)
+
+`BASELINE` (bytes == ledger), `DELIVERED` (bytes ≠ ledger **y** fila con ese sha en
+`deliveries-v1.csv`) y `UNKNOWN` (bytes ≠ ledger sin declaración). Solo el tercero falla.
+
+```
+# (a) sha vacío en una fila
+[REPLACE-LEDGER] ui_common_btn_primary_normal_01.png: 'sha256' vacio (cobertura 84/85)
+[REPLACE-SHA]    ui_common_btn_primary_normal_01.png: UNKNOWN: ledger (vacio) != disco 489d7ac9… y deliveries-v1.csv no declara ese sha
+
+# (b) bytes cambiados sin declaración
+[REPLACE-SHA] ui_common_btn_primary_normal_01.png: UNKNOWN: ledger 0000…0000 != disco 489d7ac9… y deliveries-v1.csv no declara ese sha
+  INFO REPLACE-SHA  0/85 reemplazadas (84 BASELINE, 0 DELIVERED, 1 UNKNOWN)
+
+# (c) la misma pieza, declarada
+  INFO REPLACE-SHA  1/85 reemplazadas (84 BASELINE, 1 DELIVERED, 0 UNKNOWN)
+  → 4 violaciones (el baseline no se movió)
+```
+
+Los negativos corren sobre copias en `Temp/art-selftest/`; `Docs/` y `Assets/` quedan
+byte-idénticos (`git status --porcelain` vacío al cerrar cada caso).
+
+### S2.4 El GUID sobrevive al swap (PRV-3)
+
+El swap reemplaza **bytes**; el `.meta` viaja intacto y con él el guid, que es lo que las 172
+referencias de 28 archivos nombran. La prueba es falsable en las dos direcciones:
+
+```
+CASE  replace-guid
+barrido real: 172 referencias en 28 archivos
+tras simular el swap: 172 referencias en 28 archivos
+guid nuevo: 1 REPLACE-GUID -> ledger 0123456789abcdef0123456789abcdef != .meta 8febf562d93d29f489aa842db7c78244 (un reimport que cambia el guid no es un swap: quema las referencias)
+```
+
+Simular el swap = declarar otro baseline sha + su fila en `deliveries-v1.csv`; el barrido no se
+mueve un dígito. Un `.meta` con guid nuevo falla nombrando los dos valores y **no** se acepta como
+"reimport".
+
+### S2.5 Las 4 huérfanas (PRV-4)
+
+El barrido que decide "0 consumidores" es **más ancho** que el de referencias: una entry de
+Addressables declara `m_GUID:` sin `fileID`, y `m_PressedSprite` de un Button también lleva el
+GUID. Contar solo `fileID: N, guid: G` habría declarado huérfanas **6** piezas que sí se dibujan
+(4 addresses del pase + 2 slots de power-up). Con el barrido por mención de GUID, `_Recovery/`
+excluido, la medición da **exactamente** el conjunto de PRV-4. Cada una con `rol=sin_pantalla` y
+su motivo en el CSV:
+
+| Pieza | Por qué no tiene consumidor hoy |
+|---|---|
+| `game_board_balance_base_01` | la barra se arma con `balance_bar_left/right_01`; ningún prefab dibuja la base |
+| `game_board_shadow_long_01` | la sombra viva es `game_board_line_shadow_01` |
+| `ui_pass_state_lock_01` | el panel de pase no existe en `Game.unity` |
+| `ui_common_divider_01` | `Separador.png` entra al manifiesto sin slot |
+
+```
+[ORPHAN-UNDECLARED] ui_common_divider_01.png: REPLACE con 0 consumidores y rol != sin_pantalla
+[ORPHAN-STALE]      ui_common_btn_primary_normal_01.png: declarada sin pantalla y hoy tiene 2 consumidor(es): Assets/Scenes/Game.unity, Assets/Scenes/MainMenu.unity
+```
+
+Ninguna de las 4 cuenta como cobertura: el auditor imprime `4 REPLACE sin pantalla` como línea
+propia, y el cohorte NEW no las toca.
+
+### S2.6 Riesgos y deudas que este slice deja abiertas
+
+- **La captura es un hecho, no una verdad eterna**: si un origen cambia de `.meta` (no de bytes),
+  `REPLACE-GUID` lo va a acusar; si cambia de bytes sin entrega, `REPLACE-SHA`. Eso es lo buscado.
+  Lo que **no** puede pasar es que alguien re-base: la única salida es borrar el CSV, y eso es un
+  diff visible con review.
+- **`--add` sobre una pieza que §9 no declara REPLACE** sale `ADD-REFUSED`: no hay forma de meter
+  en el baseline una pieza que el contrato no nombra.
+- **`px_actual` del baseline es histórico**: no es un gate (para eso está `px_entrega`). Si el arte
+  de §4 se entrega, el baseline no se mueve: se mueve el header.
+- **S3 hereda el denominador**: `REPLACE-LEDGER`, `REPLACE-SHA` y `ORPHAN-*` derivan `R` de §9 y de
+  la cantidad de filas del CSV. Cuando `ball_state_frozen_01` entra como REPLACE, la fila 86 se
+  appendea con `--capture-provenance --add ball_state_frozen_01` y nada más de este slice cambia.
