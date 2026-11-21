@@ -21,6 +21,8 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     diff-allowlist  APW-6: el diff admite el tooling declarado y el `.meta` de un origen de la
                   procedencia; un `.cs` de juego y un asset fuera del contrato fallan, y el
                   mismo path se cuenta una vez (no una por hunk)
+    verify-manifest-path  W-3: `--verify-manifest <PATH>` acepta un path relativo (el comando
+                  de T-36) y un manifiesto fuera del indice falla EVIDENCE-UNTRACKED
     provenance    PRV-1: la captura cubre R/R, es one-shot (CAPTURE-IMMUTABLE) y --add no reescribe
     replace-sha   PRV-2: BASELINE / DELIVERED / UNKNOWN; solo UNKNOWN falla, con los dos shas
     replace-guid  PRV-3: el swap no mueve las referencias; un guid nuevo falla con los dos
@@ -49,6 +51,7 @@ import argparse
 import contextlib
 import hashlib
 import io
+import os
 import re
 import shutil
 import sys
@@ -999,6 +1002,47 @@ def case_diff_allowlist() -> list[str]:
     return failures
 
 
+def case_verify_manifest_path() -> list[str]:
+    """W-3: `--verify-manifest <PATH>` acepta el path relativo del runbook (T-36) sin reventar
+    en `relative_to`; un manifiesto fuera del indice sigue fallando `EVIDENCE-UNTRACKED`, no con
+    un ValueError que habla de paths y no de manifiestos."""
+    failures: list[str] = []
+    real = ROOT / "Docs" / "art" / "evidence" / "captures-v1.md"
+    relative = os.path.relpath(real, Path.cwd())
+    try:
+        code, output = capture(capture_diff.main, ["--verify-manifest", relative])
+    except BaseException as error:  # un traceback es exactamente el defecto que se cierra
+        return ["--verify-manifest con path relativo termino en %s (%s)"
+                % (type(error).__name__, error)]
+    print("manifiesto relativo: exit %d" % code)
+    if code != 0:
+        failures.append("un manifiesto versionado por path relativo deberia salir 0: %s"
+                        % output.strip())
+    if "versionado" not in output:
+        failures.append("el path relativo no resolvio al manifiesto versionado: %s"
+                        % output.strip())
+
+    work = fresh("verify-manifest-path")
+    copy = work / "captures-v1.md"
+    copy.write_bytes(real.read_bytes())
+    try:
+        code, output = capture(capture_diff.main,
+                               ["--verify-manifest", os.path.relpath(copy, Path.cwd())])
+    except BaseException as error:
+        return failures + ["un manifiesto fuera del indice termino en %s (%s)"
+                           % (type(error).__name__, error)]
+    print("copia en Temp/: exit %d" % code)
+    if code != 1:
+        failures.append("un manifiesto fuera del indice deberia salir 1, salio %d: %s"
+                        % (code, output.strip()))
+    if "EVIDENCE-UNTRACKED" not in output:
+        failures.append("la copia en Temp/ deberia fallar EVIDENCE-UNTRACKED: %s"
+                        % output.strip())
+    if "ValueError" in output:
+        failures.append("el gate sigue nombrando un ValueError de paths: %s" % output.strip())
+    return failures
+
+
 def case_zlib_limit() -> list[str]:
     """DBT-3: la declaracion existe y el gate la consulta."""
     failures: list[str] = []
@@ -1085,6 +1129,7 @@ CASES = {
     "cohort-sum": case_cohort_sum,
     "cohort-manifest": case_cohort_manifest,
     "diff-allowlist": case_diff_allowlist,
+    "verify-manifest-path": case_verify_manifest_path,
     "provenance": case_provenance,
     "replace-sha": case_replace_sha,
     "replace-guid": case_replace_guid,

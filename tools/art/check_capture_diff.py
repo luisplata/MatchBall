@@ -129,6 +129,18 @@ def completed_file(path: Path) -> bool:
         return False
 
 
+def display(path: Path) -> str:
+    """Path relativo al repo cuando se puede; asoluto si vive fuera del working tree.
+
+    Un manifiesto de `Temp/` se lee relativo; uno de afuera (un sandbox, un archivo de review)
+    tambien tiene que poder nombrarse sin reventar en `relative_to`.
+    """
+    try:
+        return Path(path).resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return Path(path).as_posix()
+
+
 def verify_manifest(path: Path = MANIFEST, map_path: Path = MAP_FILE,
                     captures: Path = CAPTURES) -> tuple[list[str], list[str]]:
     """DRL-3: rig versionado, cobertura exacta, px declarados y capturas no uniformes.
@@ -231,10 +243,10 @@ def verify_manifest(path: Path = MANIFEST, map_path: Path = MAP_FILE,
                     next((entry["marco"] for entry in manifest), "-"),
                     RIG.relative_to(REPO_ROOT).as_posix()))
     if ledger_mod.git_tracked(path):
-        notes.append("MANIFIESTO %s versionado" % path.relative_to(REPO_ROOT).as_posix())
+        notes.append("MANIFIESTO %s versionado" % display(path))
     else:
         failures.append("EVIDENCE-UNTRACKED %s: `git ls-files --error-unmatch` no lo conoce"
-                        % path.relative_to(REPO_ROOT).as_posix())
+                        % display(path))
     return failures, notes
 
 
@@ -289,8 +301,11 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     if args.verify_manifest is not None:
+        # W-3: el argumento llega relativo al cwd y el gate compara contra REPO_ROOT, que es
+        # absoluto. Sin resolverlo, el comando literal de T-36 moria en `relative_to` con un
+        # ValueError que no hablaba de manifiestos sino de paths.
         try:
-            failures, notes = verify_manifest(Path(args.verify_manifest))
+            failures, notes = verify_manifest(Path(args.verify_manifest).resolve())
         except ManifestError as error:
             print("ERROR: %s" % error, file=sys.stderr)
             return 2
