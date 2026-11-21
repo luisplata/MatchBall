@@ -163,6 +163,15 @@ normalizaron a `(1,1,1)` con el alfa intacto (`0.95`) y **se volvieron a captura
 (`flat4`, `except: sin_firma`), y en `danger` (alfa 0.12) y en los dots (alfa 0.25/0.55) el alfa
 del host baja el valor del magenta sin cambiarle el tono.
 
+## Límite de determinismo (zlib)
+
+Los bytes de un placeholder son idénticos entre corridas **en la misma máquina y con la misma
+versión del compresor deflate** que trae Python/Pillow. Entre máquinas con otra versión de esa
+librería el `sha256` puede diferir aunque el PNG decodifique al mismo pixel: la verdad es el
+pixel decodificado (APH-8), no el hash. El gate lo verifica sobre este archivo (al menos una
+línea que nombre el límite) y el ledger conserva los sha de la corrida canónica como
+referencia, nunca como contrato entre máquinas.
+
 ## Reversión
 
 - **Antes de que llegue arte**: `git revert` del commit de cableado. `m_Sprite`, `m_Color` y

@@ -13,9 +13,10 @@ Que compara (regla -> columna de sec.9 -> archivo):
   ESTADO            estado         REPLACE con origen, NEW sin archivo
   ORIGEN-EXISTS     origen         el path declarado existe en el working tree
   FORMAT-JPG        origen         ASC-5: nada de JPG en la entrega
-  PX-ACTUAL         px_actual      header del archivo (PNG IHDR / JPEG SOF)
+  PX-ENTREGA        px_entrega     header del archivo == px_entrega (CTR-1)
+  PX-ACTUAL-DRIFT   px_actual      informativo: el header ya no es px_actual
   MODE-TARGET       mode_target    spriteMode medido en el .meta vs objetivo (1 = Single)
-  RECT-STALE        -              rect del spriteSheet vs lienzo completo
+  RECT-STALE        -              rect del sprite VIVO (spriteMode 2) vs lienzo (CTR-2)
   BORDER-META       border         spriteBorder del .meta (l/b/r/t)
   BORDER-SLICED     border         borde declarado si un Image lo dibuja Sliced/Tiled
   MAX-TEX           max_tex        maxTextureSize del .meta
@@ -25,11 +26,22 @@ Que compara (regla -> columna de sec.9 -> archivo):
   ADDRESS-RESOLVE   address        la entry existe en AddressableAssetsData
   ADDRESS-PATH      address        address -> m_GUID -> path == origen
 
+Cohorte NEW (ledger derivado, `tools/art/art_ledger.py`):
+
+  NEW-LEDGER        filas del ledger == sec.9 NEW, sin duplicados
+  NEW-SHA           sha(disco) != ledger sin fila en deliveries-v1.csv
+  DELIVERY-ROW      una DELIVERED exige exactamente una fila con autor
+  DELIVERY-SHA      una DELIVERED exige sha(disco) == ledger.sha256
+  EXCLUDED-MOTIVO   una EXCLUDED exige motivo no vacio
+  EXCLUDED-PNG      una EXCLUDED no puede tener PNG en disco
+  COHORT-SUM        122 = R + N y N = la suma de las cinco etiquetas (ART-3)
+
 `mode_actual` NO es una regla: es el snapshot del escaneo con el que se congelo la sec.9
 ("como estaba el arte el 2026-11-11"). Perseguirlo como estado vivo hace que cada pieza
 migrada produzca una violacion nueva (F-S2a-2), por eso solo se reporta como INFO
 (`MODE-ACTUAL-DRIFT`) cuando el .meta ya no coincide. El unico gate de import es
-`mode_target`: el objetivo no cambia cuando el asset se migra.
+`mode_target`: el objetivo no cambia cuando el asset se migra. `px_actual` corre la misma
+suerte desde CTR-1: el gate de pixeles es `px_entrega`.
 
 Exit code: 0 = PASS / 1 = hay violaciones / 2 = el manifiesto no se pudo leer.
 
@@ -49,7 +61,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import re
 import struct
@@ -58,18 +69,20 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import art_ledger as ledger_mod
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = REPO_ROOT / "Docs" / "art" / "manifest-refresh-visual-v1.md"
 ASSETS_ROOT = REPO_ROOT / "Assets"
 ADDRESSABLES_GROUPS = ASSETS_ROOT / "AddressableAssetsData" / "AssetGroups"
-LEDGER = REPO_ROOT / "Docs" / "art" / "placeholders-v1.csv"
-DELIVERIES = REPO_ROOT / "Docs" / "art" / "deliveries-v1.csv"
+LEDGER = ledger_mod.LEDGER
+DELIVERIES = ledger_mod.DELIVERIES
 SPRITES_DIR = ASSETS_ROOT / "Sprites"
 
 CONSUMER_SUFFIXES = (".unity", ".prefab", ".asset", ".mat", ".controller")
 CONSUMER_BACKUP_MARKER = "_Recovery"
 
-EXPECTED_ROWS = 122
+EXPECTED_ROWS = ledger_mod.EXPECTED_ROWS
 COLUMNS = (
     "pieza",
     "estado",
@@ -86,15 +99,16 @@ COLUMNS = (
 )
 
 # Cohort de placeholders (sec.9 estado=NEW). El ledger es derivado; estas son las unicas
-# reglas que pueden leerlo, y su namespace es el de las 37 piezas NEW: un archivo suelto
+# reglas que pueden leerlo, y su namespace es el de las piezas NEW: un archivo suelto
 # fuera de ese namespace no es atribuible al cohorte (Assets/Sprites/ es plana y convive
 # con assets legados que sec.9 no nombra).
-LEDGER_COLUMNS = ("pieza", "estado", "px", "border", "familia", "path", "guid", "sha256", "motivo")
-DELIVERY_COLUMNS = ("pieza", "sha256", "autor", "fecha")
-NEW_EXPECTED_ROWS = 37
+LEDGER_COLUMNS = ledger_mod.LEDGER_COLUMNS
+DELIVERY_COLUMNS = ledger_mod.DELIVERY_COLUMNS
 NEW_PREFIXES = ("ui_tutorial_", "ui_hud_", "ui_common_", "ui_menu_", "ball_state_", "game_board_")
 GENERATED = "GENERATED"
-BLOCKED_ESTADOS = ("BLOCKED_PX", "BLOCKED_BY_DESIGN")
+BLOCKED_ESTADOS = ledger_mod.BLOCKED_STATES
+DELIVERED = "DELIVERED"
+EXCLUDED = "EXCLUDED"
 
 NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$")
 GUID_RE = re.compile(r"^guid: ([0-9a-f]{32})\s*$", re.MULTILINE)
@@ -458,34 +472,22 @@ def collect_addresses() -> dict[str, str]:
 
 def read_ledger() -> list[dict]:
     """Filas de `Docs/art/placeholders-v1.csv` (derivado del generador, nunca a mano)."""
-    if not LEDGER.is_file():
-        return []
-    with LEDGER.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    if rows and tuple(rows[0].keys()) != LEDGER_COLUMNS:
-        raise ToolError("%s tiene columnas %s, se esperan %s"
-                        % (LEDGER.relative_to(REPO_ROOT), tuple(rows[0].keys()), LEDGER_COLUMNS))
-    return rows
+    try:
+        return ledger_mod.read_ledger(LEDGER)
+    except ledger_mod.LedgerError as error:
+        raise ToolError(str(error)) from error
 
 
-def read_deliveries() -> dict[tuple[str, str], dict]:
-    """`(pieza, sha256) -> fila` de la unica declaracion manual de arte entregado."""
-    if not DELIVERIES.is_file():
-        return {}
-    with DELIVERIES.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    if rows and tuple(rows[0].keys()) != DELIVERY_COLUMNS:
-        raise ToolError("%s tiene columnas %s, se esperan %s"
-                        % (DELIVERIES.relative_to(REPO_ROOT), tuple(rows[0].keys()), DELIVERY_COLUMNS))
-    return {(row["pieza"].strip(), row["sha256"].strip()): row for row in rows}
+def read_deliveries() -> list[dict]:
+    """`Docs/art/deliveries-v1.csv`: la unica declaracion manual de arte entregado."""
+    try:
+        return ledger_mod.read_deliveries(DELIVERIES)
+    except ledger_mod.LedgerError as error:
+        raise ToolError(str(error)) from error
 
 
 def sha256_of(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    return ledger_mod.sha256_of(path)
 
 
 # ------------------------------------------------------------------------ auditor
@@ -493,6 +495,39 @@ def sha256_of(path: Path) -> str:
 
 DRAW_MODE_SLICED = 1
 DRAW_MODE_TILED = 2
+
+
+def live_rects(meta: Meta | None, size: tuple[int, int] | None) -> list[dict]:
+    """CTR-2: el rect del sprite VIVO, no el bloque serializado muerto.
+
+    En `spriteMode == 1` el `Sprite.rect` vivo es el lienzo completo y `spriteSheet.sprite`
+    no dibuja: cualquier bloque residual es un falso positivo (10 hoy). En `spriteMode == 2`
+    los rects de la hoja SI dibujan y se miden.
+    """
+    if meta is None or size is None or meta.sprite_mode != 2:
+        return []
+    return list(meta.sprites)
+
+
+def px_entrega_verdict(row: dict, size: tuple[int, int] | None) -> tuple[str, str]:
+    """CTR-1: `(veredicto, detalle)` de la comparacion header vs `px_entrega`.
+
+    `ok` si coinciden; `pending` si el header es el `px_actual` de una de las 6 de §4 (la
+    allowlist cerrada de `art_ledger.PX_ENTREGA_PENDING`); `violation` para todo el resto.
+    """
+    if size is None:
+        return "unknown", ""
+    entrega = parse_px(row["px_entrega"])
+    if entrega is None:
+        return "tbd", ""
+    if size == entrega:
+        return "ok", ""
+    expected = ledger_mod.PX_ENTREGA_PENDING.get(row["pieza"])
+    actual = parse_px(row["px_actual"])
+    if expected is not None and row["px_entrega"] == expected and actual == size:
+        return "pending", "header %dx%d == px_actual, px_entrega %s de sec.4 pendiente" % (
+            size[0], size[1], expected)
+    return "violation", "header %dx%d != px_entrega %s" % (size[0], size[1], row["px_entrega"])
 
 
 def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
@@ -541,13 +576,16 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             declared = parse_px(row["px_actual"])
             if piece.size is None:
                 fail("PX-ACTUAL", row["pieza"], "no se pudo leer el header de %s" % row["origen"])
-            elif declared != piece.size:
-                fail(
-                    "PX-ACTUAL",
-                    row["pieza"],
-                    "header %dx%d != px_actual %s"
-                    % (piece.size[0], piece.size[1], row["px_actual"]),
-                )
+            elif declared is not None and declared != piece.size:
+                # Historico, nunca gate (CTR-1): el gate de pixeles es `px_entrega`.
+                info.append(
+                    "PX-ACTUAL-DRIFT  %s: header %dx%d != px_actual %s; informativo, el gate es"
+                    " px_entrega %s"
+                    % (row["pieza"], piece.size[0], piece.size[1], row["px_actual"],
+                       row["px_entrega"]))
+            elif declared is None:
+                info.append("PX-ACTUAL-TBD  %s: px_actual '%s' no es un par WxH (informativo)"
+                            % (row["pieza"], row["px_actual"]))
             piece.meta_path = Path(str(origin) + ".meta")
             if not piece.meta_path.is_file():
                 fail("META-EXISTS", row["pieza"], "falta %s.meta" % row["origen"])
@@ -586,9 +624,9 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
         for pieza, count in sorted(declared.items()):
             if count > 1:
                 fail("NEW-LEDGER", pieza, "%d filas en el ledger" % count)
-        if len(ledger_rows) != NEW_EXPECTED_ROWS:
-            fail("NEW-LEDGER", "-", "%d filas en el ledger, el cohorte congela %d"
-                 % (len(ledger_rows), NEW_EXPECTED_ROWS))
+        if len(ledger_rows) != len(new_by_pieza):
+            fail("NEW-LEDGER", "-", "%d filas en el ledger, la sec.9 declara %d NEW"
+                 % (len(ledger_rows), len(new_by_pieza)))
         for pieza in sorted(set(new_by_pieza) - set(declared)):
             fail("NEW-LEDGER", pieza, "NEW de sec.9 sin fila en el ledger")
         for pieza in sorted(set(declared) - set(new_by_pieza)):
@@ -597,7 +635,9 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
         pending = 0
         for row in ledger_rows:
             pieza = row["pieza"]
-            if row["estado"] in BLOCKED_ESTADOS:
+            estado = (row["estado"] or "").strip()
+            source = REPO_ROOT / row["path"] if row["path"] not in ("-", "") else None
+            if estado in BLOCKED_ESTADOS:
                 if row["path"] not in ("-", ""):
                     fail("NEW-LEDGER", pieza, "BLOCKED_* con path '%s'" % row["path"])
                 if not row["motivo"]:
@@ -605,21 +645,41 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
                 if (SPRITES_DIR / pieza).exists():
                     fail("NEW-BLOCKED", pieza, "la pieza esta bloqueada y hay PNG en disco")
                 continue
-            if row["estado"] != GENERATED:
-                fail("NEW-LEDGER", pieza, "estado '%s' desconocido" % row["estado"])
+            if estado == EXCLUDED:
+                if not (row["motivo"] or "").strip():
+                    fail("EXCLUDED-MOTIVO", pieza, "campo 'motivo' vacio (ART-4)")
+                if source is not None and source.is_file():
+                    fail("EXCLUDED-PNG", pieza, "una EXCLUDED no puede tener PNG (%s)" % row["path"])
+                elif (SPRITES_DIR / pieza).exists():
+                    fail("EXCLUDED-PNG", pieza,
+                         "una EXCLUDED no puede tener PNG (Assets/Sprites/%s)" % pieza)
                 continue
-            source = REPO_ROOT / row["path"] if row["path"] not in ("-", "") else None
+            if estado not in (GENERATED, DELIVERED):
+                fail("COHORT-SUM", pieza, "estado '%s' fuera de %s"
+                     % (estado, "/".join(ledger_mod.STATES)))
+                continue
             if source is None or not source.is_file():
                 fail("NEW-LEDGER", pieza, "FALTA el PNG declarado (%s)" % (row["path"] or "-"))
                 continue
             disk_sha = sha256_of(source)
-            if row["sha256"] != disk_sha:
-                if (pieza, disk_sha) in deliveries:
-                    info.append("NEW-DELIVERY  %s: sha distinto del ledger, declarado en deliveries-v1.csv"
-                                % pieza)
-                else:
-                    fail("NEW-SHA", pieza, "ledger %s != disco %s (sin fila en deliveries-v1.csv)"
-                         % (row["sha256"] or "(vacio)", disk_sha))
+            if estado == GENERATED:
+                if row["sha256"] != disk_sha:
+                    if ledger_mod.delivery_rows(deliveries, pieza, disk_sha):
+                        info.append("NEW-DELIVERY  %s: sha distinto del ledger, declarado en"
+                                    " deliveries-v1.csv" % pieza)
+                    else:
+                        fail("NEW-SHA", pieza, "ledger %s != disco %s (sin fila en"
+                             " deliveries-v1.csv)" % (row["sha256"] or "(vacio)", disk_sha))
+            else:  # DELIVERED: ART-1(a) y ART-1(b); los pixeles no se comparan (APH-8 no aplica)
+                ledger_sha = (row["sha256"] or "").strip()
+                declaring = ledger_mod.delivery_rows(deliveries, pieza, ledger_sha)
+                if len(declaring) != 1:
+                    fail("DELIVERY-ROW", pieza, "pieza %s sha %s, %d filas con autor en"
+                         " deliveries-v1.csv (se exige 1)"
+                         % (pieza, ledger_sha or "(vacio)", len(declaring)))
+                if disk_sha != ledger_sha:
+                    fail("DELIVERY-SHA", pieza, "ledger %s != disco %s"
+                         % (ledger_sha or "(vacio)", disk_sha))
             piece = Piece(row=new_by_pieza.get(pieza) or {"pieza": pieza})
             piece.size, piece.kind = image_size(source)
             piece.meta_path = Path(str(source) + ".meta")
@@ -657,11 +717,25 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
         for path in sorted(SPRITES_DIR.glob("*.png")):
             if path.name.startswith(NEW_PREFIXES) and path.name not in legal_names:
                 fail("NEW-ORPHAN", path.name, "PNG del namespace del cohorte sin fila en el ledger")
-        info.append("NEW-LEDGER  %d filas: %d GENERATED, %d bloqueadas, %d guid congelados"
-                    % (len(ledger_rows),
-                       sum(1 for row in ledger_rows if row["estado"] == GENERATED),
-                       sum(1 for row in ledger_rows if row["estado"] in BLOCKED_ESTADOS),
-                       len(frozen)))
+        counts = ledger_mod.cohort_counts(ledger_rows)
+        info.append("COHORT      %s"
+                    % ledger_mod.cohort_identity_text(EXPECTED_ROWS, len(replace_rows),
+                                                      len(ledger_rows)))
+        info.append("COHORT-SUM  %s"
+                    % ledger_mod.cohort_sum_text(len(ledger_rows), counts))
+        if len(replace_rows) + len(ledger_rows) != EXPECTED_ROWS:
+            fail("COHORT-SUM", "-", "%s: la diferencia es %+d"
+                 % (ledger_mod.cohort_identity_text(EXPECTED_ROWS, len(replace_rows),
+                                                    len(ledger_rows)),
+                    EXPECTED_ROWS - len(replace_rows) - len(ledger_rows)))
+        if sum(counts.values()) != len(ledger_rows):
+            fail("COHORT-SUM", "-", "%s: %d filas sin etiqueta valida"
+                 % (ledger_mod.cohort_sum_text(len(ledger_rows), counts),
+                    len(ledger_rows) - sum(counts.values())))
+        info.append("NEW-LEDGER  %d filas: %d GENERATED, %d DELIVERED, %d EXCLUDED, %d bloqueadas,"
+                    " %d guid congelados"
+                    % (len(ledger_rows), counts[GENERATED], counts[DELIVERED], counts[EXCLUDED],
+                       counts["BLOCKED_PX"] + counts["BLOCKED_BY_DESIGN"], len(frozen)))
         if pending:
             info.append("NEW-PENDING  %d piezas sin guid congelado: los .meta los escribe Unity "
                         "(cohorte new) y --freeze-guid los congela" % pending)
@@ -669,6 +743,7 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
     checked.update(new_pieces)
 
     # reglas meta vs fila
+    px_pending: list[str] = []
     for name, piece in checked.items():
         row, meta = piece.row, piece.meta
         if "_bad_columns" in row:
@@ -697,7 +772,7 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
                 % (meta.sprite_mode, row["mode_target"]),
             )
         if piece.size:
-            for sprite in meta.sprites:
+            for sprite in live_rects(meta, piece.size):
                 if sprite["rect"] != (0, 0, piece.size[0], piece.size[1]):
                     fail(
                         "RECT-STALE",
@@ -705,6 +780,12 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
                         'sprite "%s" rect %s != lienzo %dx%d'
                         % (sprite["name"] or "?", _fmt_rect(sprite["rect"]), piece.size[0], piece.size[1]),
                     )
+        verdict, detail = px_entrega_verdict(row, piece.size)
+        if verdict == "violation":
+            fail("PX-ENTREGA", name, detail)
+        elif verdict == "pending":
+            px_pending.append(name)
+            info.append("PX-ENTREGA-PENDING  %s: %s" % (name, detail))
         if border is not None and meta.border != border:
             fail("BORDER-META", name, "spriteBorder %s != %s" % (_fmt_border(meta.border), row["border"]))
         if row["max_tex"].isdigit() and meta.max_texture_size != int(row["max_tex"]):
@@ -720,6 +801,14 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
         if row["ppu"].replace(".", "", 1).isdigit() and meta.ppu is not None:
             if abs(meta.ppu - float(row["ppu"])) > 1e-4:
                 fail("PPU", name, "spritePixelsToUnits %s != ppu %s" % (meta.ppu, row["ppu"]))
+
+    if px_pending:
+        info.append("PX-ENTREGA-PENDING  %d/%d: %s"
+                    % (len(px_pending), len(ledger_mod.PX_ENTREGA_PENDING),
+                       ", ".join(sorted(px_pending))))
+    else:
+        info.append("PX-ENTREGA-PENDING  0/%d (ninguna de §4 espera entrega)"
+                    % len(ledger_mod.PX_ENTREGA_PENDING))
 
     # px_entrega vs techo de textura (REPLACE y NEW)
     for row in valid_rows:
@@ -776,7 +865,9 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             "new": len(new_rows),
             "addresses": len(address_rows),
             "ledger": len(ledger_rows),
-            "generated": len(new_pieces),
+            "generated": sum(1 for row in ledger_rows if row["estado"] == GENERATED),
+            "delivered": sum(1 for row in ledger_rows if row["estado"] == DELIVERED),
+            "excluded": sum(1 for row in ledger_rows if row["estado"] == EXCLUDED),
         },
     }
 
@@ -895,8 +986,8 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         % (counts["rows"], counts["replace"], counts["new"], counts["addresses"])
     )
     print(
-        "LEDGER NEW  %d filas | %d GENERATED registradas en el auditor"
-        % (counts["ledger"], counts["generated"])
+        "LEDGER NEW  %d filas | %d GENERATED, %d DELIVERED, %d EXCLUDED registradas"
+        % (counts["ledger"], counts["generated"], counts["delivered"], counts["excluded"])
     )
     print("VIOLACIONES %d en %d reglas" % (len(violations), len(by_rule)))
     print("")
@@ -911,9 +1002,10 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "ORIGEN-EXISTS": "el path de origen existe",
         "META-EXISTS": "el .meta del origen existe y tiene guid",
         "FORMAT-JPG": "ASC-5: la entrega es PNG, no JPG",
-        "PX-ACTUAL": "header del archivo vs px_actual",
+        "PX-ACTUAL": "header ilegible (px_actual es historico, informativo)",
+        "PX-ENTREGA": "header del archivo vs px_entrega (el gate de pixeles)",
         "MODE-TARGET": "spriteMode medido vs mode_target",
-        "RECT-STALE": "rect del spriteSheet vs lienzo completo",
+        "RECT-STALE": "rect del sprite vivo (spriteMode 2) vs lienzo completo",
         "BORDER-META": "spriteBorder vs columna border",
         "BORDER-SLICED": "borde declarado si se dibuja Sliced/Tiled",
         "MAX-TEX": "maxTextureSize vs max_tex",
@@ -922,12 +1014,17 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "PX-ENTREGA-TECHO": "max(px_entrega) <= max_tex",
         "ADDRESS-RESOLVE": "la address existe en AssetGroups",
         "ADDRESS-PATH": "address -> guid -> path == origen",
-        "NEW-LEDGER": "37 filas derivadas, sin duplicados, == sec.9 NEW",
+        "NEW-LEDGER": "filas derivadas, sin duplicados, == sec.9 NEW",
         "NEW-ORPHAN": "PNG del namespace del cohorte sin fila en el ledger",
         "NEW-BLOCKED": "una BLOCKED_* con PNG en disco",
         "NEW-SHA": "sha distinto del ledger sin fila en deliveries-v1.csv",
         "NEW-GUID": "guid 32 hex, unico, == .meta",
         "NEW-META": "textureType 8 y alphaIsTransparency 1",
+        "DELIVERY-ROW": "DELIVERED exige exactamente una fila con autor en deliveries-v1.csv",
+        "DELIVERY-SHA": "DELIVERED exige sha(disco) == ledger.sha256",
+        "EXCLUDED-MOTIVO": "EXCLUDED exige motivo no vacio (ART-4)",
+        "EXCLUDED-PNG": "EXCLUDED no puede tener PNG en disco (ART-4)",
+        "COHORT-SUM": "las dos identidades del cohorte: 122 = R + N y N = la suma de 5",
     }
     for rule in sorted(by_rule):
         print("%-18s %7d  %s" % (rule, len(by_rule[rule]), descriptions.get(rule, "")))

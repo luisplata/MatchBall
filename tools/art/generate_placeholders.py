@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Genera los placeholders PNG de las 37 piezas NEW de la sec.9 del contrato de arte.
+"""Genera los placeholders PNG del cohorte NEW de la sec.9 del contrato de arte.
 
 Fuente de verdad: el bloque ```csv de la sec.9 de ``Docs/art/manifest-refresh-visual-v1.md``
-(37 filas NEW). Este script NO inventa medidas: lee ``px_entrega``, ``border``, ``max_tex``,
-``pivot`` y ``ppu`` de esa tabla y escribe, por pieza:
+(las filas NEW; hoy 37). Este script NO inventa medidas: lee ``px_entrega``, ``border``,
+``max_tex``, ``pivot`` y ``ppu`` de esa tabla y escribe, por pieza:
 
     * ``Assets/Sprites/<pieza>``  PNG RGBA 8-bit, tamano exacto ``px_entrega``.
-    * ``Docs/art/placeholders-v1.csv``  ledger derivado de 37 filas (33 GENERATED + 4
-      BLOCKED_*). Nunca se escribe a mano.
+    * ``Docs/art/placeholders-v1.csv``  ledger derivado (hoy 33 GENERATED + 4 BLOCKED_*).
+      Nunca se escribe a mano.
 
-Las 4 bloqueadas no generan archivo: ``BLOCKED_PX`` (falta canvas en §9) y
-``BLOCKED_BY_DESIGN`` (decision de design abierta). Su fila lleva ``motivo`` no vacio con
-el artefacto que las desbloquea, el rol que decide y el efecto en los conteos (APH-11).
+El cohorte NO es una constante: se deriva de la sec.9 (``122 = R + N``) y el ledger lo
+declara con las cinco etiquetas de ``tools/art/art_ledger.py``. Las bloqueadas no generan
+archivo: ``BLOCKED_PX`` (falta canvas en §9) y ``BLOCKED_BY_DESIGN`` (decision de design
+abierta). Su fila lleva ``motivo`` no vacio con el artefacto que las desbloquea, el rol que
+decide y el efecto en los conteos (APH-11). Una ``DELIVERED``/``EXCLUDED`` que ya esta en el
+ledger se preserva verbatim: regenerar no puede reescribir una decision de entrega.
 
 Familias visuales (APH-5). El contrato exige que un placeholder no se pueda confundir con
 arte, y que su borde 9-slice sea verificable al pixel:
@@ -42,6 +45,8 @@ Uso:
     python tools/art/generate_placeholders.py --check               # gate: 0 ok / 1 drift / 2 §9
     python tools/art/generate_placeholders.py --manifest            # sha256 + agregado
     python tools/art/generate_placeholders.py --freeze-guid         # copia GUID de los .meta
+    python tools/art/generate_placeholders.py --deliver PIEZA       # ledger-only: DELIVERED
+    python tools/art/generate_placeholders.py --ack-sha PIEZA       # ledger-only: celda sha256
     python tools/art/generate_placeholders.py --check --hosts Temp/hosts.csv
 
 El gate (`--check`) vive en `tools/art/check_placeholders.py` —plan B declarado en
@@ -50,11 +55,22 @@ parser de §9 y el render de aca: se revisa una sola vez y no puede divergir. El
 mantiene en un solo flag para que el contrato no cambie.
 
 ``--out DIR`` renderiza fuera de ``Assets/`` y escribe el ledger en ``DIR/`` (mas el
-``.meta``: los escribe Unity, nunca este script). ``--hosts`` es un csv
-``pieza,r,g,b`` con el ``m_Color`` vivo del host (0..1); sin hosts el gate no puede evaluar
-``SURVIVE`` y lo reporta como ``n/a``. ``--ack-sha PIEZA`` es el unico reconocimiento
-admitido cuando un input que afecta bytes cambia: reescribe solo la celda ``sha256`` de esa
-fila. Un sha nuevo sin ``--ack-sha`` es drift, y el gate no toca ni el PNG ni el ledger.
+``.meta``: los escribe Unity, nunca este script). ``--check`` evalua ``SURVIVE`` con los
+hosts vivos del mapa (``Docs/art/placeholders-v1.md``); ``--hosts`` es el override.
+
+Dos comandos tocan el ledger y NINGUNO escribe bytes de PNG (ART-2):
+
+    --deliver PIEZA   exige exactamente una fila de ``deliveries-v1.csv`` con ese sha y autor
+                      no vacio, y escribe ``estado=DELIVERED`` + ``sha256`` en el ledger.
+    --ack-sha PIEZA   reescribe SOLO la celda ``sha256`` y solo si el sha en disco es el del
+                      render derivado. Sobre una fila ``DELIVERED`` sale 1
+                      ``DELIVERED-IMMUTABLE``; con un sha que no es el del render, 1
+                      ``ACK-REFUSED``.
+
+La corrida de escritura corre ``guard_write()`` completo ANTES del primer ``write_bytes``:
+si el sha en disco difiere del ledger y no hay fila en ``deliveries-v1.csv``, sale 1
+``WRITE-REFUSED`` con **0 archivos escritos**. El camino de reconocimiento no puede
+regenerar el placeholder sobre arte.
 """
 
 from __future__ import annotations
@@ -72,6 +88,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+import art_ledger as ledger_mod
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = REPO_ROOT / "Docs" / "art" / "manifest-refresh-visual-v1.md"
 SPRITES_DIR = REPO_ROOT / "Assets" / "Sprites"
@@ -79,9 +97,9 @@ DEFAULT_LEDGER = REPO_ROOT / "Docs" / "art" / "placeholders-v1.csv"
 
 MANIFEST_COLUMNS = ("pieza", "estado", "origen", "px_actual", "px_entrega", "mode_target",
                     "mode_actual", "border", "max_tex", "pivot", "ppu", "address")
-LEDGER_COLUMNS = ("pieza", "estado", "px", "border", "familia", "path", "guid", "sha256", "motivo")
-EXPECTED_NEW = 37
-EXPECTED_GENERATED = 33
+LEDGER_COLUMNS = ledger_mod.LEDGER_COLUMNS
+STATES = ledger_mod.STATES
+EXPECTED_ROWS = ledger_mod.EXPECTED_ROWS
 NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$")
 GUID_RE = re.compile(r"^guid: ([0-9a-f]{32})\s*$", re.MULTILINE)
 FENCED_CSV_RE = re.compile(r"(?ms)^```csv\r?\n(.*?)^```")
@@ -195,12 +213,41 @@ class ContractError(Exception):
     """§9 o el ledger no se pueden leer: el generador no opina (exit 2)."""
 
 
+class RowError(Exception):
+    """Violacion de fila NOMBRADA (pieza + campo): exit 1, nunca 2 (DBT-4).
+
+    Exit 2 queda reservado al §9 ausente o ilegible como bloque. Un `motivo` generico, un
+    `px_entrega` vacio o un `border` que no entra son datos de UNA fila: el gate los nombra
+    y sale 1.
+    """
+
+    def __init__(self, pieza: str, campo: str, regla: str, detail: str):
+        super().__init__("%s %s %s: %s" % (regla, pieza, campo, detail))
+        self.pieza = pieza
+        self.campo = campo
+        self.regla = regla
+        self.detail = detail
+
+
 def display(path: Path) -> str:
     """Path relativo al repo cuando se puede; absoluto si vive fuera del working tree."""
     try:
         return path.resolve().relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+@dataclass(frozen=True)
+class Manifest:
+    """La sec.9 tipada: filas NEW + el conteo REPLACE (la identidad 122 = R + N)."""
+
+    new: list["Row"]
+    total: int
+    replace: int
+
+    @property
+    def expected_new(self) -> int:
+        return self.total - self.replace
 
 
 @dataclass(frozen=True)
@@ -229,6 +276,11 @@ class Entry:
     def generated(self) -> bool:
         return self.estado == "GENERATED"
 
+    @property
+    def writes_png(self) -> bool:
+        """Las filas con PNG propio: GENERATED (derivado) y DELIVERED (arte real)."""
+        return self.estado in ("GENERATED", "DELIVERED")
+
 
 # --------------------------------------------------------------------------- §9 y ledger
 
@@ -245,7 +297,7 @@ def parse_border(value: str) -> tuple[int, int, int, int]:
     return tuple(int(part) for part in parts)  # type: ignore[return-value]
 
 
-def read_manifest(path: Path) -> list[Row]:
+def read_manifest(path: Path) -> Manifest:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
@@ -259,9 +311,19 @@ def read_manifest(path: Path) -> list[Row]:
     if header != MANIFEST_COLUMNS:
         raise ContractError("columnas inesperadas en la sec.9: %s" % (header,))
     rows: list[Row] = []
+    total = 0
+    replace = 0
     for raw in reader:
         cells = [cell.strip() for cell in raw]
-        if not any(cells) or len(cells) != len(MANIFEST_COLUMNS) or cells[1] != "NEW":
+        if not any(cells):
+            continue
+        if len(cells) != len(MANIFEST_COLUMNS):
+            raise ContractError("fila con %d columnas en la sec.9: %s" % (len(cells), cells[0]))
+        total += 1
+        if cells[1] == "REPLACE":
+            replace += 1
+            continue
+        if cells[1] != "NEW":
             continue
         try:
             rows.append(Row(
@@ -275,47 +337,75 @@ def read_manifest(path: Path) -> list[Row]:
             ))
         except (ValueError, IndexError) as error:
             raise ContractError("fila ilegible en la sec.9 (%s): %s" % (cells[0], error)) from error
-    if len(rows) != EXPECTED_NEW:
-        raise ContractError("la sec.9 tiene %d filas NEW, se esperan %d" % (len(rows), EXPECTED_NEW))
-    return rows
+    if total != EXPECTED_ROWS:
+        raise ContractError("la sec.9 tiene %d filas, el contrato congela %d" % (total, EXPECTED_ROWS))
+    manifest = Manifest(new=rows, total=total, replace=replace)
+    if len(rows) != manifest.expected_new:
+        raise ContractError("la sec.9 declara %d filas NEW y la identidad 122 = %d + %d pide %d"
+                            % (len(rows), replace, len(rows), manifest.expected_new))
+    return manifest
 
 
-def classify(rows: list[Row]) -> list[Entry]:
+def classify(rows: list[Row], ledger: dict[str, dict] | None = None,
+             deliveries: list[dict] | None = None) -> list[Entry]:
+    """Estado por fila: deriva GENERATED/BLOCKED_*, PRESERVA DELIVERED/EXCLUDED.
+
+    El ledger entra como dato: una pieza que ya fue entregada o excluida no puede volver a
+    GENERATED por regenerar (ART-1, ART-4). Una violacion de fila sale como `RowError`
+    (exit 1, pieza + campo), no como `ContractError` (exit 2, DBT-4).
+    """
+    ledger = ledger or {}
+    if deliveries is None:
+        deliveries = ledger_mod.read_deliveries()
     entries: list[Entry] = []
     for row in rows:
+        previous = ledger.get(row.pieza) or {}
+        previous_estado = (previous.get("estado") or "").strip()
+        if previous_estado in ledger_mod.PRESERVED_STATES:
+            entries.append(Entry(row, previous_estado,
+                                 previous.get("familia") or FAMILY.get(row.pieza) or "-",
+                                 previous.get("motivo") or ""))
+            continue
         if row.pieza in BLOCKED:
-            estado, motivo = BLOCKED[row.pieza]
+            blocked_estado, motivo = BLOCKED[row.pieza]
             if any(token in motivo.casefold() for token in GENERIC_MOTIVO):
-                raise ContractError("%s: el motivo cae en un generico (APH-11)" % row.pieza)
-            entries.append(Entry(row, estado, "-", motivo))
+                raise RowError(row.pieza, "motivo", "TBD-CAMPO",
+                               "el motivo cae en un generico (APH-11)")
+            entries.append(Entry(row, blocked_estado, "-", motivo))
             continue
         familia = FAMILY.get(row.pieza)
         if familia is None:
-            raise ContractError("%s: NEW sin familia ni bloqueo declarado" % row.pieza)
+            raise RowError(row.pieza, "familia", "TBD-CAMPO",
+                           "NEW sin familia ni bloqueo declarado")
         if row.px is None:
-            raise ContractError("%s: px_entrega vacio y la pieza no esta bloqueada" % row.pieza)
+            raise RowError(row.pieza, "px_entrega", "TBD-CAMPO",
+                           "px_entrega vacio y la pieza no esta bloqueada")
         left, bottom, right, top = row.border
         if left + right >= row.px[0] or top + bottom >= row.px[1]:
-            raise ContractError("%s: border %s no entra en %dx%d (APH-4 aborta, no clampea)"
-                                % (row.pieza, "/".join(map(str, row.border)), *row.px))
+            raise RowError(row.pieza, "border", "TBD-CAMPO",
+                           "border %s no entra en %dx%d (APH-4 aborta, no clampea)"
+                           % ("/".join(map(str, row.border)), *row.px))
         if max(row.px) > row.max_tex:
-            raise ContractError("%s: px_entrega %dx%d excede max_tex %d"
-                                % (row.pieza, *row.px, row.max_tex))
+            raise RowError(row.pieza, "max_tex", "TBD-CAMPO",
+                           "px_entrega %dx%d excede max_tex %d" % (*row.px, row.max_tex))
         entries.append(Entry(row, "GENERATED", familia, ""))
-    if len(entries) != EXPECTED_NEW:
-        raise ContractError("clasificacion incompleta: %d de %d" % (len(entries), EXPECTED_NEW))
-    if sum(1 for entry in entries if entry.generated) != EXPECTED_GENERATED:
-        raise ContractError("GENERATED != %d: la resta 37 - BLOCKED_PX - BLOCKED_BY_DESIGN no cierra"
-                            % EXPECTED_GENERATED)
+    if len(entries) != len(rows):
+        raise ContractError("clasificacion incompleta: %d de %d" % (len(entries), len(rows)))
     return entries
 
 
-def ledger_text(entries: list[Entry], shas: dict[str, str], guids: dict[str, str]) -> str:
+def ledger_text(entries: list[Entry], shas: dict[str, str], guids: dict[str, str],
+                previous: dict[str, dict] | None = None) -> str:
+    """Ledger derivado. DELIVERED/EXCLUDED se escriben VERBATIM desde el ledger previo."""
+    previous = previous or {}
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(LEDGER_COLUMNS)
     for entry in entries:
         row = entry.row
+        if entry.estado in ledger_mod.PRESERVED_STATES and row.pieza in previous:
+            writer.writerow([previous[row.pieza].get(column, "") for column in LEDGER_COLUMNS])
+            continue
         px = "%dx%d" % row.px if row.px else "-"
         writer.writerow((
             row.pieza,
@@ -323,7 +413,7 @@ def ledger_text(entries: list[Entry], shas: dict[str, str], guids: dict[str, str
             px,
             "/".join(map(str, row.border)),
             entry.familia,
-            "Assets/Sprites/" + row.pieza if entry.generated else "-",
+            "Assets/Sprites/" + row.pieza if entry.writes_png else "-",
             guids.get(row.pieza, ""),
             shas.get(row.pieza, ""),
             entry.motivo,
@@ -332,10 +422,8 @@ def ledger_text(entries: list[Entry], shas: dict[str, str], guids: dict[str, str
 
 
 def read_ledger(path: Path) -> dict[str, dict]:
-    if not path.is_file():
-        return {}
-    with path.open(newline="", encoding="utf-8") as handle:
-        return {row["pieza"]: row for row in csv.DictReader(handle)}
+    """`pieza -> fila` del ledger; el formato y el encabezado los valida `art_ledger`."""
+    return ledger_mod.ledger_index(ledger_mod.read_ledger(path))
 
 
 # ------------------------------------------------------------------------------- render
@@ -526,7 +614,11 @@ def encode(image: Image.Image) -> bytes:
 
 
 def collisions(entries: list[Entry], render_dir: Path) -> list[str]:
-    """APH-3: nombres unicos entre si y sin colision con otro path del repo."""
+    """APH-3: nombres unicos entre si y sin colision con otro path del repo.
+
+    La colision con `Assets/` solo aplica cuando el destino ES `Assets/Sprites`: una corrida
+    de ensayo en `Temp/` no entrega y por lo tanto no puede colisionar con lo ya entregado.
+    """
     failures: list[str] = []
     names = [entry.row.pieza for entry in entries]
     for name in sorted({name for name in names if names.count(name) > 1}):
@@ -534,6 +626,8 @@ def collisions(entries: list[Entry], render_dir: Path) -> list[str]:
     for name in names:
         if not NAME_RE.match(name):
             failures.append("%s NOMBRE: no cumple ^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\\.png$" % name)
+    if render_dir.resolve() != SPRITES_DIR:
+        return failures
     index: dict[str, list[str]] = {}
     for path in sorted((REPO_ROOT / "Assets").rglob("*")):
         if path.is_file() and path.suffix.lower() in (".png", ".jpg", ".jpeg"):
@@ -571,10 +665,11 @@ def do_manifest(entries, render_dir) -> int:
             return 1
         lines.append("%s  Assets/Sprites/%s" % (hashlib.sha256(path.read_bytes()).hexdigest(),
                                                 entry.row.pieza))
+    generated = sum(1 for entry in entries if entry.generated)
     print("\n".join(lines))
     print("AGREGADO  %s  %d/%d" % (hashlib.sha256("\n".join(lines).encode("ascii")).hexdigest(),
-                                   len(lines), EXPECTED_GENERATED))
-    return 0 if len(lines) == EXPECTED_GENERATED else 1
+                                   len(lines), generated))
+    return 0 if len(lines) == generated else 1
 
 
 def do_freeze_guid(entries, render_dir, ledger_path) -> int:
@@ -598,17 +693,49 @@ def do_freeze_guid(entries, render_dir, ledger_path) -> int:
         return 2
     ledger = read_ledger(ledger_path)
     shas = {pieza: row["sha256"] for pieza, row in ledger.items()}
-    ledger_path.write_text(ledger_text(entries, shas, guids), encoding="utf-8", newline="\n")
+    ledger_path.write_text(ledger_text(entries, shas, guids, ledger), encoding="utf-8",
+                           newline="\n")
     print("escrito %s: %d GUID congelados desde los .meta"
           % (display(ledger_path), len(guids)))
     return 0
 
 
-def do_write(entries, render_dir, ledger_path, twice, acked) -> int:
+def guard_write(entries, render_dir: Path, ledger: dict[str, dict],
+                deliveries: list[dict]) -> list[str]:
+    """ART-2: corre COMPLETO antes del primer `write_bytes`.
+
+    Regla: si el sha del PNG en disco difiere del sha del ledger y no hay una fila de
+    `deliveries-v1.csv` que declare esos bytes, el generador NO escribe nada. Un ledger sin
+    sha es adopcion (el PNG todavia no fue reconocido por nadie) y no acusa.
+    """
+    failures: list[str] = []
+    for entry in entries:
+        if not entry.generated:
+            continue
+        pieza = entry.row.pieza
+        path = render_dir / pieza
+        if not path.is_file():
+            continue
+        previous = ((ledger.get(pieza) or {}).get("sha256") or "").strip()
+        if not previous:
+            continue  # adopcion: no hay sha contra el cual acusar drift
+        disk = ledger_mod.sha256_of(path)
+        if disk == previous:
+            continue
+        if ledger_mod.delivery_rows(deliveries, pieza, disk):
+            continue
+        failures.append(
+            "%s WRITE-REFUSED: disco %s != ledger %s y sin fila en deliveries-v1.csv"
+            % (pieza, disk, previous))
+    return failures
+
+
+def do_write(entries, render_dir, ledger_path, twice, deliveries_path=None) -> int:
     # Un solo validador para las dos mitades (plan B de tasks): el generador se niega a
     # escribir algo que su propio gate rechazaria.
     from check_placeholders import validate
 
+    deliveries = ledger_mod.read_deliveries(deliveries_path or ledger_mod.DELIVERIES)
     rendered = render_all(entries)
     if twice:
         second = render_all(entries)
@@ -620,33 +747,125 @@ def do_write(entries, render_dir, ledger_path, twice, acked) -> int:
     failures = collisions(entries, render_dir)
     shas = {pieza: hashlib.sha256(data).hexdigest() for pieza, (_, data, _) in rendered.items()}
     by_piece = {entry.row.pieza: entry for entry in entries}
-    for pieza, (image, data, _) in rendered.items():
+    for pieza, (image, data, _) in sorted(rendered.items()):
         failures.extend(validate(by_piece[pieza], data, image, None))
     ledger = read_ledger(ledger_path)
     for pieza, sha in shas.items():
         previous = (ledger.get(pieza) or {}).get("sha256") or ""
-        if previous and previous != sha and pieza not in acked:
-            failures.append("%s SHA: ledger %s, render %s (reconocer con --ack-sha %s)"
+        if previous and previous != sha:
+            failures.append("%s SHA: ledger %s, render %s (reconocer con --ack-sha %s, que es"
+                            " ledger-only y no escribe PNG)"
                             % (pieza, previous, sha, pieza))
+    # El guard corre completo ANTES de cualquier escritura (ART-2): drift sin entrega = 0 bytes.
+    failures.extend(guard_write(entries, render_dir, ledger, deliveries))
     if failures:
         for failure in failures:
             print(failure, file=sys.stderr)
-        print("FALLA  nada escrito: %d hallazgos" % len(failures), file=sys.stderr)
+        print("FALLA  nada escrito: %d hallazgos (0 archivos escritos)" % len(failures),
+              file=sys.stderr)
         return 1
     render_dir.mkdir(parents=True, exist_ok=True)
     for pieza, (_, data, _) in sorted(rendered.items()):
         (render_dir / pieza).write_bytes(data)
     guids = {pieza: row.get("guid", "") for pieza, row in ledger.items()}
+    for pieza, row in ledger.items():
+        if (row.get("estado") or "").strip() in ledger_mod.PRESERVED_STATES:
+            shas[pieza] = row.get("sha256", "")
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
-    ledger_path.write_text(ledger_text(entries, shas, guids), encoding="utf-8", newline="\n")
+    ledger_path.write_text(ledger_text(entries, shas, guids, ledger), encoding="utf-8",
+                           newline="\n")
     print("escritos %d PNG en %s y el ledger %s"
           % (len(rendered), display(render_dir), display(ledger_path)))
     return 0
 
 
+def do_ack(entries, render_dir: Path, ledger_path: Path, pieces: list[str],
+           deliveries_path: Path | None = None) -> int:
+    """ART-2: `--ack-sha` reescribe SOLO la celda `sha256`; jamas un PNG.
+
+    Condiciones: la fila existe y su estado no es DELIVERED/EXCLUDED (`DELIVERED-IMMUTABLE`),
+    y el sha en disco es exactamente el del render derivado (`ACK-REFUSED` si no).
+    """
+    rendered = render_all(entries)
+    by_piece = {entry.row.pieza: entry for entry in entries}
+    rows = ledger_mod.read_ledger(ledger_path)
+    index = ledger_mod.ledger_index(rows)
+    failures: list[str] = []
+    changed = 0
+    for pieza in pieces:
+        entry = by_piece.get(pieza)
+        row = index.get(pieza)
+        if entry is None or row is None:
+            failures.append("ACK-REFUSED %s: no esta en la sec.9 ni en el ledger" % pieza)
+            continue
+        estado = (row.get("estado") or "").strip()
+        if estado in ledger_mod.PRESERVED_STATES or estado != "GENERATED":
+            failures.append("DELIVERED-IMMUTABLE %s: estado '%s' (una entrega no se re-reconoce)"
+                            % (pieza, estado or "(vacio)"))
+            continue
+        new_sha = hashlib.sha256(rendered[pieza][1]).hexdigest()
+        path = render_dir / pieza
+        if not path.is_file():
+            failures.append("ACK-REFUSED %s: falta %s, no hay sha en disco que reconocer"
+                            % (pieza, display(path)))
+            continue
+        disk = ledger_mod.sha256_of(path)
+        if disk != new_sha:
+            failures.append("ACK-REFUSED %s: disco %s != render derivado %s"
+                            % (pieza, disk, new_sha))
+            continue
+        if (row.get("sha256") or "") == new_sha:
+            print("SIN-CAMBIO  %s: el ledger ya declara %s" % (pieza, new_sha))
+            continue
+        previous = row["sha256"] if row["sha256"] else "(vacio)"
+        row["sha256"] = new_sha
+        changed += 1
+        print("ACK  %s: sha256 %s -> %s" % (pieza, previous, new_sha))
+    if failures:
+        for failure in failures:
+            print(failure)
+        print("RESULTADO   FAIL  (%d hallazgos, 0 archivos escritos)" % len(failures))
+        return 1
+    ledger_mod.write_ledger(rows, ledger_path)
+    print("escrito %s: %d celdas sha256 (0 PNG)" % (display(ledger_path), changed))
+    return 0
+
+
+def do_deliver(entries, ledger_path: Path, pieza: str, deliveries_path: Path | None = None) -> int:
+    """ART-1: `--deliver` escribe `estado` + `sha256` desde `deliveries-v1.csv` (ledger-only)."""
+    deliveries = ledger_mod.read_deliveries(deliveries_path or ledger_mod.DELIVERIES)
+    rows = ledger_mod.read_ledger(ledger_path)
+    index = ledger_mod.ledger_index(rows)
+    row = index.get(pieza)
+    if row is None:
+        print("DELIVERY-ROW %s: no tiene fila en el ledger" % pieza)
+        return 1
+    declared = ledger_mod.delivery_rows(deliveries, pieza)
+    if len(declared) != 1:
+        shas = ", ".join((entry.get("sha256") or "").strip() or "(vacio)" for entry in declared)
+        print("DELIVERY-ROW %s: %d filas con autor en deliveries-v1.csv (se exige exactamente 1)%s"
+              % (pieza, len(declared), (": " + shas) if shas else ""))
+        return 1
+    sha = (declared[0].get("sha256") or "").strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha):
+        print("DELIVERY-SHA %s: '%s' no es un sha256" % (pieza, sha))
+        return 1
+    path = ledger_mod.REPO_ROOT / (row.get("path") or "") if row.get("path") not in ("-", "") else None
+    if path is not None and path.is_file():
+        disk = ledger_mod.sha256_of(path)
+        if disk != sha:
+            print("DELIVERY-SHA %s: disco %s != deliveries %s" % (pieza, disk, sha))
+            return 1
+    row["estado"] = "DELIVERED"
+    row["sha256"] = sha
+    ledger_mod.write_ledger(rows, ledger_path)
+    print("DELIVERED   %s %s (ledger-only, 0 PNG)" % (pieza, sha))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Genera y verifica los placeholders PNG de las 37 NEW de la sec.9.")
+        description="Genera y verifica los placeholders PNG del cohorte NEW de la sec.9.")
     parser.add_argument("--out", type=Path, help="directorio de salida (default Assets/Sprites)")
     parser.add_argument("--ledger", type=Path, help="ledger derivado (default Docs/art/placeholders-v1.csv)")
     parser.add_argument("--contract", type=Path, help="manifiesto con el bloque ```csv de la sec.9")
@@ -654,33 +873,46 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", action="store_true", help="imprime sha256 por pieza + agregado")
     parser.add_argument("--twice", action="store_true", help="renderiza dos veces y compara sha256")
     parser.add_argument("--freeze-guid", action="store_true", help="copia el GUID de los .meta al ledger")
-    parser.add_argument("--hosts", type=Path, help="csv pieza,r,g,b con el m_Color vivo del host")
+    parser.add_argument("--hosts", type=Path, help="csv pieza,r,g,b: override de los hosts del mapa")
+    parser.add_argument("--deliver", metavar="PIEZA",
+                        help="ledger-only: marca DELIVERED desde deliveries-v1.csv (0 PNG)")
     parser.add_argument("--ack-sha", action="append", default=[], metavar="PIEZA",
-                        help="reconoce el sha nuevo de esa fila (unico reconocimiento admitido)")
+                        help="ledger-only: reescribe la celda sha256, nunca un PNG")
+    parser.add_argument("--deliveries", type=Path,
+                        help="csv pieza,sha256,autor,fecha (default Docs/art/deliveries-v1.csv)")
     return parser
 
 
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
-    manifest = args.contract or MANIFEST
+    manifest_path = args.contract or MANIFEST
     render_dir = (args.out or SPRITES_DIR).resolve()
     ledger_path = args.ledger or (render_dir / "placeholders-v1.csv" if args.out else DEFAULT_LEDGER)
     try:
-        entries = classify(read_manifest(manifest))
+        manifest = read_manifest(manifest_path)
+        entries = classify(manifest.new, read_ledger(ledger_path),
+                           ledger_mod.read_deliveries(args.deliveries or ledger_mod.DELIVERIES))
     except ContractError as error:
         print("ERROR: %s" % error, file=sys.stderr)
         return 2
+    except RowError as error:
+        print(error, file=sys.stderr)
+        return 1
     if args.check:
         # Plan B de tasks: el gate vive en check_placeholders.py (mismo importa-render, sin
         # re-derivar). El CLI se mantiene aca para que `--check` siga siendo uno solo.
         import check_placeholders
 
-        return check_placeholders.run(entries, render_dir, ledger_path, args.hosts)
+        return check_placeholders.run(entries, render_dir, ledger_path, args.hosts, manifest)
+    if args.deliver:
+        return do_deliver(entries, ledger_path, args.deliver, args.deliveries)
+    if args.ack_sha:
+        return do_ack(entries, render_dir, ledger_path, list(args.ack_sha), args.deliveries)
     if args.manifest:
         return do_manifest(entries, render_dir)
     if args.freeze_guid:
         return do_freeze_guid(entries, render_dir, ledger_path)
-    return do_write(entries, render_dir, ledger_path, args.twice, set(args.ack_sha))
+    return do_write(entries, render_dir, ledger_path, args.twice, args.deliveries)
 
 
 if __name__ == "__main__":

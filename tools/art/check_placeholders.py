@@ -22,19 +22,27 @@ Que mide (regla -> req):
     FLAT4           relleno solido #FFFFFF sin marcas                          APH-5
     FIRMA           tramo #FF00FF >= 6 px si min(w,h) >= 16                    APH-5
     FRAME-FILL      los 3 canales del relleno >= 232                          APH-6
-    LEGIBLE         texto/placa >= 4.5:1 pre-tinte                            APH-6b
-    SURVIVE         L_tinte(relleno) >= 0.004 y delta >= 0.002 (solo con host) APH-6b
+    LEGIBLE         texto/placa medido en PIXELES >= 4.5:1                     DBT-1
+    SURVIVE         L_tinte(relleno) >= 0.004 y delta >= 0.002, una linea por
+                    host del mapa (`--hosts` es override)                      DBT-2
+    COHORT-SUM      37 = 33 + 0 + 0 + 2 + 2 y 122 = 85 REPLACE + 37 NEW        ART-3
+    DELIVERY-ROW    una DELIVERED exige exactamente una fila en deliveries     ART-1
+    DELIVERY-SHA    una DELIVERED exige sha(disco) == ledger.sha256            ART-1
+    EXCLUDED-*      una EXCLUDED sin motivo, o con PNG en disco                ART-4
+    ZLIB-LIMIT      el limite de determinismo (APH-7) esta declarado y es >= 1 DBT-3
 
 El orden es el de la spec: primero los bytes crudos (IHDR), despues el pixel decodificado,
 y el sha como atajo. Un solo canal de un solo pixel distinto es drift.
 
-``--hosts`` es el ``m_Color`` vivo del host (csv ``pieza,r,g,b``, 0..1). Sin hosts, la
-metrica ``SURVIVE`` no tiene con que medirse y se reporta como no evaluable: el host existe
-recien cuando hay slot cableado (slice 2). El caso de la spec —host oscuro, pieza que no
-sobrevive— se reproduce con ``--hosts`` y un relleno oscuro; con el relleno claro que exige
-APH-6 la pieza sobrevive incluso a 0.07 (ver la evidencia del change).
+Una fila DELIVERED NO compara pixeles contra el render derivado (APH-8 no aplica): exige
+sha(disco) == ledger y una fila de entrega con autor. Esa es la unica forma de que un arte
+real deje los tres gates en verde sin `--ack-sha`.
 
-Exit code: 0 = PASS / 1 = hay hallazgos / 2 = §9 ilegible.
+``SURVIVE`` se evalua con los hosts vivos del mapa (`check_placeholder_wiring.hosts_from_map`)
+sin exigir `--hosts`: la corrida canonica imprime una linea por host y `n/a` esta prohibido.
+`--hosts` es el override de review.
+
+Exit code: 0 = PASS / 1 = hay hallazgos / 2 = §9 ilegible (una fila nombrada es 1: DBT-4).
 
 Uso:
     python tools/art/check_placeholders.py
@@ -51,16 +59,19 @@ import io
 import re
 import struct
 import sys
+from collections import Counter
 from pathlib import Path
 
 from PIL import Image
 
+import art_ledger as ledger_mod
 import generate_placeholders as gen
 
 FORBIDDEN_CHUNKS = (b"tIME", b"pHYs", b"tEXt", b"iTXt")
 LEGIBLE_MIN = 4.5
 SURVIVE_FLOOR = 0.004
 SURVIVE_DELTA = 0.002
+ZLIB_DOC = gen.REPO_ROOT / "Docs" / "art" / "placeholders-v1.md"
 
 
 def wcag_luminance(color: tuple[int, int, int]) -> float:
@@ -115,8 +126,48 @@ def fill_color(image: Image.Image, familia: str):
     return max(candidates)[1] if candidates else None
 
 
-def validate(entry, data: bytes, image: Image.Image, host) -> list[str]:
-    """Reglas de pixel y archivo de una pieza. Devuelve hallazgos legibles."""
+def label_contrast(image: Image.Image):
+    """DBT-1: contraste MEDIDO entre el texto y la placa del render.
+
+    Devuelve `(ratio, text_rgb, plate_rgb)` o `None` si no hay placa. La placa es el rect de
+    pixeles `PLATE`; el texto es el color modal dentro de ese rect que no es placa. Cambiar
+    la placa cambia el numero: no hay dos constantes decidiendo.
+    """
+    width, height = image.size
+    pixels = image.load()
+    plate = gen.PLATE + (255,)
+    min_x = min_y = None
+    max_x = max_y = -1
+    for y in range(height):
+        for x in range(width):
+            if pixels[x, y] != plate:
+                continue
+            if min_x is None or x < min_x:
+                min_x = x
+            if min_y is None or y < min_y:
+                min_y = y
+            if x > max_x:
+                max_x = x
+            if y > max_y:
+                max_y = y
+    if min_x is None:
+        return None
+    counts: Counter = Counter()
+    for y in range(min_y, max_y + 1):
+        for x in range(min_x, max_x + 1):
+            color = pixels[x, y]
+            if color[3] == 255 and color[:3] != gen.PLATE:
+                counts[color[:3]] += 1
+    if not counts:
+        return None
+    # El texto se mide por su nucleo, no por el halo de antialias: el color no-placa con mas
+    # contraste contra la placa. Si NI SIQUIERA ese llega a 4.5, el par entero es ilegible.
+    text = max(counts, key=lambda color: contrast_ratio(color, gen.PLATE))
+    return contrast_ratio(text, gen.PLATE), text, gen.PLATE
+
+
+def validate_bytes(entry, data: bytes) -> list[str]:
+    """Primera mitad: los bytes crudos (IHDR, chunks). Independiente de los pixeles."""
     failures: list[str] = []
     width, height = entry.row.px
     label = "%-40s" % entry.row.pieza
@@ -133,6 +184,14 @@ def validate(entry, data: bytes, image: Image.Image, host) -> list[str]:
     for chunk in png_chunks(data):
         if chunk in FORBIDDEN_CHUNKS:
             failures.append("%s CHUNK: %s varia entre corridas" % (label, chunk.decode("ascii")))
+    return failures
+
+
+def validate_render(entry, image: Image.Image, host) -> list[str]:
+    """Segunda mitad: marcas, relleno, LEGIBLE medido y SURVIVE con host."""
+    failures: list[str] = []
+    width, height = image.size
+    label = "%-40s" % entry.row.pieza
 
     pixels = image.load()
     corners = (pixels[0, 0], pixels[width - 1, 0], pixels[0, height - 1], pixels[width - 1, height - 1])
@@ -162,28 +221,40 @@ def validate(entry, data: bytes, image: Image.Image, host) -> list[str]:
             failures.append("%s FRAME-FILL: relleno %s, los 3 canales deben ser >= 232"
                             % (label, "sin relleno visible" if not fill
                                else "#%02X%02X%02X" % tuple(fill)))
-    has_plate = any(color[:3] == gen.PLATE and color[3] == 255
-                    for _, color in (image.getcolors(maxcolors=1 << 24) or []))
-    if has_plate:
-        ratio = contrast_ratio(gen.WHITE, gen.PLATE)
+    measured = label_contrast(image)
+    if measured is not None:
+        ratio, text, plate = measured
         if ratio < LEGIBLE_MIN:
-            failures.append("%s LEGIBLE: texto/placa %.2f:1, minimo %.1f"
-                            % (label, ratio, LEGIBLE_MIN))
+            failures.append("%s LEGIBLE: texto/placa %.2f:1, minimo %.1f (texto #%02X%02X%02X,"
+                            " placa #%02X%02X%02X)"
+                            % (label, ratio, LEGIBLE_MIN, *text, *plate))
     if host is not None:
         failures.extend(survive(entry, image, host))
     return failures
 
 
-def survive(entry, image: Image.Image, host: tuple[float, float, float]) -> list[str]:
-    label = "%-40s" % entry.row.pieza
+def validate(entry, data: bytes, image: Image.Image, host) -> list[str]:
+    """Las dos mitades en el orden del contrato: bytes crudos y despues pixeles."""
+    return validate_bytes(entry, data) + validate_render(entry, image, host)
+
+
+def survive_metrics(entry, image: Image.Image, host: tuple[float, float, float]):
+    """`(L_tinte(relleno), L_tinte(marca), relleno)` o `None` si no hay con que medir."""
     colors = [color for _, color in (image.getcolors(maxcolors=1 << 24) or []) if color[3] == 255]
     fill = fill_color(image, entry.familia)
     if not colors or fill is None:
-        return []
+        return None
     marks = [color[:3] for color in colors if color[:3] != fill] or [gen.MAGENTA]
     darkest = min(marks, key=wcag_luminance)
-    lit_fill = tinted_luminance(fill, host)
-    lit_dark = tinted_luminance(darkest, host)
+    return tinted_luminance(fill, host), tinted_luminance(darkest, host), fill
+
+
+def survive(entry, image: Image.Image, host: tuple[float, float, float]) -> list[str]:
+    label = "%-40s" % entry.row.pieza
+    metrics = survive_metrics(entry, image, host)
+    if metrics is None:
+        return ["%s SURVIVE: sin relleno visible, no se puede medir (n/a prohibido, DBT-2)" % label]
+    lit_fill, lit_dark, _ = metrics
     failures = []
     if lit_fill < SURVIVE_FLOOR:
         failures.append("%s SURVIVE: L_tinte(relleno) %.5f < %.3f con host %s"
@@ -194,12 +265,29 @@ def survive(entry, image: Image.Image, host: tuple[float, float, float]) -> list
     return failures
 
 
+def survive_line(entry, image: Image.Image, host, source: str) -> str:
+    """Una linea por host del mapa: la metrica impresa, no un n/a."""
+    metrics = survive_metrics(entry, image, host)
+    lit_fill, lit_dark, fill = metrics if metrics else (0.0, 0.0, (0, 0, 0))
+    return ("SURVIVE  %-40s L_tinte(relleno) %.5f delta %.5f host %.2f/%.2f/%.2f  (%s)"
+            % (entry.row.pieza, lit_fill, lit_fill - lit_dark, host[0], host[1], host[2], source))
+
+
 def read_hosts(path: Path) -> dict[str, tuple[float, float, float]]:
     hosts: dict[str, tuple[float, float, float]] = {}
     with path.open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             hosts[row["pieza"].strip()] = (float(row["r"]), float(row["g"]), float(row["b"]))
     return hosts
+
+
+def resolve_hosts(hosts_path: Path | None):
+    """Los hosts del mapa (DBT-2) o el override de `--hosts`. Devuelve (hosts, origen)."""
+    if hosts_path:
+        return read_hosts(hosts_path), "override --hosts"
+    import check_placeholder_wiring as wiring
+
+    return wiring.hosts_from_map(), "host declarado en el mapa"
 
 
 def verify_pixels(entry, data: bytes, expected: Image.Image) -> tuple[list[str], str]:
@@ -239,10 +327,51 @@ def check_guid(pieza: str, guid: str, render_dir: Path) -> list[str]:
     return []
 
 
-def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None) -> int:
-    hosts = read_hosts(hosts_path) if hosts_path else {}
+def cohort_lines(entries, ledger_rows: list[dict], manifest) -> tuple[list[str], list[str]]:
+    """ART-3: las dos identidades, derivadas del ledger. Devuelve (lineas, hallazgos)."""
+    lines: list[str] = []
+    failures: list[str] = []
+    counts = ledger_mod.cohort_counts(ledger_rows)
+    total_ledger = len(ledger_rows)
+    for pieza, label in ledger_mod.unknown_states(ledger_rows):
+        failures.append("COHORT-SUM %s: etiqueta '%s' fuera de %s"
+                        % (pieza, label, "/".join(ledger_mod.STATES)))
+    if manifest is not None:
+        declared = manifest.replace + total_ledger
+        lines.append("COHORT      %s" % ledger_mod.cohort_identity_text(
+            manifest.total, manifest.replace, total_ledger))
+        if declared != manifest.total:
+            failures.append("COHORT-SUM %s: la diferencia es %+d (el ledger y la sec.9 no cierran)"
+                            % (ledger_mod.cohort_identity_text(manifest.total, manifest.replace,
+                                                               total_ledger),
+                               manifest.total - declared))
+    lines.append("COHORT-SUM  %s" % ledger_mod.cohort_sum_text(total_ledger, counts))
+    if sum(counts.values()) != total_ledger:
+        failures.append("COHORT-SUM %s: %d filas sin etiqueta valida"
+                        % (ledger_mod.cohort_sum_text(total_ledger, counts),
+                           total_ledger - sum(counts.values())))
+    if len(entries) != total_ledger:
+        failures.append("COHORT-SUM %d filas en la sec.9 y %d en el ledger (la diferencia es %+d)"
+                        % (len(entries), total_ledger, total_ledger - len(entries)))
+    return lines, failures
+
+
+def zlib_limit(path: Path = ZLIB_DOC) -> int:
+    """DBT-3: lineas que declaran el limite de determinismo (`grep -ci zlib`)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    return sum(1 for line in text.splitlines() if re.search(r"zlib", line, re.IGNORECASE))
+
+
+def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None, manifest=None,
+        deliveries_path: Path | None = None) -> int:
+    hosts, host_source = resolve_hosts(hosts_path)
+    ledger_rows = ledger_mod.read_ledger(ledger_path)
+    ledger = ledger_mod.ledger_index(ledger_rows)
+    deliveries = ledger_mod.read_deliveries(deliveries_path or ledger_mod.DELIVERIES)
     failures = gen.collisions(entries, render_dir)
-    ledger = gen.read_ledger(ledger_path)
     if not ledger:
         print("INFO  sin ledger en %s: se compara solo contra el render derivado"
               % gen.display(ledger_path))
@@ -251,14 +380,55 @@ def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None) -> int:
         if pending:
             print("INFO  %d filas sin guid congelado: los .meta los escribe Unity (cohorte new)"
                   " y --freeze-guid los congela" % pending)
+    lines, cohort_failures = cohort_lines(entries, ledger_rows, manifest)
+    failures.extend(cohort_failures)
+    limit = zlib_limit()
+    if limit < 1:
+        failures.append("ZLIB-LIMIT %d coincidencias de 'zlib' en %s: el limite de APH-7 no esta"
+                        " declarado (DBT-3)" % (limit, gen.display(ZLIB_DOC)))
+    print("ZLIB-LIMIT  %d" % limit)
     rendered = gen.render_all(entries)
+    hosts_used = 0
     for entry in entries:
         pieza = entry.row.pieza
         path = render_dir / pieza
-        if not entry.generated:
+        row = ledger.get(pieza)
+        if entry.estado == "EXCLUDED":
+            if row is None:
+                failures.append("%s LEDGER: sin fila en el ledger (el cohorte la exige)" % pieza)
+                continue
+            motivo = (row.get("motivo") or "").strip()
+            if not motivo or any(token in motivo.casefold() for token in gen.GENERIC_MOTIVO):
+                failures.append("%s EXCLUDED-MOTIVO: campo 'motivo' vacio o generico" % pieza)
+            if path.exists():
+                failures.append("%s EXCLUDED-PNG: una EXCLUDED no puede tener PNG (%s)"
+                                % (pieza, gen.display(path)))
+            continue
+        if entry.estado == "DELIVERED":
+            if row is None:
+                failures.append("%s LEDGER: sin fila en el ledger (el cohorte la exige)" % pieza)
+                continue
+            ledger_sha = (row.get("sha256") or "").strip()
+            declared = ledger_mod.delivery_rows(deliveries, pieza, ledger_sha)
+            if len(declared) != 1:
+                failures.append("%s DELIVERY-ROW: pieza %s sha %s, %d filas con autor en"
+                                " deliveries-v1.csv (se exige exactamente 1)"
+                                % (pieza, pieza, ledger_sha or "(vacio)", len(declared)))
+                continue
+            if not path.is_file():
+                failures.append("%s FALTA: no existe %s" % (pieza, gen.display(path)))
+                continue
+            on_disk = path.read_bytes()
+            disk_sha = hashlib.sha256(on_disk).hexdigest()
+            if disk_sha != ledger_sha:
+                failures.append("%s DELIVERY-SHA: ledger %s != disco %s"
+                                % (pieza, ledger_sha or "(vacio)", disk_sha))
+                continue
+            failures.extend(validate_bytes(entry, on_disk))
+            continue
+        if entry.estado in ledger_mod.BLOCKED_STATES:
             if path.exists():
                 failures.append("%s NEW-BLOCKED: la pieza esta bloqueada y hay PNG en disco" % pieza)
-            row = ledger.get(pieza)
             if row and (not row["motivo"] or any(token in row["motivo"].casefold()
                                                  for token in gen.GENERIC_MOTIVO)):
                 failures.append("%s MOTIVO: motivo vacio o generico (APH-11)" % pieza)
@@ -272,10 +442,13 @@ def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None) -> int:
         failures.extend(findings)
         if not findings and sha != hashlib.sha256(data).hexdigest():
             failures.append("%s SHA: bytes distintos del render derivado (pixeles iguales)" % pieza)
-        failures.extend(validate(entry, on_disk, image, hosts.get(pieza)))
-        row = ledger.get(pieza)
+        host = hosts.get(pieza)
+        if host is not None:
+            hosts_used += 1
+            print(survive_line(entry, image, host, host_source))
+        failures.extend(validate(entry, on_disk, image, host))
         if not row:
-            failures.append("%s LEDGER: sin fila (37 filas obligatorias)" % pieza)
+            failures.append("%s LEDGER: sin fila (el cohorte NEW la exige)" % pieza)
             continue
         expected = {"estado": "GENERATED", "px": "%dx%d" % entry.row.px,
                     "border": "/".join(map(str, entry.row.border)),
@@ -289,11 +462,19 @@ def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None) -> int:
                             % (pieza, row.get("sha256") or "(vacio)", sha))
         if row.get("guid"):
             failures.extend(check_guid(pieza, row["guid"], render_dir))
+    if hosts and hosts_used != len(hosts):
+        for pieza in sorted(set(hosts) - {entry.row.pieza for entry in entries}):
+            failures.append("SURVIVE %s: host declarado para una pieza fuera del cohorte NEW" % pieza)
+    for line in lines:
+        print(line)
     for failure in failures:
         print(failure)
-    total = sum(1 for entry in entries if entry.generated)
-    print("RESULTADO   %s  (%d GENERATED, %d bloqueadas, %d hallazgos)"
-          % ("PASS" if not failures else "FAIL", total, len(entries) - total, len(failures)))
+    states = Counter(entry.estado for entry in entries)
+    print("RESULTADO   %s  (%d GENERATED, %d bloqueadas; %d DELIVERED, %d EXCLUDED; %d filas,"
+          " %d hallazgos)"
+          % ("PASS" if not failures else "FAIL", states["GENERATED"],
+             states["BLOCKED_PX"] + states["BLOCKED_BY_DESIGN"], states["DELIVERED"],
+             states["EXCLUDED"], len(entries), len(failures)))
     return 1 if failures else 0
 
 
@@ -302,7 +483,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, help="directorio de los PNG (default Assets/Sprites)")
     parser.add_argument("--ledger", type=Path, help="ledger derivado")
     parser.add_argument("--contract", type=Path, help="manifiesto con el bloque ```csv de la sec.9")
-    parser.add_argument("--hosts", type=Path, help="csv pieza,r,g,b con el m_Color vivo del host")
+    parser.add_argument("--hosts", type=Path, help="csv pieza,r,g,b: override de los hosts del mapa")
+    parser.add_argument("--deliveries", type=Path, help="csv pieza,sha256,autor,fecha")
     return parser
 
 
@@ -310,12 +492,18 @@ def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     render_dir = (args.out or gen.SPRITES_DIR).resolve()
     ledger_path = args.ledger or (render_dir / "placeholders-v1.csv" if args.out else gen.DEFAULT_LEDGER)
+    deliveries_path = args.deliveries or ledger_mod.DELIVERIES
     try:
-        entries = gen.classify(gen.read_manifest(args.contract or gen.MANIFEST))
+        manifest = gen.read_manifest(args.contract or gen.MANIFEST)
+        entries = gen.classify(manifest.new, gen.read_ledger(ledger_path),
+                               ledger_mod.read_deliveries(deliveries_path))
     except gen.ContractError as error:
         print("ERROR: %s" % error, file=sys.stderr)
         return 2
-    return run(entries, render_dir, ledger_path, args.hosts)
+    except gen.RowError as error:
+        print(error, file=sys.stderr)
+        return 1
+    return run(entries, render_dir, ledger_path, args.hosts, manifest, deliveries_path)
 
 
 if __name__ == "__main__":

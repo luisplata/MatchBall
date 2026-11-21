@@ -132,6 +132,41 @@ def read_ledger_paths() -> set[str]:
         return {row["path"] for row in csv.DictReader(handle) if row.get("path", "-") != "-"}
 
 
+def live_image_color(row: dict):
+    """El `m_Color` vivo del `Image` del nodo de una fila `cableado`, o `None`."""
+    if row["nodo"] == "-":
+        return None
+    asset = REPO_ROOT / row["asset"]
+    if not asset.is_file():
+        return None
+    for doc in component_docs(asset, row["nodo"], "Image"):
+        color = parse_color(field(doc, "m_Color"))
+        if color is not None:
+            return color[:3]
+    return None
+
+
+def hosts_from_map(path: Path | None = None) -> dict[str, tuple[float, float, float]]:
+    """DBT-2: un host por fila `cableado`, leido del mapa sin abrir Unity.
+
+    - `image`, `image+alfa_host`, `selectable_state`, `serialized_sprite_field`: el `m_Color`
+      vivo del `Image` de ese nodo.
+    - `serialized_sprite_field` sin `Image` (los 3 dots): `1/1/1`, declarado.
+    - `image+tinte_design`: el tinte oscuro ES el efecto (excepcion que el propio mapa
+      declara); el host que decide si el contenido sobrevive es blanco, y `tint_original`
+      queda intacto en el mapa.
+    """
+    hosts: dict[str, tuple[float, float, float]] = {}
+    for row in read_map(path or MAP_FILE):
+        if row["estado"] != "cableado":
+            continue
+        if row["slot_tipo"] == "image+tinte_design":
+            hosts[row["pieza"]] = (1.0, 1.0, 1.0)
+            continue
+        hosts[row["pieza"]] = live_image_color(row) or (1.0, 1.0, 1.0)
+    return hosts
+
+
 # --------------------------------------------------------------------------- YAML
 
 
