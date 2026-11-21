@@ -137,28 +137,52 @@ ui_menu_btn_play_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Ca
 
 ## Capturas (`Docs/art/captures/placeholders-v1/`)
 
-24 PNG: **20 recortes** con el nombre de su pieza + **4 panorámicas** de host a 900×1900 (la
-resolución de referencia del proyecto: `CanvasScaler` de todas las escenas es
-`ScaleWithScreenSize 900×1900`, match 0).
+**20 PNG**: uno por cada fila `cableado` que declara `captura`, con el nombre de su pieza y el
+tamaño del recorte del nodo. Las 4 panorámicas de host que había acá se retiraron con el rig:
+nada las regeneraba, y una captura que sólo se puede mirar no es evidencia (DRL-3).
 
-Método: cámara del propio canvas (`Canvas.worldCamera`, `ScreenSpaceCamera`) → `RenderTexture`
-900×1900 → `ReadPixels` → recorte a la `RectTransform` del nodo. Nada de `ScreenCapture`: la
-resolución tiene que ser la del contrato, no la del Game view.
+Rig: `Assets/Editor/ArtContract/ArtCaptureRig.cs` (`BatchCapture`, entrypoint único). Método:
+cámara del propio canvas (`Canvas.worldCamera`, `ScreenSpaceCamera`) → `RenderTexture` 900×1900
+(la resolución de referencia del proyecto: `CanvasScaler` de todas las escenas es
+`ScaleWithScreenSize 900×1900`, match 0) → `ReadPixels` → recorte por la proyección del
+`RectTransform` del nodo. Nada de `ScreenCapture`: la resolución tiene que ser la del contrato, no
+la del Game view. El manifiesto con `px`, `bbox` y colores medidos es
+`Docs/art/evidence/captures-v1.md`, y lo reescribe el rig.
 
-Tres decisiones del rig, declaradas porque afectan lo que se ve:
+Decisiones del rig, declaradas porque afectan lo que se ve:
 
-1. **`TutorialOverlay` es código, no un estado guardado.** En el prefab `Dim`, `Panel`,
-   `CalloutLeft/Right`, `SkipButton`, `RetryPanel` y `DangerStrip` están inactivos y los prende
-   `TutorialOverlay.cs` paso a paso. Cada recorte activa **sólo** la cadena de su nodo, y las tres
-   `step_dot_*` se capturan con `TutorialStepDots.SetCurrent(1)` (dot 0 `done`, dot 1 `active`,
-   dot 2 `normal`) — el estado real del componente, no una asignación a mano.
+1. **Sin play mode.** `TutorialOverlay` es código, no un estado guardado: en el prefab `Dim`,
+   `Panel`, `CalloutLeft/Right`, `SkipButton`, `RetryPanel` y `DangerStrip` están inactivos y los
+   prende `TutorialOverlay.cs` paso a paso. Cada recorte activa **sólo** la cadena de su nodo, y
+   las tres `step_dot_*` se capturan con `TutorialStepDots.SetCurrent(1)` (dot 0 `done`, dot 1
+   `active`, dot 2 `normal`) — el estado real del componente, no una asignación a mano — y se
+   recorta el dot que nombra el `campo`, no la tira.
 2. **`pressed`/`disabled` se fuerzan con `Selectable.DoStateTransition`** (vía reflexión: es
    `protected`), que es exactamente lo que hace el input. La captura de `pressed` muestra el sprite
    de `m_PressedSprite` y **ningún** tinte de color: es la prueba visual del costo de APW-4b.
-3. **`MainMenu` sólo se ve bien en play mode**, y su panel `Configuration` no tiene *opener*
-   cableado (`onClick` con 0 listeners en el engranaje, `RectTransform` fuera de pantalla): el rig
-   corre en play mode y deja el panel en la posición que tendría abierto. No se guarda nada — el
-   play mode no escribe la escena.
+3. **`MainMenu` no entra en play mode.** El panel `Configuration` está fuera de pantalla en la
+   escena (`m_AnchoredPosition.x = -1000`) y su engranaje no tiene *opener* cableado; el rig
+   escribe el destino del tween de `PanelFloatingUiRules.Show()` (`localPosition = 0`). **La
+   posición abierta del panel no está confirmada por el dueño de la UI**: si se abre en otro lado,
+   se corrige el rig y las capturas se regeneran.
+4. **Ningún vecino tapa el recorte.** En el asset de una escena de UI todos los paneles de nivel
+   canvas están `active` y el código prende uno por vez; el rig apaga los hermanos **posteriores**
+   que cubren entero al nodo. El fondo (hermanos anteriores) se respeta.
+5. **No escribe `Assets/`.** Cada escena se abre desde disco y se recarga para descartar el estado
+   forzado: ningún `.meta` se reescribe (15 piezas en Single serializan un bloque de tamaño lienzo;
+   moverles un px las volvería `RECT-STALE`).
+
+El diff de DRL-4 no compara las capturas versionadas: `ArtCaptureRig.CaptureSwapDrill` emite
+`before.png` y `after.png` del mismo estado en `Temp/` (ignorado) y
+`tools/art/check_capture_diff.py` exige `changed ⊆ bbox` y `changed >= 1` sobre ese marco.
+`--verify-manifest` cierra la otra mitad: rig versionado, una captura por fila `cableado`, `px`
+declarados y ≥ 2 colores distintos (un PNG uniforme falla).
+
+**Una fila queda fuera del rig, declarada**: `ball_state_frozen_01` (el único `cableado` sin
+`captura`). Su slot es un `Sprite` serializado en un `MonoBehaviour` que en runtime se asigna al
+`SpriteRenderer` de una bola de mundo: no hay `RectTransform` ni canvas que proyectar. La lista
+cerrada vive en `tools/art/art_ledger.py` (`CAPTURE_EXCEPTIONS`) y los dos gates la imprimen por
+nombre.
 
 **Firma visual, en las capturas**: el marco `#FF00FF` y la etiqueta se ven en `bubble`, `skip`,
 `panel_retry`, `continue`, `retry`, `btn_primary_*`, `play` y `settings`. `continue`/`retry`

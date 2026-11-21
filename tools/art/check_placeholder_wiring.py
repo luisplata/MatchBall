@@ -23,7 +23,8 @@ Que prueba:
                `image+tinte_design` conservan el suyo por excepcion declarada. El alfa nunca
                se toca (APW-3)
     FALTA      ningun `sin_slot`/`bloqueado` aparece referenciado en ningun YAML (por GUID)
-    CAPTURA    cada fila `cableado` con `captura` tiene su PNG (las vacias son pendientes)
+    CAPTURA    cada fila `cableado` con `captura` tiene su PNG (las vacias son pendientes; una
+               excepcion declarada en `art_ledger.CAPTURE_EXCEPTIONS` no es un hueco)
     DIFF       con --diff REF, cada linea cambiada toca solo claves permitidas de SU fila,
                ningun `.cs` y ningun asset fuera del mapa (APW-4, APW-4b, APW-6)
 
@@ -57,6 +58,8 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+import art_ledger as ledger_mod
 
 TOOLS = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -683,6 +686,35 @@ def check_diff(rows: list[dict], base: str) -> list[str]:
     return failures
 
 
+def capture_report(rows: list[dict], pending: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """`--require-captures` (DRL-3): separa lo declarado de lo que es un hueco.
+
+    `pending` son las filas `cableado` sin captura. Una fila de `CAPTURE_EXCEPTIONS` esta
+    declarada con su motivo (lista cerrada en `art_ledger`, diff de codigo + review); cualquier
+    otra es un hueco y falla. La declaracion se mide en las dos direcciones: una excepcion que ya
+    tiene captura, o que no es una fila cableada, es `CAPTURA-STALE` (la lista envejecio).
+    """
+    failures: list[str] = []
+    declared: list[str] = []
+    names = {row["pieza"]: row for row in rows}
+    for pieza in pending:
+        reason = ledger_mod.CAPTURE_EXCEPTIONS.get(pieza)
+        if reason:
+            declared.append("EXCEPCION  %s: %s" % (pieza, reason))
+        else:
+            failures.append("CAPTURA: %s sin captura declarada" % pieza)
+    for pieza in sorted(ledger_mod.CAPTURE_EXCEPTIONS):
+        row = names.get(pieza)
+        if row is None:
+            failures.append("CAPTURA-STALE: %s es una excepcion declarada y no esta en el mapa"
+                            % pieza)
+        elif row["estado"] != "cableado" or row["captura"]:
+            failures.append("CAPTURA-STALE: %s es una excepcion declarada y el mapa ya declara "
+                            "estado '%s' con captura '%s'"
+                            % (pieza, row["estado"], row["captura"] or "-"))
+    return failures, declared, pending
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Gate del cableado de placeholders.")
     parser.add_argument("--plan", action="store_true", help="solo resuelve el mapa, sin diff")
@@ -723,10 +755,16 @@ def main(argv: list[str]) -> int:
     print("DIFF        %s" % (("allowlist contra %s" % args.diff) if args.diff is not None
                               else "sin base: pasar --diff REF para correr la allowlist"))
     print("YAML        %d archivos escaneados en busca de filtraciones" % scanned)
-    if args.require_captures and pending:
-        failures += ["CAPTURA: %s sin captura declarada" % pieza for pieza in pending]
+    if args.require_captures:
+        capture_failures, declared, pending = capture_report(rows, pending)
+        failures += capture_failures
+        for note in declared:
+            print(note)
+        if pending:
+            print("CAPTURA     %d cableada(s) sin captura: %d declarada(s), %d sin declarar"
+                  % (len(pending), len(declared), len(capture_failures)))
     elif pending:
-        print("PENDIENTE   %d capturas sin declarar (slice de capturas)" % len(pending))
+        print("PENDIENTE   %d capturas sin declarar (gate: --require-captures)" % len(pending))
     for failure in failures:
         print(failure)
     print("RESULTADO   %s  (%d hallazgos)" % ("PASS" if not failures else "FAIL", len(failures)))

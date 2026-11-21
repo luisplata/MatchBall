@@ -13,6 +13,8 @@ Que declara (regla -> req):
     EXPECTED_ROWS        122 filas en la sec.9 del contrato (la identidad 122 = R + N)
     PX_ENTREGA_PENDING   las 6 piezas de §4 cuyo header sigue en `px_actual`; una septima
                          exige diff de codigo y review
+    CAPTURE_EXCEPTIONS   las filas `cableado` que no pueden tener captura (hoy 1: un slot de
+                         mundo sin RectTransform); una segunda exige diff de codigo y review
     PROVENANCE           `Docs/art/provenance-v1.csv`: la procedencia CONGELADA de las
                          REPLACE (86 filas). Archivo SEPARADO del ledger a proposito
     ORPHAN_MOTIVO        las 4 REPLACE sin consumidor de PRV-4, con su motivo escrito
@@ -77,6 +79,20 @@ PX_ENTREGA_PENDING = {
 ROLE_SCREEN = "con_pantalla"
 ROLE_NO_SCREEN = "sin_pantalla"
 ROLES = (ROLE_SCREEN, ROLE_NO_SCREEN)
+
+# DRL-3: filas `cableado` del mapa que NO pueden tener captura, con el motivo escrito. Lista
+# CERRADA por la misma razon que PX_ENTREGA_PENDING y ORPHAN_MOTIVO: agregar la segunda es un
+# diff de codigo (y su review), no una celda vacia en el mapa. La usa el gate de capturas
+# (`check_capture_diff.py`) y `check_placeholder_wiring.py --require-captures`, y los dos la
+# imprimen por nombre: una fila cableada sin captura y sin esta declaracion es un hueco.
+CAPTURE_EXCEPTIONS = {
+    "ball_state_frozen_01.png":
+        "el slot es un `Sprite` serializado en un `MonoBehaviour` (FreezerMono.freezeSprite) que "
+        "en runtime se asigna al SpriteRenderer de una bola de mundo: no tiene RectTransform ni "
+        "Canvas, asi que el rig de canvas no lo proyecta. Una captura de un SpriteRenderer "
+        "inventado probaria la pieza, no el cableado (DRL-3/DRL-4 miden la proyeccion del nodo). "
+        "La cierra un rig de mundo con el prefab instanciado y la bola en juego.",
+}
 
 # PRV-4: las 4 REPLACE con cero consumidores, con su motivo escrito. Lista CERRADA por la misma
 # razon que PX_ENTREGA_PENDING: una quinta huerfana es un diff de codigo (y su review), no una
