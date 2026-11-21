@@ -16,6 +16,10 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     legible       DBT-1: el ratio se mide; cambiar la placa cambia el numero y puede fallar
     tbd           DBT-4: una fila nombrada sale 1 (TBD-CAMPO); un §9 ilegible sigue saliendo 2
     cohort-sum    ART-3: una etiqueta inventada en el ledger falla COHORT-SUM con pieza
+    provenance    PRV-1: la captura cubre R/R, es one-shot (CAPTURE-IMMUTABLE) y --add no reescribe
+    replace-sha   PRV-2: BASELINE / DELIVERED / UNKNOWN; solo UNKNOWN falla, con los dos shas
+    replace-guid  PRV-3: el swap no mueve las referencias; un guid nuevo falla con los dos
+    orphan        PRV-4: las 4 declaradas; una quinta → UNDECLARED y una con consumidor → STALE
     zlib-limit    DBT-3: la declaracion existe y el gate la consulta (>= 1)
 
 Uso:
@@ -48,6 +52,8 @@ PLAYER_AVATAR = ROOT / "Assets" / "Sprites" / "PlayerAvatar.png.meta"
 PIECE = "ui_tutorial_dim_01.png"
 RETRY = "ui_tutorial_btn_retry_normal_01.png"
 BLOCKED = "ui_tutorial_spotlight_fill_01.png"
+REPLACE = "ui_common_btn_primary_normal_01.png"
+ORPHAN = "ui_common_divider_01.png"
 
 
 def fresh(name: str) -> Path:
@@ -95,6 +101,30 @@ def deliveries_copy(directory: Path, rows: list[tuple[str, str, str, str]]) -> P
         for row in rows:
             writer.writerow(row)
     return path
+
+
+def provenance_copy(directory: Path, mutate, name: str = "provenance-v1.csv") -> Path:
+    """Copia del baseline real con una mutacion: los negativos de S2 nunca tocan Docs/."""
+    rows = ledger_mod.read_provenance()
+    if not rows:
+        raise AssertionError("%s no existe: correr --capture-provenance" % ledger_mod.PROVENANCE)
+    mutate(ledger_mod.provenance_index(rows))
+    path = directory / name
+    ledger_mod.write_provenance(rows, path)
+    return path
+
+
+@contextlib.contextmanager
+def swapped(module, **attributes):
+    """Cambia globals del gate (PROVENANCE/DELIVERIES/LEDGER) y los restaura pase lo que pase."""
+    original = {name: getattr(module, name) for name in attributes}
+    try:
+        for name, value in attributes.items():
+            setattr(module, name, value)
+        yield
+    finally:
+        for name, value in original.items():
+            setattr(module, name, value)
 
 
 def real_entries(ledger_path: Path | None = None, deliveries: list[dict] | None = None):
@@ -484,6 +514,203 @@ def case_cohort_sum() -> list[str]:
     return failures
 
 
+def case_provenance() -> list[str]:
+    """PRV-1: la captura es one-shot, cubre 85/85 y `--add` no reescribe una fila."""
+    failures: list[str] = []
+    work = fresh("provenance")
+    target = work / "provenance-v1.csv"
+
+    code, output = capture(audit.capture_provenance, gen.MANIFEST, audit.ASSETS_ROOT, target)
+    rows = ledger_mod.read_provenance(target)
+    replace_rows = [row for row in audit.read_csv_block(gen.MANIFEST)
+                    if row["estado"] == "REPLACE"]
+    print("captura: exit %d, %d filas (%d REPLACE en sec.9)" % (code, len(rows),
+                                                                len(replace_rows)))
+    if code != 0:
+        failures.append("la captura deberia salir 0: %s" % output)
+    if len(rows) != len(replace_rows):
+        failures.append("la captura escribio %d filas y sec.9 declara %d REPLACE"
+                        % (len(rows), len(replace_rows)))
+    if any(not row["sha256"] or len(row["guid"]) != 32 for row in rows):
+        failures.append("una fila capturada quedo sin sha o sin guid de 32 hex")
+
+    frozen = ledger_mod.sha256_of(target)
+    code, output = capture(audit.capture_provenance, gen.MANIFEST, audit.ASSETS_ROOT, target)
+    print("segunda captura: exit %d" % code)
+    if code != 1 or "CAPTURE-IMMUTABLE" not in output:
+        failures.append("la segunda captura deberia salir 1 CAPTURE-IMMUTABLE: %s" % output)
+    if ledger_mod.sha256_of(target) != frozen:
+        failures.append("la corrida negada reescribio el baseline")
+
+    code, output = capture(audit.capture_provenance, gen.MANIFEST, audit.ASSETS_ROOT, target,
+                           REPLACE)
+    print("--add de una pieza presente: exit %d" % code)
+    if code != 1 or "ADD-REFUSED" not in output:
+        failures.append("--add sobre una fila existente deberia salir 1 ADD-REFUSED: %s" % output)
+    if ledger_mod.sha256_of(target) != frozen:
+        failures.append("--add reescribio una fila existente")
+
+    with swapped(audit, PROVENANCE=target):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    info = "\n".join(result["info"])
+    print("cobertura declarada: %s" % next((line for line in result["info"]
+                                            if line.startswith("REPLACE-LEDGER")), "-"))
+    if "%d/%d" % (len(replace_rows), len(replace_rows)) not in info:
+        failures.append("el auditor no reporta %d/%d: %s" % (len(replace_rows),
+                                                             len(replace_rows), info[-300:]))
+    if any(violation.rule == "REPLACE-LEDGER" for violation in result["violations"]):
+        failures.append("una captura completa no deberia fallar REPLACE-LEDGER")
+
+    empty = provenance_copy(work, lambda index: index[REPLACE].__setitem__("sha256", ""),
+                            "sin-sha.csv")
+    with swapped(audit, PROVENANCE=empty):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    matches = [violation for violation in result["violations"]
+               if violation.rule == "REPLACE-LEDGER"]
+    print("sha vacio: %d REPLACE-LEDGER -> %s"
+          % (len(matches), matches[0].detail if matches else "-"))
+    if len(matches) != 1 or matches[0].pieza != REPLACE:
+        failures.append("un sha vacio deberia fallar REPLACE-LEDGER nombrando %s: %s"
+                        % (REPLACE, [(v.pieza, v.detail) for v in matches]))
+    elif "%d/%d" % (len(replace_rows) - 1, len(replace_rows)) not in matches[0].detail:
+        failures.append("REPLACE-LEDGER no imprime la cobertura %d/%d: %s"
+                        % (len(replace_rows) - 1, len(replace_rows), matches[0].detail))
+    return failures
+
+
+def case_replace_sha() -> list[str]:
+    """PRV-2: BASELINE / DELIVERED / UNKNOWN; solo UNKNOWN falla, con los dos shas."""
+    failures: list[str] = []
+    work = fresh("replace-sha")
+    rows = ledger_mod.provenance_index(ledger_mod.read_provenance())
+    disk = ledger_mod.sha256_of(ROOT / rows[REPLACE]["origen"])
+    broken = provenance_copy(work, lambda index: index[REPLACE].__setitem__("sha256", "0" * 64),
+                             "sin-declarar.csv")
+
+    with swapped(audit, PROVENANCE=broken):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    unknown = [violation for violation in result["violations"] if violation.rule == "REPLACE-SHA"]
+    info = "\n".join(result["info"])
+    print("bytes cambiados sin declarar: %d REPLACE-SHA | %s" % (
+        len(unknown), next((line for line in result["info"]
+                            if line.startswith("REPLACE-SHA  ")
+                            and "reemplazadas" in line), "-")))
+    if len(unknown) != 1 or unknown[0].pieza != REPLACE:
+        failures.append("UNKNOWN deberia ser 1 y nombrar %s: %s"
+                        % (REPLACE, [(v.pieza, v.detail) for v in unknown]))
+    elif "0" * 12 not in unknown[0].detail or disk[:12] not in unknown[0].detail:
+        failures.append("REPLACE-SHA no imprime los dos shas: %s" % unknown[0].detail)
+    if "0/85 reemplazadas" not in info.replace("%d/" % len(rows), "0/85"):
+        failures.append("el auditor no imprime el contador de reemplazadas: %s" % info[-300:])
+
+    declared = deliveries_copy(work, [(REPLACE, disk, "rehearsal", "2026-11-20")])
+    with swapped(audit, PROVENANCE=broken, DELIVERIES=declared):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    left = [violation for violation in result["violations"] if violation.rule == "REPLACE-SHA"]
+    summary = next((line for line in result["info"]
+                    if line.startswith("REPLACE-SHA  ") and "reemplazadas" in line), "-")
+    print("declaracion valida: %d REPLACE-SHA | %s" % (len(left), summary))
+    if left:
+        failures.append("una entrega declarada no deberia fallar REPLACE-SHA: %s"
+                        % [(v.pieza, v.detail) for v in left])
+    if "1/85 reemplazadas" not in summary.replace("%d/" % len(rows), "1/85") or \
+            "1 DELIVERED" not in summary:
+        failures.append("el contador no subio a 1 DELIVERED: %s" % summary)
+    return failures
+
+
+def case_replace_guid() -> list[str]:
+    """PRV-3: el swap no mueve las referencias (son del GUID); un guid nuevo falla nombrando los dos."""
+    failures: list[str] = []
+    work = fresh("replace-guid")
+    rows = ledger_mod.provenance_index(ledger_mod.read_provenance())
+    disk = ledger_mod.sha256_of(ROOT / rows[REPLACE]["origen"])
+
+    def refs(result: dict) -> tuple[int, int]:
+        total = sum(piece.refs_total for piece in result["pieces"].values())
+        files = len({path for paths in result["consumers"]["files_by_guid"].values()
+                     for path in paths})
+        return total, files
+
+    before = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    print("barrido real: %d referencias en %d archivos" % refs(before))
+
+    swapped_bytes = provenance_copy(
+        work, lambda index: index[REPLACE].__setitem__("sha256", "1" * 64), "swap.csv")
+    declared = deliveries_copy(work, [(REPLACE, disk, "rehearsal", "2026-11-20")])
+    with swapped(audit, PROVENANCE=swapped_bytes, DELIVERIES=declared):
+        after = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    print("tras simular el swap: %d referencias en %d archivos" % refs(after))
+    if refs(after) != refs(before):
+        failures.append("las referencias cambiaron con el swap: %s -> %s"
+                        % (refs(before), refs(after)))
+    if any(violation.rule == "REPLACE-GUID" for violation in after["violations"]):
+        failures.append("un swap con el .meta intacto no deberia fallar REPLACE-GUID")
+
+    new_guid = "0123456789abcdef0123456789abcdef"
+    moved = provenance_copy(work, lambda index: index[REPLACE].__setitem__("guid", new_guid),
+                            "guid-nuevo.csv")
+    with swapped(audit, PROVENANCE=moved):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    matches = [violation for violation in result["violations"]
+               if violation.rule == "REPLACE-GUID"]
+    print("guid nuevo: %d REPLACE-GUID -> %s"
+          % (len(matches), matches[0].detail if matches else "-"))
+    if len(matches) != 1 or matches[0].pieza != REPLACE:
+        failures.append("un guid distinto deberia fallar REPLACE-GUID en %s: %s"
+                        % (REPLACE, [(v.pieza, v.detail) for v in matches]))
+    elif new_guid not in matches[0].detail or rows[REPLACE]["guid"] not in matches[0].detail:
+        failures.append("REPLACE-GUID no imprime los dos valores: %s" % matches[0].detail)
+    return failures
+
+
+def case_orphan() -> list[str]:
+    """PRV-4: las 4 declaradas; una quinta sin declarar y una declarada con consumidor."""
+    failures: list[str] = []
+    work = fresh("orphan")
+    result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    summary = next((line for line in result["info"] if line.startswith("ORPHAN")), "-")
+    print(summary)
+    if not summary.startswith("ORPHAN      %d REPLACE sin pantalla" % len(ledger_mod.ORPHAN_MOTIVO)):
+        failures.append("el auditor no imprime las %d sin pantalla: %s"
+                        % (len(ledger_mod.ORPHAN_MOTIVO), summary))
+    for pieza in ledger_mod.ORPHAN_MOTIVO:
+        if pieza not in summary:
+            failures.append("%s no aparece en la linea de huerfanas" % pieza)
+    if any(violation.rule.startswith("ORPHAN") for violation in result["violations"]):
+        failures.append("el baseline declarado no deberia fallar ORPHAN-*: %s"
+                        % [(v.pieza, v.detail) for v in result["violations"]
+                           if v.rule.startswith("ORPHAN")])
+
+    undeclared = provenance_copy(
+        work, lambda index: index[ORPHAN].update(rol=ledger_mod.ROLE_SCREEN, motivo=""),
+        "sin-declarar.csv")
+    with swapped(audit, PROVENANCE=undeclared):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    matches = [violation for violation in result["violations"]
+               if violation.rule == "ORPHAN-UNDECLARED"]
+    print("huerfana sin declarar: %d ORPHAN-UNDECLARED -> %s"
+          % (len(matches), matches[0].detail if matches else "-"))
+    if len(matches) != 1 or matches[0].pieza != ORPHAN:
+        failures.append("una huerfana sin declarar deberia fallar ORPHAN-UNDECLARED en %s: %s"
+                        % (ORPHAN, [(v.pieza, v.detail) for v in matches]))
+
+    stale = provenance_copy(
+        work, lambda index: index[REPLACE].update(rol=ledger_mod.ROLE_NO_SCREEN,
+                                                  motivo="declarada sin pantalla"),
+        "declarada-con-consumidor.csv")
+    with swapped(audit, PROVENANCE=stale):
+        result = audit.audit(gen.MANIFEST, audit.ASSETS_ROOT, with_refs=False)
+    matches = [violation for violation in result["violations"]
+               if violation.rule == "ORPHAN-STALE"]
+    print("declarada que gano consumidor: %d ORPHAN-STALE -> %s"
+          % (len(matches), matches[0].detail if matches else "-"))
+    if len(matches) != 1 or matches[0].pieza != REPLACE:
+        failures.append("una declarada con consumidor deberia fallar ORPHAN-STALE en %s: %s"
+                        % (REPLACE, [(v.pieza, v.detail) for v in matches]))
+    return failures
+
+
 def case_zlib_limit() -> list[str]:
     """DBT-3: la declaracion existe y el gate la consulta."""
     failures: list[str] = []
@@ -511,6 +738,10 @@ CASES = {
     "legible": case_legible,
     "tbd": case_tbd,
     "cohort-sum": case_cohort_sum,
+    "provenance": case_provenance,
+    "replace-sha": case_replace_sha,
+    "replace-guid": case_replace_guid,
+    "orphan": case_orphan,
     "zlib-limit": case_zlib_limit,
 }
 
