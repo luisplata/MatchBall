@@ -42,17 +42,27 @@
 // Uso:
 //   Tools > Art Contract > Synthetic Harness > Print Plan (dry-run)
 //   Tools > Art Contract > Synthetic Harness > Run "mode1" (escribe y restaura)
+//   Tools > Art Contract > Synthetic Harness > Drill cohort "new" (evidencia versionada)
 //   Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtSyntheticBatch.BatchDryRun
 //   Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtSyntheticBatch.BatchApply
+//   Unity -batchmode -quit -executeMethod DarkVoid.ArtContract.ArtSyntheticBatch.BatchDrillNew
 //
 // Cohortes (alineadas a los slices de S2, para gatear cada uno por separado):
-//   all      -> las 85 REPLACE
+//   all      -> las 86 REPLACE
 //   world    -> game_board_* + ball_*                       (S2a)
 //   avatars  -> hero_* + ui_menu_avatar_* + panel/picture   (S2b)
 //   rest     -> all - world - avatars                       (S2c)
 //   mode1    -> REPLACE con spriteMode MEDIDO en el .meta == 1 y px_actual == px_entrega
+//   new      -> el cohorte NEW (DRL-1): filas `GENERATED` del ledger `Docs/art/placeholders-v1.csv`,
+//               con `path` y `px` del ledger. NO sale de la sec.9. Si el conjunto no es
+//               exactamente 33 sale exit 2 (`COHORT n != 33`) ANTES de tocar un byte.
 // El parametro `pieces` (glob separado por comas) reemplaza al cohorte; matchea la pieza y el
 // basename del origen. No hay parser de argv: los entrypoints son menu y -executeMethod.
+//
+// Evidencia (DRL-2): `BatchDrillNew` es el UNICO entrypoint que escribe el reporte a un path
+// versionado (`Docs/art/evidence/drill-new-v1.md`, el que mira `EVIDENCE-UNTRACKED`); las
+// corridas ad-hoc siguen en `Temp/art-contract/reports/` (ignorado). Todo reporte cierra con la
+// linea `sha256:` del propio cuerpo, re-hasheable por el auditor sin Unity.
 //
 // Exit codes: 0 ok (o dry-run ok) · 1 algun veredicto != exact · 2 plan/manifiesto ·
 //             3 guard (Assets/ sucio) · 4 restauracion no byte-identica · 5 error interno.
@@ -108,6 +118,19 @@ namespace DarkVoid.ArtContract
         public const string RenderDir = "Temp/art-contract/render";
         public const string PatternVersion = "synthetic-v1";
 
+        /// <summary>Ledger del cohorte NEW: la unica declaracion de que pieza esta `GENERATED`.</summary>
+        public const string LedgerPath = "Docs/art/placeholders-v1.csv";
+
+        /// <summary>DRL-2: el reporte del drill vive en un path VERSIONADO (`git ls-files`), no en Temp/.</summary>
+        public const string DrillReportPath = "Docs/art/evidence/drill-new-v1.md";
+
+        /// <summary>DRL-1: el drill cubre exactamente las NEW con PNG; hoy el ledger declara 33.</summary>
+        public const int ExpectedGeneratedCohort = 33;
+
+        const string NewCohort = "new";
+        const string GeneratedState = "GENERATED";
+        const string DeclaredNewState = "NEW";
+
         const string MenuRoot = "Tools/Art Contract/Synthetic Harness/";
         const string DefaultCohort = "mode1";
 
@@ -162,6 +185,28 @@ namespace DarkVoid.ArtContract
             }
         }
 
+        [MenuItem(MenuRoot + "Print plan cohort new (dry-run)", false, 2102)]
+        public static void PrintPlanNewMenu()
+        {
+            DryRun(NewCohort, null, false);
+        }
+
+        [MenuItem(MenuRoot + "Drill cohort new (evidencia versionada)", false, 2103)]
+        public static void DrillNewMenu()
+        {
+            bool confirmed = EditorUtility.DisplayDialog(
+                "ArtSyntheticBatch · DRL-1",
+                "Vas a PISAR y RESTAURAR los bytes de las 33 piezas NEW del ledger, y a escribir\n" +
+                DrillReportPath + "\n\n" +
+                "Precondicion: `Assets/` limpio. Si el cohorte no es 33, no se toca ni un byte.",
+                "Correr",
+                "Cancelar");
+            if (confirmed)
+            {
+                BatchDrillNew();
+            }
+        }
+
         // ------------------------------------------------------------- entrypoints
 
         /// <summary>Plan sin escrituras (ni calidos ni en Assets/). Devuelve 0 si pudo planificar.</summary>
@@ -196,6 +241,25 @@ namespace DarkVoid.ArtContract
             }
         }
 
+        /// <summary>
+        /// DRL-1/DRL-2: el drill del cohorte `new`. Es el UNICO entrypoint que escribe el reporte
+        /// a un path versionado; las corridas ad-hoc siguen en `Temp/`.
+        /// </summary>
+        public static int BatchDrillNew()
+        {
+            var options = new Options(NewCohort, null, false, SyntheticChaos.None)
+            {
+                ReportPath = DrillReportPath,
+            };
+            int code = Run(true, options);
+            Log("DRILL new terminado · exit " + code);
+            if (Application.isBatchMode)
+            {
+                EditorApplication.Exit(code);
+            }
+            return code;
+        }
+
         // ---------------------------------------------------------------- opciones
 
         sealed class Options
@@ -205,6 +269,9 @@ namespace DarkVoid.ArtContract
             public readonly bool AllowInvalid;
             public readonly SyntheticChaos Chaos;
 
+            /// <summary>Destino del reporte: null = `Temp/art-contract/reports/` (ad-hoc).</summary>
+            public string ReportPath;
+
             public Options(string cohort, string pieces, bool allowInvalid, SyntheticChaos chaos)
             {
                 Cohort = string.IsNullOrEmpty(cohort) ? DefaultCohort : cohort.Trim();
@@ -212,6 +279,23 @@ namespace DarkVoid.ArtContract
                 AllowInvalid = allowInvalid;
                 Chaos = chaos;
             }
+
+            /// <summary>`new` es el cohorte del ledger (DRL-1), no el de la sec.9.</summary>
+            public bool IsNewCohort
+            {
+                get
+                {
+                    return Pieces == null && string.Equals(Cohort, NewCohort, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+
+        sealed class LedgerRow
+        {
+            public string Pieza;
+            public string Estado;
+            public string Px;
+            public string Path;
         }
 
         sealed class Target
@@ -228,6 +312,10 @@ namespace DarkVoid.ArtContract
             /// <summary>spriteMode medido en el `.meta` (el mismo dato que lee el auditor Python). -1 = no se pudo medir.</summary>
             public int MeasuredMode = -1;
             public string SkipReason;
+            /// <summary>Cohorte `new`: la fila sale del ledger, no de la sec.9 (DRL-1).</summary>
+            public bool IsNew;
+            /// <summary>Cohorte `new`: `px` declarado por el ledger (la expectativa del swap).</summary>
+            public string LedgerPx;
         }
 
         sealed class Fingerprint
@@ -271,6 +359,9 @@ namespace DarkVoid.ArtContract
             public int SpriteRectY;
             public int SpriteRectW;
             public int SpriteRectH;
+            /// <summary>DRL-2: borde y ppu MEDIDOS del sprite importado (ya estaban en `Geometry`).</summary>
+            public string SpriteBorder;
+            public double SpritePpu;
             public Comparison Compare;
             public string EvidenceDir;
             public bool HardFailure;
@@ -458,6 +549,10 @@ namespace DarkVoid.ArtContract
         static List<Target> SelectTargets(ArtContractManifest manifest, Options options)
         {
             var targets = new List<Target>();
+            if (options.IsNewCohort)
+            {
+                return SelectNewTargets(manifest, options);
+            }
             if (options.Pieces != null)
             {
                 Debug.Log("[ArtSyntheticBatch] `pieces` reemplaza al cohorte `" + options.Cohort + "`.");
@@ -506,9 +601,152 @@ namespace DarkVoid.ArtContract
             if (pattern == null && targets.Count == 0)
             {
                 throw new InvalidOperationException("cohorte desconocido o vacio: " + options.Cohort +
-                    " (validos: all, world, avatars, rest, mode1)");
+                    " (validos: all, world, avatars, rest, mode1, new)");
             }
             return targets;
+        }
+
+        /// <summary>
+        /// DRL-1: el cohorte `new` se DERIVA del ledger (`estado=GENERATED`), no de la sec.9. El
+        /// `path` y el `px` de la expectativa salen del ledger (la sec.9 NEW no tiene `origen`).
+        /// Se niega con `COHORT n != 33` ANTES de planificar siquiera: si el conjunto no es
+        /// exactamente el cohorte GENERATED, el drill no toca un byte.
+        /// </summary>
+        static List<Target> SelectNewTargets(ArtContractManifest manifest, Options options)
+        {
+            if (options.Pieces != null)
+            {
+                throw new InvalidOperationException(
+                    "`pieces` no aplica al cohorte `new`: DRL-1 mide el cohorte completo del ledger");
+            }
+
+            List<LedgerRow> ledger = ReadLedger();
+            var generated = new List<LedgerRow>();
+            foreach (LedgerRow row in ledger)
+            {
+                if (string.Equals(row.Estado, GeneratedState, StringComparison.Ordinal))
+                {
+                    generated.Add(row);
+                }
+            }
+
+            var declaredNew = new Dictionary<string, ArtContractRow>(StringComparer.OrdinalIgnoreCase);
+            foreach (ArtContractRow row in manifest.Rows)
+            {
+                if (string.Equals(row.Estado, DeclaredNewState, StringComparison.Ordinal))
+                {
+                    declaredNew[row.Pieza] = row;
+                }
+            }
+
+            Debug.Log("[ArtSyntheticBatch] cohorte `new`: " + generated.Count + " filas " + GeneratedState +
+                      " en " + LedgerPath + " · la sec.9 declara " + declaredNew.Count + " NEW · esperado " +
+                      ExpectedGeneratedCohort);
+
+            var targets = new List<Target>(generated.Count);
+            var rejected = new List<string>();
+            foreach (LedgerRow row in generated)
+            {
+                ArtContractRow declared;
+                if (!declaredNew.TryGetValue(row.Pieza, out declared))
+                {
+                    rejected.Add(row.Pieza + ": " + GeneratedState +
+                                 " en el ledger y ausente del cohorte NEW de la sec.9");
+                    continue;
+                }
+                var target = new Target
+                {
+                    Row = declared,
+                    Pieza = row.Pieza,
+                    IsNew = true,
+                    LedgerPx = row.Px,
+                    AssetPath = ArtContractManifest.NormalizePath(row.Path),
+                    MetaPath = ArtContractManifest.NormalizePath(row.Path) + ".meta",
+                };
+                if (string.IsNullOrEmpty(target.AssetPath) || target.AssetPath == "-")
+                {
+                    rejected.Add(row.Pieza + ": el ledger no declara `path`");
+                    continue;
+                }
+                target.MeasuredMode = MeasureSpriteMode(target.MetaPath);
+                ResolveExpectation(target);
+                if (!string.IsNullOrEmpty(target.SkipReason))
+                {
+                    rejected.Add(row.Pieza + ": " + target.SkipReason);
+                    continue;
+                }
+                if (!options.AllowInvalid && !IsValidToday(target))
+                {
+                    rejected.Add(row.Pieza + ": " + GateReason(target));
+                    continue;
+                }
+                targets.Add(target);
+            }
+
+            foreach (string reason in rejected)
+            {
+                Debug.LogWarning("[ArtSyntheticBatch] COHORT-RECHAZO " + reason);
+            }
+            if (targets.Count != ExpectedGeneratedCohort || rejected.Count > 0)
+            {
+                throw new InvalidOperationException("COHORT " + targets.Count + " != " + ExpectedGeneratedCohort);
+            }
+            return targets;
+        }
+
+        /// <summary>`pieza,estado,px,border,familia,path,guid,sha256,motivo` del ledger derivado.</summary>
+        static List<LedgerRow> ReadLedger()
+        {
+            string absolute = System.IO.Path.Combine(ArtContractManifest.ProjectRoot(), LedgerPath);
+            if (!File.Exists(absolute))
+            {
+                throw new InvalidOperationException("falta el ledger " + LedgerPath);
+            }
+            string[] lines = File.ReadAllLines(absolute, Encoding.UTF8);
+            if (lines.Length == 0)
+            {
+                throw new InvalidOperationException(LedgerPath + " esta vacio");
+            }
+            string[] header = ArtContractManifest.SplitCsv(lines[0]);
+            int iPieza = ColumnIndex(header, "pieza");
+            int iEstado = ColumnIndex(header, "estado");
+            int iPx = ColumnIndex(header, "px");
+            int iPath = ColumnIndex(header, "path");
+
+            var rows = new List<LedgerRow>(lines.Length - 1);
+            for (int i = 1; i < lines.Length; i++)
+            {
+                if (lines[i].Trim().Length == 0)
+                {
+                    continue;
+                }
+                string[] cells = ArtContractManifest.SplitCsv(lines[i]);
+                rows.Add(new LedgerRow
+                {
+                    Pieza = Field(cells, iPieza),
+                    Estado = Field(cells, iEstado),
+                    Px = Field(cells, iPx),
+                    Path = Field(cells, iPath),
+                });
+            }
+            return rows;
+        }
+
+        static int ColumnIndex(string[] header, string name)
+        {
+            for (int i = 0; i < header.Length; i++)
+            {
+                if (string.Equals(header[i], name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+            throw new InvalidOperationException("el ledger " + LedgerPath + " no tiene la columna `" + name + "`");
+        }
+
+        static string Field(string[] cells, int index)
+        {
+            return index >= 0 && index < cells.Length ? cells[index] : string.Empty;
         }
 
         static bool MatchesCohort(string cohort, Target target)
@@ -537,11 +775,18 @@ namespace DarkVoid.ArtContract
         }
 
         /// <summary>
-        /// Corrible HOY: el import ya esta en Single (medido, no el snapshot de la sec.9) y
-        /// px_actual == px_entrega (si difieren, el swap cambia el tamano y el patron no calza).
+        /// Corrible HOY: el import ya esta en Single (medido, no el snapshot de la sec.9) y el
+        /// archivo mide exactamente lo que el swap va a escribir (px_actual == px_entrega en una
+        /// REPLACE, `px` del ledger en una NEW: si difieren, el swap cambia el tamano).
         /// </summary>
         static bool IsValidToday(Target target)
         {
+            if (target.IsNew)
+            {
+                return target.MeasuredMode == 1
+                    && target.FileW == target.ExpectedW
+                    && target.FileH == target.ExpectedH;
+            }
             return target.MeasuredMode == 1
                 && string.Equals(target.Row.PxActual, target.Row.PxEntrega, StringComparison.Ordinal);
         }
@@ -595,7 +840,19 @@ namespace DarkVoid.ArtContract
         static void ResolveExpectation(Target target)
         {
             Vector2 size;
-            if (ArtContractManifest.TryParseSize(target.Row.PxEntrega, out size))
+            if (target.IsNew)
+            {
+                // El ledger declara el `px` de la pieza NEW: la sec.9 NEW no tiene origen ni px medido.
+                if (!ArtContractManifest.TryParseSize(target.LedgerPx, out size))
+                {
+                    target.SkipReason = "px del ledger ilegible ('" + (target.LedgerPx ?? "-") + "')";
+                    return;
+                }
+                target.ExpectedW = Mathf.RoundToInt(size.x);
+                target.ExpectedH = Mathf.RoundToInt(size.y);
+                target.ExpectedSource = "ledger.px";
+            }
+            else if (ArtContractManifest.TryParseSize(target.Row.PxEntrega, out size))
             {
                 target.ExpectedW = Mathf.RoundToInt(size.x);
                 target.ExpectedH = Mathf.RoundToInt(size.y);
@@ -630,6 +887,11 @@ namespace DarkVoid.ArtContract
             }
             target.FileW = w;
             target.FileH = h;
+
+            if (target.IsNew)
+            {
+                return;
+            }
 
             Vector2 declared;
             bool hasDeclared = ArtContractManifest.TryParseSize(target.Row.PxActual, out declared);
@@ -718,7 +980,9 @@ namespace DarkVoid.ArtContract
 
             int runnable = 0;
             int skipped = 0;
-            Debug.Log("[ArtSyntheticBatch] cohorte: " + targets.Count + " piezas REPLACE (" + Describe(options) + ")");
+            Debug.Log("[ArtSyntheticBatch] cohorte: " + targets.Count + " piezas " +
+                      (options.IsNewCohort ? "NEW (ledger " + LedgerPath + ")" : "REPLACE") +
+                      " (" + Describe(options) + ")");
             foreach (Target target in targets)
             {
                 if (string.IsNullOrEmpty(target.SkipReason))
@@ -742,9 +1006,15 @@ namespace DarkVoid.ArtContract
         {
             if (target.MeasuredMode != 1)
             {
-                return "spriteMode medido " + ModeLabel(target.MeasuredMode) + " != mode_target " +
-                       target.Row.ModeTarget + ": el gate sintetico solo es valido con el import ya en Single" +
+                return "spriteMode medido " + ModeLabel(target.MeasuredMode) + " != " +
+                       (target.IsNew ? "1 (Single)" : "mode_target " + target.Row.ModeTarget) +
+                       ": el gate sintetico solo es valido con el import ya en Single" +
                        " (design 3.5; mode_actual de sec.9 es historico y no se usa)";
+            }
+            if (target.IsNew)
+            {
+                return "el archivo mide " + target.FileW + "x" + target.FileH + " y el ledger declara " +
+                       (target.LedgerPx ?? "-") + ": el swap cambiaria el tamano, no es 1:1";
             }
             return "px_entrega " + target.Row.PxEntrega + " != px_actual " + target.Row.PxActual +
                    ": el swap cambia el tamano del archivo, no es un swap de bytes 1:1";
@@ -944,11 +1214,18 @@ namespace DarkVoid.ArtContract
             outcome.SpriteRectY = Mathf.RoundToInt(rect.y);
             outcome.SpriteRectW = Mathf.RoundToInt(rect.width);
             outcome.SpriteRectH = Mathf.RoundToInt(rect.height);
+            // DRL-2: rect, border y ppu van a la tabla del reporte, no solo a la linea de prosa.
+            Vector4 border = sprite.border;
+            outcome.SpriteBorder = border.x.ToString("0.##", CultureInfo.InvariantCulture) + "/" +
+                                   border.y.ToString("0.##", CultureInfo.InvariantCulture) + "/" +
+                                   border.z.ToString("0.##", CultureInfo.InvariantCulture) + "/" +
+                                   border.w.ToString("0.##", CultureInfo.InvariantCulture);
+            outcome.SpritePpu = sprite.pixelsPerUnit;
             outcome.Geometry = "textura " + outcome.TextureW + "x" + outcome.TextureH +
                                " (" + (texture == null ? "?" : texture.format.ToString()) + ")" +
                                " · rect " + outcome.SpriteRectX + "," + outcome.SpriteRectY + " " +
                                outcome.SpriteRectW + "x" + outcome.SpriteRectH +
-                               " · ppu " + sprite.pixelsPerUnit.ToString("0.##", CultureInfo.InvariantCulture) +
+                               " · ppu " + outcome.SpritePpu.ToString("0.##", CultureInfo.InvariantCulture) +
                                " · borde " + sprite.border;
         }
 
@@ -1780,9 +2057,19 @@ namespace DarkVoid.ArtContract
         static string WriteReport(string stamp, Options options, List<Outcome> outcomes, List<string> hardFailures,
             bool gitAvailable, string gitBefore, string gitAfter, bool treeRestored)
         {
-            string directory = System.IO.Path.Combine(ArtContractManifest.ProjectRoot(), ReportDir);
-            Directory.CreateDirectory(directory);
-            string path = System.IO.Path.Combine(directory, "art-synthetic-batch-" + stamp + ".md");
+            string path;
+            if (!string.IsNullOrEmpty(options.ReportPath))
+            {
+                // DRL-2: `BatchDrillNew` escribe a un path VERSIONADO (el que mira EVIDENCE-UNTRACKED).
+                path = System.IO.Path.Combine(ArtContractManifest.ProjectRoot(), options.ReportPath);
+            }
+            else
+            {
+                // Las corridas ad-hoc siguen en Temp/ (ignorado): no son evidencia.
+                path = System.IO.Path.Combine(ArtContractManifest.ProjectRoot(), ReportDir,
+                    "art-synthetic-batch-" + stamp + ".md");
+            }
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
 
             int exact = 0;
             int defects = 0;
@@ -1819,9 +2106,14 @@ namespace DarkVoid.ArtContract
             text.AppendLine("|---|---|");
             text.AppendLine("| Modo | APPLY (bytes pisados y restaurados) |");
             text.AppendLine("| Cohorte | " + Cell(Describe(options)) + " |");
+            if (options.IsNewCohort)
+            {
+                text.AppendLine("| Requisito | DRL-1 · cohorte `new` derivado de `" + LedgerPath + "` |");
+            }
             text.AppendLine("| Patron | `" + PatternVersion + "` |");
             text.AppendLine("| Piezas | " + outcomes.Count + " |");
             text.AppendLine("| exact | " + exact + " |");
+            text.AppendLine("| cierre | " + exact + "/" + outcomes.Count + " exact |");
             text.AppendLine("| defectos (cropped/offset/tinted/mismatch) | " + defects + " |");
             text.AppendLine("| skipped | " + skipped + " |");
             text.AppendLine("| errores | " + errors + " |");
@@ -1835,8 +2127,8 @@ namespace DarkVoid.ArtContract
             text.AppendLine();
             text.AppendLine("## Veredicto por pieza");
             text.AppendLine();
-            text.AppendLine("| Pieza | px | veredicto | rect | textura | marco | exacto(tol8) | notas |");
-            text.AppendLine("|---|---|---|---|---|---|---|---|");
+            text.AppendLine("| Pieza | px | veredicto | rect | border | ppu | textura | marco | exacto(tol8) | notas |");
+            text.AppendLine("|---|---|---|---|---|---|---|---|---|---|");
             foreach (Outcome outcome in outcomes)
             {
                 Target target = outcome.Target;
@@ -1844,6 +2136,10 @@ namespace DarkVoid.ArtContract
                     ? outcome.SpriteRectX + "," + outcome.SpriteRectY + " " + outcome.SpriteRectW + "x" + outcome.SpriteRectH
                     : "-";
                 string texture = outcome.TextureW > 0 ? outcome.TextureW + "x" + outcome.TextureH : "-";
+                string border = string.IsNullOrEmpty(outcome.SpriteBorder) ? "-" : outcome.SpriteBorder;
+                string ppu = outcome.SpritePpu > 0
+                    ? outcome.SpritePpu.ToString("0.##", CultureInfo.InvariantCulture)
+                    : "-";
                 string frame = outcome.Compare == null
                     ? "-"
                     : (outcome.Compare.FrameCoverage * 100.0).ToString("0.00", CultureInfo.InvariantCulture) + "%";
@@ -1851,7 +2147,8 @@ namespace DarkVoid.ArtContract
                     ? "-"
                     : (outcome.Compare.ExactRatio * 100.0).ToString("0.00", CultureInfo.InvariantCulture) + "%";
                 text.AppendLine("| `" + target.Pieza + "` | " + target.ExpectedW + "x" + target.ExpectedH + " | **" +
-                                outcome.Verdict + "** | " + rect + " | " + texture + " | " + frame + " | " + exactRatio +
+                                outcome.Verdict + "** | " + rect + " | " + border + " | " + ppu + " | " + texture +
+                                " | " + frame + " | " + exactRatio +
                                 " | " + Cell(outcome.Reason ?? string.Empty) + " |");
             }
 
@@ -1899,6 +2196,12 @@ namespace DarkVoid.ArtContract
                 }
             }
 
+            // DRL-2: el reporte cierra con el sha256 de su propio CUERPO. El gate quita esta linea y
+            // re-hashea (sin Unity): la evidencia se puede verificar sin volver a correr el drill.
+            // La linea en blanco separadora cuenta en el hash: el cuerpo es TODO lo anterior.
+            text.AppendLine();
+            string body = text.ToString();
+            text.AppendLine("sha256: " + Sha256(Utf8NoBom.GetBytes(body)));
             File.WriteAllText(path, text.ToString(), Utf8NoBom);
             return ArtContractManifest.ToProjectPath(path);
         }
