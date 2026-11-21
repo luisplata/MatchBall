@@ -921,6 +921,16 @@ def project_plan(result: dict, filters: list[str]) -> list[str]:
                         ),
                     )
                 )
+        if stale and not flip and int(row["mode_target"]) == 1:
+            # CTR-2: ya en Single, el bloque serializado no dibuja pero sigue escrito.
+            for sprite in stale:
+                ops.append(
+                    (
+                        "sheet-clear",
+                        'rect "%s" %s -> bloque vaciado (2 -> 0 rects -> 1)'
+                        % (sprite["name"] or "?", _fmt_rect(sprite["rect"])),
+                    )
+                )
         if flip:
             ops.append(("spriteMode", "%s -> %s" % (meta.sprite_mode, row["mode_target"])))
             for sprite in stale:

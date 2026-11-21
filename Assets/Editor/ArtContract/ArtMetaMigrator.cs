@@ -40,13 +40,26 @@
 //
 // Orden de apply por pieza (una sola operacion, en este orden):
 //   1. rect-resync (solo si la pieza queda en Multiple; ver BuildPlan)
-//   2. spriteImportMode = Single
-//   3. fileID remap GUID-scoped -> 21300000 en los YAML consumidores
-//   4. spriteBorder desde sec.9
-//   5. maxTextureSize desde sec.9
-// El paso 2 reimporta antes del 3 (es el orden que pide el contrato), pero la ventana
+//   2. sheet-clear (solo si la pieza YA esta en Single con un bloque residual; ver BuildPlan)
+//   3. spriteImportMode = Single
+//   4. fileID remap GUID-scoped -> 21300000 en los YAML consumidores
+//   5. spriteBorder desde sec.9
+//   6. maxTextureSize desde sec.9
+// El paso 3 reimporta antes del 4 (es el orden que pide el contrato), pero la ventana
 // sin referencias no existe en la practica: los dos pasos corren dentro del mismo
 // apply de la misma pieza y no hay ningun import intermedio que lea esas referencias.
+//
+// Op sheet-clear (S1b, CTR-2): 9 piezas que ya estan en Single (mode_target 1) conservan un
+// bloque `spriteSheet.sprites[]` residual. En Single ese bloque no dibuja (el rect vivo ES el
+// lienzo), pero sigue serializado: si alguna vez se vuelve a Multiple, el rect muerto revive.
+// En Single no hay data provider que lo escriba, asi que la unica via es el round-trip
+// Multiple -> SetSpriteRects(empty) -> Single -> SaveAndReimport. La verificacion RE-PARSEA el
+// .meta: si queda una sola entrada se emite RECT-CLEAR-FAILED (nunca un log verde) y el apply
+// devuelve 4. Este op no remapea referencias: el modo no cambia y el fileID vivo (21300000) es
+// el mismo antes y despues.
+// OJO: `grep -c spriteSheet` NO sirve como prueba de cierre en Unity 6 — el serializer escribe
+// siempre la clave `spriteSheet:` en Single, con `sprites: []`. La prueba es `sprites: []`
+// (cero entradas) y `nameFileIdTable: {}`, que es lo que cuenta SheetSpriteCount().
 
 #if UNITY_EDITOR
 using System;
@@ -724,6 +737,7 @@ namespace DarkVoid.ArtContract
             public int Height;
             public bool Flip;
             public bool RectResync;
+            public bool SheetClear;
             public bool ApplyBorder;
             public Vector4 Border;
             public bool ApplyMaxTex;
@@ -845,6 +859,22 @@ namespace DarkVoid.ArtContract
                         Kind = "rect-resync",
                         Detail = string.Join("; ", staleDetail) + " -> " + FormatRect(new Rect(0f, 0f, plan.Width, plan.Height)),
                     });
+                }
+
+                // CTR-2: la pieza ya esta en el modo objetivo (Single) y aun asi el .meta
+                // serializa sub-sprites. Ese bloque no dibuja hoy, pero es el que hace que
+                // RECT-STALE pueda volver con cualquier reimport a Multiple: se vacia.
+                if (plan.ModeNow == plan.ModeTarget && staleRects && plan.ModeTarget == SpriteModeSingle)
+                {
+                    plan.SheetClear = true;
+                    foreach (string detail in staleDetail)
+                    {
+                        plan.Ops.Add(new PlannedOp
+                        {
+                            Kind = "sheet-clear",
+                            Detail = detail + " -> bloque vaciado (" + SpriteModeMultiple + " -> 0 rects -> " + SpriteModeSingle + ")",
+                        });
+                    }
                 }
 
                 plan.Flip = plan.ModeNow != plan.ModeTarget;
@@ -1022,6 +1052,7 @@ namespace DarkVoid.ArtContract
             switch (kind)
             {
                 case "rect-resync": return 0;
+                case "sheet-clear": return 0;
                 case "spriteMode": return 1;
                 case "fileID-remap": return 2;
                 case "border": return 3;
@@ -1142,7 +1173,9 @@ namespace DarkVoid.ArtContract
             // El cohorte `new` no se agrupa: cada SaveAndReimport tiene que completarse para
             // que Unity acuñe el GUID antes del `--freeze-guid` (dentro de StartAssetEditing la
             // importacion queda diferida y el .meta no existe todavia al salir).
-            bool batched = toApply.TrueForAll(plan => plan.Kind != "new");
+            // `sheet-clear` tampoco: su verificacion re-parsea el .meta EN EL ACTO y con la
+            // importacion diferida leeria el bloque viejo y daria un RECT-CLEAR-FAILED falso.
+            bool batched = toApply.TrueForAll(plan => plan.Kind != "new" && !plan.SheetClear);
             if (batched)
             {
                 AssetDatabase.StartAssetEditing();
@@ -1213,6 +1246,10 @@ namespace DarkVoid.ArtContract
             {
                 return ApplyNewImporter(plan);
             }
+            if (plan.SheetClear)
+            {
+                return ApplySheetClear(plan);
+            }
             if (!plan.Flip && !plan.RectResync && !plan.ApplyBorder && !plan.ApplyMaxTex)
             {
                 return false;
@@ -1256,6 +1293,77 @@ namespace DarkVoid.ArtContract
             importer.SaveAndReimport();
             Log("escrito " + plan.AssetPath + ".meta (" + string.Join(", ", plan.Ops.ConvertAll(op => op.Kind).ToArray()) + ")");
             return true;
+        }
+
+        /// <summary>
+        /// CTR-2 / S1b: vacia el bloque `spriteSheet.sprites[]` de una pieza que YA esta en Single.
+        /// En Single el importer no expone las rects y el data provider 2D solo escribe en Multiple,
+        /// asi que el unico camino es el round-trip Multiple -> SetSpriteRects(vacio) -> Single.
+        /// La verificacion RE-PARSEA el .meta: si sobrevive una sola entrada, RECT-CLEAR-FAILED
+        /// (nunca un log verde) y el apply sale 4. Nunca se edita el .meta a mano.
+        /// </summary>
+        static bool ApplySheetClear(PiecePlan plan)
+        {
+            var importer = AssetImporter.GetAtPath(plan.AssetPath) as TextureImporter;
+            if (importer == null)
+            {
+                throw new InvalidOperationException("importer nulo para " + plan.AssetPath);
+            }
+
+            if (importer.spriteImportMode != SpriteImportMode.Multiple)
+            {
+                importer.spriteImportMode = SpriteImportMode.Multiple;
+                importer.SaveAndReimport(); // sincronico: el data provider necesita el modo ya escrito
+            }
+            WriteSpriteRects(importer, Array.Empty<SpriteRect>());
+
+            importer.spriteImportMode = SpriteImportMode.Single;
+            if (plan.ApplyBorder)
+            {
+                importer.spriteBorder = plan.Border;
+            }
+            if (plan.ApplyMaxTex)
+            {
+                importer.maxTextureSize = plan.MaxTex;
+            }
+            EditorUtility.SetDirty(importer);
+            importer.SaveAndReimport();
+            AssetDatabase.ImportAsset(plan.AssetPath, ImportAssetOptions.ForceUpdate);
+
+            int surviving = SheetSpriteCount(plan.MetaPath);
+            bool staleLeft = SheetHasStaleRect(plan.MetaPath, plan.Width, plan.Height);
+            if (surviving != 0 || staleLeft)
+            {
+                throw new InvalidOperationException(
+                    "RECT-CLEAR-FAILED " + plan.MetaPath + ": el bloque spriteSheet sobrevive con " +
+                    (surviving < 0 ? "un .meta ilegible" : surviving + " entrada(s)") +
+                    " tras SetSpriteRects(empty)" +
+                    (staleLeft ? " y queda un rect distinto del lienzo" : string.Empty) +
+                    ". No se edita el .meta a mano: `git checkout -- Assets` y reportar.");
+            }
+
+            Log("escrito " + plan.AssetPath + ".meta (" + string.Join(", ", plan.Ops.ConvertAll(op => op.Kind).ToArray()) +
+                ") spriteSheet.sprites[] vaciado (" + plan.Row.Pieza + ")");
+            return true;
+        }
+
+        /// <summary>Entradas serializadas bajo `spriteSheet.sprites[]`; -1 si el .meta no se puede parsear.</summary>
+        static int SheetSpriteCount(string metaPath)
+        {
+            if (string.IsNullOrEmpty(metaPath) || !File.Exists(System.IO.Path.Combine(ProjectRoot(), metaPath)))
+            {
+                return 0;
+            }
+            try
+            {
+                Sheet sheet = ParseSheet(File.ReadAllText(System.IO.Path.Combine(ProjectRoot(), metaPath), Encoding.UTF8));
+                return sheet.Sprites.Count;
+            }
+            catch (Exception error)
+            {
+                LogWarning(metaPath + ": no se pudo re-parsear el bloque (" + error.Message + ")");
+                return -1;
+            }
         }
 
         static bool ApplyNewImporter(PiecePlan plan)
