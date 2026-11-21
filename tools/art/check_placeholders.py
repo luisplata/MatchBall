@@ -72,6 +72,10 @@ FORBIDDEN_CHUNKS = (b"tIME", b"pHYs", b"tEXt", b"iTXt")
 LEGIBLE_MIN = 4.5
 SURVIVE_FLOOR = 0.004
 SURVIVE_DELTA = 0.002
+# La placa es un rectangulo RELLENO: su color ocupa casi todo su bbox (lo demas es el texto).
+# Un bloque de color con los cuatro vertices propios que no llene su bbox no es una placa.
+PLATE_MIN_SHARE = 0.5
+PLATE_MIN_PIXELS = 64
 ZLIB_DOC = gen.REPO_ROOT / "Docs" / "art" / "placeholders-v1.md"
 
 
@@ -127,44 +131,76 @@ def fill_color(image: Image.Image, familia: str):
     return max(candidates)[1] if candidates else None
 
 
-def label_contrast(image: Image.Image):
-    """DBT-1: contraste MEDIDO entre el texto y la placa del render.
+def plate_region(image: Image.Image):
+    """La placa DECODIFICADA: el mayor rectangulo relleno de un color opaco del render.
 
-    Devuelve `(ratio, text_rgb, plate_rgb)` o `None` si no hay placa. La placa es el rect de
-    pixeles `PLATE`; el texto es el color modal dentro de ese rect que no es placa. Cambiar
-    la placa cambia el numero: no hay dos constantes decidiendo.
+    Devuelve `(rgb, (x0, y0, x1, y1))` o `None`. La placa se localiza por su FORMA —un rectangulo
+    de un solo color con los cuatro vertices propios— y no por igualdad con `gen.PLATE`: si el
+    render la dibuja de otro color, el gate mide ese color (DBT-1, W-8). Excluir relleno y marcas
+    no alcanza para descartarlas (el relleno del marco tiene los vertices tapados por los bloques
+    blancos, y esos bloques no cubren su bbox), asi que ademas se exige que el bbox este lleno.
     """
     width, height = image.size
     pixels = image.load()
-    plate = gen.PLATE + (255,)
-    min_x = min_y = None
-    max_x = max_y = -1
+    wanted = {color[:3] for _, color in (image.getcolors(maxcolors=1 << 24) or [])
+              if color[3] == 255 and color[:3] not in (gen.MAGENTA, gen.CYAN, gen.WHITE)
+              and _ >= PLATE_MIN_PIXELS}
+    if not wanted:
+        return None
+    # Una sola pasada: el bbox de cada candidato sin recorrer la imagen una vez por color.
+    boxes = {color: [width, height, -1, -1, 0] for color in wanted}
     for y in range(height):
         for x in range(width):
-            if pixels[x, y] != plate:
+            pixel = pixels[x, y]
+            if pixel[3] != 255:
                 continue
-            if min_x is None or x < min_x:
-                min_x = x
-            if min_y is None or y < min_y:
-                min_y = y
-            if x > max_x:
-                max_x = x
-            if y > max_y:
-                max_y = y
-    if min_x is None:
+            box = boxes.get(pixel[:3])
+            if box is None:
+                continue
+            box[0] = min(box[0], x)
+            box[1] = min(box[1], y)
+            box[2] = max(box[2], x)
+            box[3] = max(box[3], y)
+            box[4] += 1
+    best = None
+    for color, (min_x, min_y, max_x, max_y, count) in boxes.items():
+        area = (max_x - min_x + 1) * (max_y - min_y + 1)
+        if area <= 0 or count / area < PLATE_MIN_SHARE:
+            continue
+        opaque = color + (255,)
+        if any(pixels[x, y] != opaque
+               for x, y in ((min_x, min_y), (max_x, min_y), (min_x, max_y), (max_x, max_y))):
+            continue
+        if best is None or area > best[0]:
+            best = (area, color, (min_x, min_y, max_x, max_y))
+    return (best[1], best[2]) if best else None
+
+
+def label_contrast(image: Image.Image):
+    """DBT-1: contraste MEDIDO entre el texto y la placa del render.
+
+    Devuelve `(ratio, text_rgb, plate_rgb)` o `None` si no hay placa localizable. Los DOS
+    operandos salen de los pixeles: la placa es el rectangulo medido (no la constante `PLATE`) y
+    el texto es el color modal dentro de ese rect que no es placa. Cambiar cualquiera de los dos
+    cambia el numero reportado.
+    """
+    found = plate_region(image)
+    if found is None:
         return None
+    plate, (min_x, min_y, max_x, max_y) = found
+    pixels = image.load()
     counts: Counter = Counter()
     for y in range(min_y, max_y + 1):
         for x in range(min_x, max_x + 1):
             color = pixels[x, y]
-            if color[3] == 255 and color[:3] != gen.PLATE:
+            if color[3] == 255 and color[:3] != plate:
                 counts[color[:3]] += 1
     if not counts:
         return None
     # El texto se mide por su nucleo, no por el halo de antialias: el color no-placa con mas
     # contraste contra la placa. Si NI SIQUIERA ese llega a 4.5, el par entero es ilegible.
-    text = max(counts, key=lambda color: contrast_ratio(color, gen.PLATE))
-    return contrast_ratio(text, gen.PLATE), text, gen.PLATE
+    text = max(counts, key=lambda color: contrast_ratio(color, plate))
+    return contrast_ratio(text, plate), text, plate
 
 
 def validate_bytes(entry, data: bytes) -> list[str]:
@@ -188,8 +224,13 @@ def validate_bytes(entry, data: bytes) -> list[str]:
     return failures
 
 
-def validate_render(entry, image: Image.Image, host) -> list[str]:
-    """Segunda mitad: marcas, relleno, LEGIBLE medido y SURVIVE con host."""
+def validate_render(entry, image: Image.Image, host, *, labeled: bool = False) -> list[str]:
+    """Segunda mitad: marcas, relleno, LEGIBLE medido y SURVIVE con host.
+
+    `labeled` dice si el render derivado DIBUJO una etiqueta. Con `labeled` y sin placa
+    localizable el gate falla `LEGIBLE`: antes devolvia `None` y la regla se salteaba en silencio,
+    asi que una placa recoloreada apagaba el unico gate de contraste (DBT-1, W-8).
+    """
     failures: list[str] = []
     width, height = image.size
     label = "%-40s" % entry.row.pieza
@@ -223,7 +264,11 @@ def validate_render(entry, image: Image.Image, host) -> list[str]:
                             % (label, "sin relleno visible" if not fill
                                else "#%02X%02X%02X" % tuple(fill)))
     measured = label_contrast(image)
-    if measured is not None:
+    if measured is None:
+        if labeled:
+            failures.append("%s LEGIBLE: la etiqueta se dibujo y no se localiza la placa en el"
+                            " render (no se saltea, DBT-1)" % label)
+    else:
         ratio, text, plate = measured
         if ratio < LEGIBLE_MIN:
             failures.append("%s LEGIBLE: texto/placa %.2f:1, minimo %.1f (texto #%02X%02X%02X,"
@@ -234,9 +279,10 @@ def validate_render(entry, image: Image.Image, host) -> list[str]:
     return failures
 
 
-def validate(entry, data: bytes, image: Image.Image, host) -> list[str]:
+def validate(entry, data: bytes, image: Image.Image, host, *,
+             labeled: bool = False) -> list[str]:
     """Las dos mitades en el orden del contrato: bytes crudos y despues pixeles."""
-    return validate_bytes(entry, data) + validate_render(entry, image, host)
+    return validate_bytes(entry, data) + validate_render(entry, image, host, labeled=labeled)
 
 
 def survive_metrics(entry, image: Image.Image, host: tuple[float, float, float]):
@@ -434,7 +480,7 @@ def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None, manifest=
                                                  for token in gen.GENERIC_MOTIVO)):
                 failures.append("%s MOTIVO: motivo vacio o generico (APH-11)" % pieza)
             continue
-        image, data, _ = rendered[pieza]
+        image, data, labeled = rendered[pieza]
         if not path.is_file():
             failures.append("%s FALTA: no existe %s" % (pieza, gen.display(path)))
             continue
@@ -447,7 +493,7 @@ def run(entries, render_dir: Path, ledger_path: Path, hosts_path=None, manifest=
         if host is not None:
             hosts_used += 1
             print(survive_line(entry, image, host, host_source))
-        failures.extend(validate(entry, on_disk, image, host))
+        failures.extend(validate(entry, on_disk, image, host, labeled=labeled))
         if not row:
             failures.append("%s LEDGER: sin fila (el cohorte NEW la exige)" % pieza)
             continue

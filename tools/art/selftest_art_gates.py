@@ -14,6 +14,8 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     excluded      ART-4: EXCLUDED cierra conteos; sin motivo → EXCLUDED-MOTIVO; con PNG → -PNG
     px-entrega    CTR-1: 6/6 pendientes, entregar baja el contador, la septima es violacion
     legible       DBT-1: el ratio se mide; cambiar la placa cambia el numero y puede fallar
+    plate-decoded  DBT-1/W-8: la placa medida es el color DECODIFICADO del render, no la
+                  constante; sin placa localizable el hallazgo aparece, no se saltea
     tbd           DBT-4: una fila nombrada sale 1 (TBD-CAMPO); un §9 ilegible sigue saliendo 2
     cohort-sum    ART-3: una etiqueta inventada en el ledger falla COHORT-SUM con pieza
     cohort-manifest  DBT-5: una etiqueta inventada en §9 sale 1 COHORT-SUM en las dos rutas
@@ -482,6 +484,75 @@ def case_legible() -> list[str]:
             failures.append("LEGIBLE no muestra las dos muestras RGB: %s" % legible[0])
     finally:
         gen.PLATE = original
+    return failures
+
+
+def case_plate_decoded() -> list[str]:
+    """DBT-1/W-8: el operando "placa" es el color DECODIFICADO del render, no `gen.PLATE`.
+
+    Se repinta la placa sin tocar la constante: el gate tiene que medir el color nuevo (y fallar
+    si ese par es ilegible). Una imagen con etiqueta y sin placa localizable NO se saltea.
+    """
+    from PIL import ImageDraw
+
+    failures: list[str] = []
+    _, entries = real_entries(deliveries=[])
+    entry = [item for item in entries if item.row.pieza == RETRY][0]
+    original = gen.PLATE
+    try:
+        image, _ = gen.render(entry)
+        found = check.plate_region(image)
+        if found is None:
+            return ["no se localizo la placa en el render derivado de %s" % RETRY]
+        plate, rect = found
+        measured = check.label_contrast(image)
+        print("placa decodificada #%02X%02X%02X, ratio %.2f:1" % (*plate, measured[0]))
+        if plate != original:
+            failures.append("la placa medida #%02X%02X%02X no es la dibujada #%02X%02X%02X"
+                            % (*plate, *original))
+
+        # La placa se dibuja de OTRO color y la constante se restaura antes de medir: si el
+        # operando fuera `gen.PLATE`, `label_contrast` devolveria None (W-8).
+        gen.PLATE = (170, 170, 170)
+        repainted, _ = gen.render(entry)
+    finally:
+        gen.PLATE = original
+    decoded = check.label_contrast(repainted)
+    print("placa dibujada #AAAAAA con la constante ya restaurada: %s"
+          % ("%.2f:1 placa #%02X%02X%02X" % (decoded[0], *decoded[2]) if decoded else "None"))
+    if decoded is None:
+        failures.append("una placa de otro color dejo LEGIBLE sin medir: devolvio None (el"
+                        " operando sigue siendo la constante)")
+    else:
+        if decoded[2] != (170, 170, 170):
+            failures.append("la placa medida no es la decodificada: #%02X%02X%02X"
+                            % decoded[2])
+        if abs(decoded[0] - measured[0]) < 1e-6:
+            failures.append("cambiar el color dibujado no cambio el ratio reportado")
+        findings = [finding for finding in check.validate_render(entry, repainted, None,
+                                                                labeled=True)
+                    if "LEGIBLE" in finding]
+        if not findings or "AAAAAA" not in findings[0]:
+            failures.append("LEGIBLE deberia medir la placa decodificada (#AAAAAA): %s" % findings)
+
+    unplated = image.copy()
+    ImageDraw.Draw(unplated).rectangle([rect[0], rect[1], rect[2], rect[3]],
+                                       fill=gen.FILL + (255,))
+    leftover = check.label_contrast(unplated)
+    if leftover is not None:
+        failures.append("sin placa localizable el operando deberia ser None (el caso no prueba"
+                        " nada); se midio %s" % (leftover,))
+    silent = [finding for finding in check.validate_render(entry, unplated, None, labeled=True)
+              if "LEGIBLE" in finding]
+    print("sin placa localizable: %s" % (silent[0].split("LEGIBLE")[-1].strip() if silent
+                                         else "sin hallazgo"))
+    if not silent:
+        failures.append("una etiqueta sin placa localizable no puede saltear LEGIBLE en silencio")
+    unlabeled = [finding for finding in check.validate_render(entry, unplated, None)
+                 if "LEGIBLE" in finding]
+    if unlabeled:
+        failures.append("sin etiqueta dibujada (labeled=False) no corresponde el hallazgo: %s"
+                        % unlabeled)
     return failures
 
 
@@ -1125,6 +1196,7 @@ CASES = {
     "excluded": case_excluded,
     "px-entrega": case_px_entrega,
     "legible": case_legible,
+    "plate-decoded": case_plate_decoded,
     "tbd": case_tbd,
     "cohort-sum": case_cohort_sum,
     "cohort-manifest": case_cohort_manifest,
