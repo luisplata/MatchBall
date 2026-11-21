@@ -556,3 +556,234 @@ propia, y el cohorte NEW no las toca.
 - **S3 hereda el denominador**: `REPLACE-LEDGER`, `REPLACE-SHA` y `ORPHAN-*` derivan `R` de §9 y de
   la cantidad de filas del CSV. Cuando `ball_state_frozen_01` entra como REPLACE, la fila 86 se
   appendea con `--capture-provenance --add ball_state_frozen_01` y nada más de este slice cambia.
+
+## §S3 — `ball_state_frozen_01` resuelve su slot (T-24…T-29)
+
+Cierra CTR-3 y CTR-4 sin tocar Unity y sin escribir un byte de arte. La afirmación que este
+slice vuelve medible es una sola: **`ball_state_frozen_01` estaba mal clasificada**. No era una
+pieza nueva bloqueada por diseño: era el reemplazo de `Assets/Sprites/iceBall.png` en un slot
+que existe, está cableado y se instancia dos veces.
+
+La cadena, leída del YAML y no de la prosa:
+
+```
+Assets/Prefabs/Ballzone/FreezerMono.prefab:48
+  freezeSprite: {fileID: 21300000, guid: 558ffd990351d9b4896d1582e751ee57, type: 3}
+Assets/Sprites/iceBall.png.meta:2
+  guid: 558ffd990351d9b4896d1582e751ee57     # 1024x1024, spriteMode 1, ppu 100, maxTextureSize 2048
+Assets/Scenes/Game.unity                      # 2 instancias del prefab, sin guid directo
+```
+
+Ese guid aparece **sólo** en `FreezerMono.prefab` y en su propio `.meta` — el barrido GUID→YAML
+de PRV-3 lo confirma y ningún otro consumidor lo reclama (CTR-3, segundo escenario).
+
+### S3.1 La fila de §9 (T-24)
+
+```
+- ball_state_frozen_01.png,NEW,-,TBD,416x416,1,-,0/0/0/0,2048,0.5/0.5,100,-
++ ball_state_frozen_01.png,REPLACE,Assets/Sprites/iceBall.png,1024x1024,1024x1024,1,1,0/0/0/0,2048,0.5/0.5,100,-
+```
+
+`px_actual` = `px_entrega` = **1024×1024** porque es el header medido del archivo y no hay
+canvas propuesto que respetar (`mode_actual` = `mode_target` = 1, el `.meta` no necesita nada).
+Los 416×416 de la fila vieja eran un canvas inventado para un overlay que nunca se dibujó.
+
+Efecto en los conteos del propio contrato (§2 del manifiesto): `D — Bolas` pasa de 12/3 a
+**13/2** y el total de **85/37** a **86/36**. La aritmética vieja queda marcada como previa en
+la nota de reclasificación, no borrada.
+
+### S3.2 Los lectores que había que mover con la fila (T-25, T-27)
+
+Ninguno de los tres gates tenía un literal con el número: los tres derivan de §9 y del ledger.
+Lo que sí había eran **literales de comportamiento**:
+
+| Archivo | Antes | Después | Por qué |
+|---|---|---|---|
+| `generate_placeholders.BLOCKED` | 4 entradas, una con `ball_state_frozen_01` | **3** entradas | una pieza que ya no es NEW no puede seguir teniendo motivo de bloqueo: sería una decisión zombi |
+| motivos de las 2 `BLOCKED_PX` | `… 2 BLOCKED_BY_DESIGN = 37` | `… 1 BLOCKED_BY_DESIGN = 36` | el `motivo` promete el conteo post-desbloqueo; con 37 prometía un número que ya no existe |
+| motivo de `spotlight_fill` | `EXCLUDED deja 37 = 33 + 2 + 1 + 1` | `EXCLUDED deja 36 = 33 + 2 + 0 + 1` | ídem, y la `BLOCKED_BY_DESIGN` restante queda en 0 |
+| `check_placeholder_wiring.EXPECTED` | `{20, 13, 4}` literal | **derivado** del ledger + §9 | CTR-4: los buckets no pueden ser una constante que haya que editar cuando una pieza se entrega |
+| `check_placeholder_wiring.EXPECTED_ROWS 37` | literal | **derivado** (cohorte = filas del ledger) | el mapa tiene 37 filas por coincidencia, no por contrato: 36 NEW + 1 REPLACE |
+
+El cohorte del mapa ahora se **cruza contra dos artefactos**: el conjunto de piezas NEW sale del
+ledger y cada fila extra tiene que ser una `REPLACE` de §9. Una `BLOCKED_*` sólo puede figurar
+`bloqueado` (`LEDGER_STATE_TO_MAP`), así que una pieza bloqueada cableada es un hallazgo, no una
+interpretación. El estado de las 36 piezas NEW no se compara contra una tabla de números: se
+compara contra `pieza → estado` del ledger, que es lo único que un cambio de estado tiene que
+tocar.
+
+### S3.3 El mapa y la rama `MonoBehaviour` (T-26, T-27)
+
+```
+- ball_state_frozen_01.png,image,-,-,-,-,bloqueado,-,-,
++ ball_state_frozen_01.png,serialized_sprite_field,Assets/Prefabs/Ballzone/FreezerMono.prefab,FreezerMono,MonoBehaviour,freezeSprite,cableado,-,-,
+```
+
+`component_docs()` gana la rama `MonoBehaviour`: no tiene claves fijas, así que se reconoce por la
+clave que **la fila nombra** (`freezeSprite`) teniendo valor serializado. Sin ese parámetro la
+rama no existe a propósito — cualquier documento 114 de un nodo arbitrario sería un falso
+positivo. `MAP_FIELDS["serialized_sprite_field"]` acepta `freezeSprite` y `BASE_KEYS` también (es
+la clave que un diff puede tocar), y `MonoBehaviour` entra a la allowlist de `componente`.
+
+El guid contra el que se resuelve el campo **no está en el ledger**: la pieza no es NEW. Sale de
+`provenance-v1.csv` (PRV-1). Ese es el acoplamiento que este slice declara: sin la fila 86, el
+campo no se puede verificar y el gate lo dice en vez de saltearlo.
+
+```
+$ python tools/art/check_placeholder_wiring.py --plan   # ANTES de la fila 86 (estado transitorio)
+FALTA ball_state_frozen_01.png: no hay guid congelado (ledger ni provenance) contra el cual resolver FreezerMono.freezeSprite
+RESULTADO   FAIL  (1 hallazgos)
+
+$ python tools/art/check_placeholder_wiring.py --plan   # árbol final
+MAPA        36 NEW: 20 cableado, 13 sin_slot, 3 bloqueado
+REPLACE     1 cableado: ball_state_frozen_01.png
+FILAS       37 en el mapa (36 del cohorte NEW + 1 REPLACE con slot)
+GUID        119 piezas con guid congelado | 21 campos resueltos contra su pieza
+PENDIENTE   1 capturas sin declarar (slice de capturas)
+RESULTADO   PASS  (0 hallazgos)
+```
+
+`PENDIENTE 1` es deliberado y no es un hallazgo: la captura de `ball_state_frozen_01` la produce el
+rig de S4b (`--require-captures` es el gate de ese slice). Declararla vacía es honesto; inventar
+un PNG de captura no.
+
+La fila REPLACE **no** suma a los tres buckets. Si sumara, el mapa diría `21/13/3 = 37` y el
+cohorte NEW quedaría inflado por una pieza que no es del cohorte: es la misma doble cuenta que
+CTR-3 prohíbe. Por eso `hosts_from_map()` filtra por cohorte — una REPLACE no tiene render
+derivado contra el cual medir `SURVIVE`.
+
+### S3.4 Ledger y fila 86 (T-28)
+
+```
+$ python tools/art/generate_placeholders.py --freeze-guid
+escrito Docs/art/placeholders-v1.csv: 33 GUID congelados desde los .meta
+$ wc -l Docs/art/placeholders-v1.csv
+37        # encabezado + 36 filas (antes 38)
+
+$ python tools/art/audit_art_manifest.py --capture-provenance --add ball_state_frozen_01
+ADD          ball_state_frozen_01.png -> provenance-v1.csv (558ffd99, fb5f40d3)
+FILAS        86 | 84 guid distintos, 2 guid compartidos por el mismo origen
+$ wc -l Docs/art/provenance-v1.csv
+87        # encabezado + 86 filas
+```
+
+`--freeze-guid` es seguro para este slice y se verificó antes de correrlo: `do_freeze_guid()`
+**sólo** escribe el ledger (`ledger_path.write_text`), lee los `.meta` y nunca los abre en
+escritura; el único escritor de `.meta` del proyecto sigue siendo `ArtMetaMigrator` (C#). Prueba:
+
+```
+$ git status --porcelain -- Assets
+                                        # vacío: ni iceBall.png ni su .meta se tocaron
+$ git status --porcelain -- "*.png"
+                                        # vacío: los 33 PNG siguen byte-idénticos
+```
+
+La fila 86 es **append-only**: no re-basa las 85 anteriores ni puede reescribirlas
+(`ADD-REFUSED`). `px_actual` y `px_entrega` son `1024x1024`, medidos del disco y de §9.
+
+### S3.5 El cierre, medido (T-29)
+
+```
+$ python tools/art/check_placeholders.py          # exit 0
+COHORT      122 = 86 REPLACE + 36 NEW
+COHORT-SUM  36 = 33 + 0 + 0 + 2 + 1
+RESULTADO   PASS  (33 GENERATED, 3 bloqueadas; 0 DELIVERED, 0 EXCLUDED; 36 filas, 0 hallazgos)
+
+$ python tools/art/audit_art_manifest.py          # exit 1 — el baseline declarado, sin una más
+PROCEDENCIA 86 filas REPLACE | 0/86 reemplazadas | 4 sin pantalla
+VIOLACIONES 4 en 2 reglas        # FORMAT-JPG 3 + MODE-TARGET 1
+  COHORT      122 = 86 REPLACE + 36 NEW
+  COHORT-SUM  36 = 33 + 0 + 0 + 2 + 1
+  REPLACE-LEDGER  86/86 filas con pieza+origen+guid+sha256+px (84 guid distintos)
+  REPLACE-SHA  0/86 reemplazadas (86 BASELINE, 0 DELIVERED, 0 UNKNOWN)
+  ORPHAN      4 REPLACE sin pantalla: game_board_balance_base_01.png, game_board_shadow_long_01.png, ui_common_divider_01.png, ui_pass_state_lock_01.png
+  total 173 referencias en 29 archivos
+
+$ python tools/art/selftest_art_gates.py          # exit 0
+RESULTADO   PASS  (17 casos, 0 hallazgos)        # 16 de S1/S2 + wiring-mono
+```
+Tres números se movieron **porque la población creció**, y se declaran en vez de ajustarse en
+silencio:
+
+| Medición | S2 (85 REPLACE) | S3 (86 REPLACE) | Delta |
+|---|---|---|---|
+| referencias por GUID | 172 en 28 archivos | **173 en 29 archivos** | +1 referencia, +1 archivo: `FreezerMono.prefab:48` es el consumidor de la pieza 86 |
+| `REPLACE-LEDGER` | 85/85 (83 guid distintos) | **86/86 (84 guid distintos)** | +1 pieza, +1 guid |
+| `REPLACE-SHA` | 0/85 | **0/86** | denominador derivado, cero reemplazos: `iceBall.png` está en baseline |
+
+`PRV-3` fija "172 referencias en 28 archivos" para las **85** REPLACE que medía S2. La medición de
+hoy sobre las **86** es 173/29 y ninguna referencia se perdió: el diferencial es exactamente el
+consumidor que se sumó. Ese literal de PRV-3 queda con su población explícita (85) y este slice
+declara la nueva, en vez de editar el número como si siempre hubiera sido 173.
+
+El caso `replace-sha` del selftest asertaba el denominador con un `85` literal; pasa a derivarlo
+de `len(provenance)`. Es el mismo defecto que CTR-3 corrige en la prosa, encontrado en el test.
+
+### S3.6 Los negativos de CTR-4 (caso nuevo `wiring-mono`)
+
+```
+$ python tools/art/selftest_art_gates.py --only wiring-mono
+CASE  wiring-mono
+freezeSprite declarado: 1 campo(s) resuelto(s), 0 hallazgo(s)
+slot vaciado: 1 hallazgo(s) -> FALTA ball_state_frozen_01.png: FreezerMono.freezeSprite = sin sprite, el ledger congela 558ffd990351d9b4896d1582e751ee57
+mapa real: 36 = 20 + 13 + 3 | REPLACE cableadas: ['ball_state_frozen_01.png']
+RESULTADO   PASS  (1 casos, 0 hallazgos)
+```
+
+El sandbox escribe una copia del prefab **bajo `Temp/`** y la nombra desde un mapa también en
+`Temp/`: el positivo mide el mismo campo que el árbol real, y el negativo (`freezeSprite:
+{fileID: 0}`, el escenario "slot vaciado" de CTR-4) tiene que fallar nombrando la pieza. El mapa
+real se vuelve a resolver ahí mismo para atar `36 = 20 + 13 + 3` y "la única REPLACE cableada es
+la frozen" a los artefactos, no a este documento.
+
+### S3.7 El contrato archivado: la sustitución, fila por fila
+
+Los requirements de `sdd/placeholders-arte-v2` (obs **#4045**) están **cerrados**: se citan, no se
+reescriben. Pero cinco de ellos —`APH-1`, `APH-10`, `APH-11`, `APW-1` y `APW-2`— contienen
+literales numéricos que la reclasificación invalida, y dejar el texto archivado diciendo `37`
+cuando el repo mide `36` es exactamente el modo de fallo que un replay futuro no puede detectar.
+Esta tabla es la receta: **literal viejo → literal nuevo, requirement por requirement**, para que
+un replay (o una sincronización de specs) la aplique sin re-derivar nada.
+
+| Req. | Literal archivado (viejo) | Sustitución (nuevo) |
+|---|---|---|
+| `APH-1` | "derivar el cohorte de §9 (`estado=NEW`, **37**)" | `estado=NEW`, **36** |
+| `APH-1` | "El ledger MUST tener **37** filas: 33 `GENERATED` … `BLOCKED_BY_DESIGN` (`ui_tutorial_spotlight_fill_01`, **`ball_state_frozen_01`**)" | **36** filas … `BLOCKED_BY_DESIGN` (**`ui_tutorial_spotlight_fill_01`**) |
+| `APH-1` | Escenario *cohorte íntegro*: "GIVEN §9 con **37** NEW … THEN 33 PNG y **37** filas con los **4** motivos" | **36** NEW … **36** filas con los **3** motivos |
+| `APH-10` | "un PNG cuyo nombre no esté entre las **37** filas MUST fallar por `NEW-ORPHAN`" | **36** |
+| `APH-10` | "El ledger MUST tener **37** filas sin duplicados contra las **37** NEW de §9" | **36** y **36** |
+| `APH-10` | Escenario *huérfano y bloqueada*: "un PNG con nombre fuera de las **37**" | fuera de las **36** |
+| `APH-11` | "Cada una de las **4** piezas bloqueadas" | **3** |
+| `APH-11` | Tabla, fila `ball_state_frozen_01` → `BLOCKED_BY_DESIGN`, desbloqueo por exclusión o marcador | **fila eliminada**: la pieza es REPLACE de `iceBall.png`, no está bloqueada y su ruta de desbloqueo ya no existe |
+| `APH-11` | "el total MUST seguir siendo **37** y la resta `37 − BLOCKED_PX − BLOCKED_BY_DESIGN − EXCLUDED = GENERATED`" | **36** y `36 − … = GENERATED` |
+| `APH-11` | "el ledger MUST quedar exactamente como APH-1 lo fija (**33 / 2 / 2**)" | **33 / 2 / 1** |
+| `APH-11` | Escenario *§9 v3 desbloquea*: "THEN **35 `GENERATED` + 2 `BLOCKED_BY_DESIGN` = 37**" | **34 `GENERATED` + 2 bloqueadas** (1 `BLOCKED_PX` + 1 `BLOCKED_BY_DESIGN`) **= 36** |
+| `APH-11` | Escenario *motivo sin decisión*: "GIVEN `motivo = "TBD"` en **`ball_state_frozen_01`**" | **`ui_tutorial_spotlight_fill_01`** — es la única `BLOCKED_BY_DESIGN` que queda; el escenario prueba la regla, no la pieza |
+| `APH-11` | Escenario *exclusión permanente*: "el total sigue en **37**" | **36** |
+| `APW-1` | Título: "20 cableables, 13 `sin_slot`, **4** bloqueadas" | **3** bloqueadas |
+| `APW-1` | "`BLOCKED_*` **4** — sin PNG: `bubble_tail_left`, `caption_pill` (`BLOCKED_PX`), `spotlight_fill`, **`ball_state_frozen`** (`BLOCKED_BY_DESIGN`)" | **3** — sin `ball_state_frozen` |
+| `APW-1` | "Aritmética: **20 + 13 + 4 = 37**; **33 GENERATED = 20 + 13**" | **20 + 13 + 3 = 36**; la segunda identidad no cambia |
+| `APW-2` | "MUST tener **37** filas (**33 `GENERATED` + 4 `BLOCKED_*`**)" | **37** filas (**36** del cohorte NEW: 33 `GENERATED` + **3 `BLOCKED_*`**, **+ 1 `REPLACE` cableada**) |
+
+**La trampa de esta tabla**: `APW-2` es el único requirement donde `37` **no** se convierte en
+`36`. El mapa sigue teniendo 37 filas; lo que cambia es su composición (36 NEW + 1 REPLACE). Un
+replay que aplique "37 → 36" a ciegas rompe `APW-2` y el gate de filas del mapa. Por eso la
+sustitución está escrita fila por fila y no como una regla global.
+
+Nada de esto se aplicó al artefacto archivado: obs **#4045** sigue byte por byte como se cerró.
+Lo que se versiona acá es la **diferencia auditable** entre lo archivado y lo medido hoy; el
+archivo de specs sólo debería moverse si alguien reabre `placeholders-arte-v2`, y entonces tiene
+esta tabla esperándolo.
+
+### S3.8 Lo que este slice no toca
+
+- **Cero bytes de arte**: los 33 PNG quedan idénticos (`git status -- "*.png"` vacío). `iceBall.png`
+  se lee para medir header y sha, nunca se escribe.
+- **Cero `.meta`**: `--freeze-guid` no es un escritor de `.meta` (ver S3.4). Si lo hubiera sido
+  sobre `iceBall.png.meta` el slice se detenía: el guid de una REPLACE es el contrato (PRV-3).
+- **Cero C#**: la rama `MonoBehaviour` es del checker Python. Unity no se abrió en este slice.
+- **Contratos de S1 y S2 intactos**: `--ack-sha` ledger-only, `DELIVERED`/`EXCLUDED`,
+  `PX_ENTREGA_PENDING 6/6`, `SURVIVE` canónico, `TBD` exit 1, `sheet-clear`, `RECT-STALE` sobre el
+  rect vivo, `REPLACE-SHA` en sus tres estados y `ORPHAN-*` siguen verdes en el selftest (17/17).
+- **Baseline del auditor**: 4, sin una quinta. Cualquier hallazgo nuevo habría sido un defecto
+  introducido por este slice; no lo hay.
