@@ -937,3 +937,205 @@ RESULTADO   PASS  (18 casos, 0 hallazgos)         # 17 de S1/S2/S3 + evidence
   `PX_ENTREGA_PENDING 6/6`, `SURVIVE` canónico, `TBD` exit 1, `sheet-clear`, `RECT-STALE` sobre el
   rect vivo, `REPLACE-SHA` en sus tres estados, `ORPHAN-*` y `COHORT 122 = 86 + 36` — todos los
   casos del selftest verdes.
+
+## §S4b — el rig de capturas y el diff acotado al bbox (T-34…T-38)
+
+Cierra: la captura deja de ser un archivo que existe y pasa a ser **salida de código versionado**
+(DRL-3), y "comparable" deja de ser una palabra: `changed ⊆ bbox` y `changed >= 1`, medido sobre el
+marco completo (DRL-4). Unity 6000.3.10f1, editor abierto por MCP; el rig nunca entra en play mode.
+
+### S4b.1 El rig (T-34)
+
+`Assets/Editor/ArtContract/ArtCaptureRig.cs` — `BatchCapture` es el único entrypoint que escribe un
+path versionado (mismo patrón que `BatchDrillNew`); `CaptureSwapDrill` escribe sólo a un directorio
+explícito y se niega a caer en `Docs/art/captures/`. Un solo bloque de rendimiento:
+
+```
+fila del mapa -> host (la escena, o la escena donde el juego instancia el prefab)
+              -> nodo (path relativo al prefab, o path completo en la escena)
+              -> forzado declarado -> canvas.worldCamera -> RenderTexture 900x1900
+              -> ReadPixels -> recorte por la proyeccion del RectTransform del nodo
+```
+
+Lo que fuerza, y por qué cada cosa es una decisión y no una comodidad:
+
+| Forzado | Por qué | Si no |
+|---|---|---|
+| cadena de ancestros activa | el asset de una escena de UI tiene los paneles inactivos y los prende el código | el nodo no dibuja y el recorte sale vacío |
+| hermanos posteriores que **cubren entero** el nodo, apagados | en `MainMenu` los paneles de nivel canvas están todos `active` en el asset y el código prende uno por vez | el recorte de un botón de `Configuration` devolvía `Canvas/Heroes` encima (medido: 8 PNG cambiados por esto) |
+| `m_Color` que APW-3 exige | la captura no puede depender del color que dejó otra corrida | la firma `#FF00FF` se apagaría en un host sin normalizar |
+| `Selectable.DoStateTransition` (reflexión) | es lo que hace el input; `m_Transition: 2` no tinta | el `pressed` mostraría el sprite normal |
+| `TutorialStepDots.SetCurrent(1)` | el estado real del componente, no tres asignaciones a mano | los tres dots saldrían con el mismo sprite |
+| `PanelFloatingUiRules.Show()` → `localPosition = 0` | `Configuration` está en `-1000` y su engranaje no tiene *opener* | el recorte cae fuera del canvas |
+
+Nada de `ScreenCapture`: la resolución es la del contrato (`CanvasScaler` 900×1900 en las tres
+escenas), no la del Game view. Las escenas se abren desde disco y se **recargan** al terminar: el
+estado forzado no sobrevive, no se guarda nada y ningún `.meta` se reescribe.
+
+**Posición del panel de `Configuration`: no confirmada por el dueño de la UI** (riesgo que el design
+deja abierto). El rig escribe el destino del tween que `PanelFloatingUiRules.Show()` declara
+(`localPosition = 0`), no una posición inventada; si el panel debe abrirse en otro lado, se corrige
+esa fila y las capturas se regeneran. La prueba que impide que esto sea un verde vacío: un nodo que
+no proyecte dentro del marco falla `OFF-CANVAS <pieza>` y **no** escribe PNG.
+
+### S4b.2 Las 20 capturas (T-37)
+
+20/20 filas `cableado` con `captura`, PNG reescritos por el rig, `Docs/art/evidence/captures-v1.md`
+regenerado (mismo comando). Los `px` coinciden **al píxel** con la evidencia anterior en las 20
+(401×521, 288×146, 100×119, 238×58, 548×58, 310×112, 122×57, 280×85/84, 781×420, 353×44, 160×200,
+28×28, 900×1900, …): el recorte no cambió de criterio, cambió de dueño.
+
+| Resultado | n | Cuáles |
+|---|---|---|
+| byte-idénticas a la corrida anterior | **12** | `dim`, `hand_point_left/right`, los 3 `step_dot_*`, `skip_normal/pressed`, `continue_normal/pressed`, `icon_danger`, `menu_btn_play_pressed` |
+| bytes distintos, mismo `px` | **8** | `bubble_body`, `panel_retry`, `btn_retry_normal/pressed`, `zone_veil`, `settings_pressed`, `btn_primary_pressed/disabled` |
+
+Las 8 no son ruido, son correcciones, y se ven: `bubble_body` y `panel_retry` ganan el botón
+`Continue`/`Return` que el cableado de la pieza hermana había puesto debajo; las 4 de `MainMenu`
+dejaban de devolver el panel que las tapaba (ver S4b.1); `zone_veil` mide la franja real del
+countdown tras el rebuild de layout.
+
+**Determinismo medido**: dos corridas seguidas del rig → los 20 `sha256` idénticos. No es un
+requisito (DRL-4 prohíbe comparar hashes de captura), pero es lo que hace que `DIFF-EMPTY` signifique
+"no cambió nada" y no "el frame salió distinto".
+
+**Las 4 panorámicas de host se retiraron** (`game.png`, `main-menu.png`, `main-menu-configuration.png`,
+`tutorial-overlay.png`): no las producía ningún código versionado y una captura que sólo se puede
+mirar es exactamente lo que DRL-3 prohíbe. El marco completo hoy lo emite `CaptureSwapDrill` en
+`Temp/` (ignorado), que es donde el diff lo necesita y donde no engorda el repo con 20 imágenes de
+~1 MB.
+
+### S4b.3 `--verify-manifest`: la mitad que no necesita Unity (T-36)
+
+```
+$ python tools/art/check_capture_diff.py --verify-manifest    # exit 0
+CAPTURAS 20/20 | marco 900x1900 | rig Assets/Editor/ArtContract/ArtCaptureRig.cs
+EXCEPCION  ball_state_frozen_01.png: ...
+MANIFIESTO Docs/art/evidence/captures-v1.md versionado
+RESULTADO   PASS  (0 hallazgos)
+```
+
+Cuatro condiciones, cada una falsable por separado (y cada una con su caso en el selftest):
+
+1. **el rig está versionado** (`git ls-files --error-unmatch`): sin el archivo, la captura no se
+   puede regenerar. Es la condición que hace que "la captura existe" deje de ser criterio.
+2. **cobertura exacta**: el conjunto del manifiesto == el conjunto de filas `cableado` con
+   `captura` del mapa, en las dos direcciones (`CAPTURA-FALTA` / `CAPTURA-STALE`).
+3. **`px` declarados** == los del PNG, y el `colores` declarado == el medido.
+4. **≥ 2 colores distintos**: un PNG uniforme es `CAPTURA ... un solo color`.
+
+### S4b.4 Los tres veredictos de DRL-4 (T-38)
+
+El after **no pisa bytes**: `CaptureSwapDrill(bbox, nodo, sprite, outDir)` asigna en memoria el
+`Sprite` de otra pieza al nodo elegido y emite `before.png`/`after.png` del mismo estado, así que la
+única diferencia entre los dos marcos es ese cambio. Es el mismo efecto que un swap de bytes tiene
+sobre el nodo, sin riesgo de dejar un asset a medio cambiar (y sin tocar los 33 PNG).
+
+```
+$ python tools/art/check_capture_diff.py --piece ui_tutorial_btn_skip_normal_01.png \
+      --before Temp/art-captures/drill-pass/before.png --after .../after.png     # exit 0
+BBOX        484,1495,122,57 de 900x1900
+CAMBIADOS   514 px, todos dentro del bbox
+RESULTADO   PASS
+
+$ ... --before Temp/art-captures/drill-outside/before.png --after .../after.png   # exit 1
+DIFF-OUTSIDE ui_tutorial_btn_skip_normal_01.png: 317539 de 317539 pixeles cambiados caen
+             fuera del bbox 484,1495,122,57
+
+$ ... --before Temp/art-captures/drill-empty/before.png --after .../after.png     # exit 1
+DIFF-EMPTY ui_tutorial_btn_skip_normal_01.png: 0 pixeles cambiados dentro de 484,1495,122,57
+```
+
+- **PASS**: el nodo de `skip_normal` pasa a mostrar el sprite de `skip_pressed` → 514 px, todos
+  dentro.
+- **DIFF-OUTSIDE**: el mismo bbox, pero el cambio se hace en el nodo de `panel_retry` (781×420,
+  fuera de la franja del skip) → 317 539 px, todos fuera.
+- **DIFF-EMPTY**: sin swap → 0 px. Es la prueba de que el gate no es un verde automático y de que
+  el render del editor es estable.
+
+El diff se mide sobre el **marco** y no sobre el recorte a propósito: un recorte *es* el bbox, así
+que `changed ⊆ bbox` se cumpliría siempre y `DIFF-OUTSIDE` sería código muerto.
+
+**`DIFF-OUTSIDE` y la proyección de `MainMenu`**: el bbox es el `RectTransform`, no lo que el nodo
+dibuja. Un nodo con `Shadow`/`Outline` de UI (el mesh se expande fuera del rect) reportaría píxeles
+fuera; ninguna de las 20 lo hace (la corrida PASS lo mide: 514 px, 0 fuera), y si apareciera, el
+hallazgo nombra la pieza, el bbox y el número. No se relaja: se declara por fila cuando pasa.
+
+### S4b.5 `--require-captures` cierra en 0 sin declarar (T-37)
+
+`ball_state_frozen_01` es `cableado` y REPLACE, y **DRL-3 no la cubre**: no tiene `RectTransform`
+ni canvas. Su slot es un `Sprite` serializado en un `MonoBehaviour` que en runtime se asigna al
+`SpriteRenderer` de una bola de mundo; el rig proyecta `RectTransform` contra la cámara del canvas,
+y un `SpriteRenderer` inventado para la foto probaría la pieza, no el cableado. La captura existe
+como **excepción declarada**, no como hueco: lista cerrada en `art_ledger.CAPTURE_EXCEPTIONS`
+(agregar una segunda es diff de código + review), impresa por nombre por los dos gates, y medida en
+las dos direcciones — si la fila gana captura, o deja de ser cableada, da `CAPTURA-STALE` /
+`EXCEPCION-STALE`.
+
+```
+$ python tools/art/check_placeholder_wiring.py --require-captures   # exit 0
+EXCEPCION  ball_state_frozen_01.png: el slot es un `Sprite` serializado en un `MonoBehaviour` ...
+CAPTURA    1 cableada(s) sin captura: 1 declarada(s), 0 sin declarar
+RESULTADO  PASS  (0 hallazgos)
+```
+
+### S4b.6 Las 15 piezas en Single: cero px movidos
+
+El riesgo heredado de S1b era que tocar un px reviviera `RECT-STALE` en las 15 piezas Single que
+serializan un bloque de tamaño lienzo. El rig **no escribe `Assets/`**: lee escenas y prefabs, abre
+y recarga, no guarda. Medido al cerrar: `git status --porcelain -- Assets` vacío y `RECT-STALE 0`.
+Los dos pares REPLACE que comparten GUID (mismo origen, dos roles) tampoco pueden confundir una
+captura: el rig indexa por `pieza` y por el `nodo` del mapa, **nunca por GUID**, y esas piezas no
+tienen fila de captura.
+
+### S4b.7 Gates al cerrar
+
+```
+$ python tools/art/audit_art_manifest.py          # exit 1 — el baseline declarado, sin una más
+VIOLACIONES 4 en 2 reglas                          # FORMAT-JPG 3 + MODE-TARGET 1
+  COHORT 122 = 86 REPLACE + 36 NEW · COHORT-SUM 36 = 33 + 0 + 0 + 2 + 1
+  REPLACE-SHA 0/86 (86 BASELINE) · ORPHAN 4 REPLACE sin pantalla · RECT-STALE 0
+
+$ python tools/art/check_placeholders.py                                  # exit 0
+RESULTADO   PASS  (33 GENERATED, 3 bloqueadas; 36 filas, 0 hallazgos)
+
+$ python tools/art/check_placeholder_wiring.py --plan                     # exit 0
+MAPA        36 NEW: 20 cableado, 13 sin_slot, 3 bloqueado
+REPLACE     1 cableado: ball_state_frozen_01.png
+
+$ python tools/art/check_placeholder_wiring.py --require-captures         # exit 0
+$ python tools/art/check_capture_diff.py --verify-manifest                # exit 0
+
+$ python tools/art/selftest_art_gates.py                                  # exit 0
+RESULTADO   PASS  (21 casos, 0 hallazgos)   # + capture-diff, capture-manifest, capture-declared
+```
+
+### S4b.8 Desvíos declarados
+
+1. **`LoadMap()` no existe** (T-34 dice "reusa `ArtContractManifest.SplitCsv`/`NormalizePath`/
+   `LoadMap`"). `ArtContractManifest` no tiene un lector del mapa: el que hay en `ArtSyntheticBatch`
+   lee el **ledger**, no el mapa. El rig parsea el bloque ```csv del mapa con `SplitCsv`/
+   `NormalizePath` y lee las columnas por nombre (~40 líneas), y falla el arranque si el mapa no
+   tiene un único bloque.
+2. **`--map` es `--manifest`** (T-38 lo nombra `--map`). El bbox no vive en
+   `Docs/art/placeholders-v1.md` — vive en el manifiesto que emite el rig, que es el único archivo
+   que lo conoce; el flag se llama `--manifest` (default `Docs/art/evidence/captures-v1.md`).
+3. **El "swap" de los negativos es una asignación de `Sprite` en memoria**, no un pisado de bytes.
+   DRL-4 compara capturas; lo que produce la captura es asunto del rig, y asignar el sprite de otra
+   pieza al nodo tiene el mismo efecto visual que un byte swap entre dos placeholders del mismo
+   `px`, sin arriesgar el arte de las 33 piezas.
+4. **Tamaño**: el rig quedó en ~1 200 líneas de C# (el forecast decía ~300). No es prosa: cada
+   bloque de S4b.1 es una decisión que el artefacto pide por nombre (host, nodo, forzado,
+   oclusores, bbox, evidencia, negativos). El gate Python quedó en ~350 líneas, ~110 previstas.
+5. **Se retiraron 4 PNG** (las panorámicas de host): no las regenera ningún código versionado. Es
+   parte de T-37 ("borrar el directorio y commitear las 20").
+
+### S4b.9 Lo que este slice NO toca
+
+- **Cero arte, cero `.meta`, cero `ProjectSettings`**: los 33 PNG NEW y las 86 REPLACE (incluido
+  `iceBall.png`) quedan byte-idénticos; `git status --porcelain -- Assets` vacío al cerrar.
+- **Cero conteos**: §9, `COHORT 122 = 86 + 36`, `36 = 33 + 2 + 1` y `PX_ENTREGA_PENDING 6/6` no
+  se mueven; el baseline del auditor sigue en **4**.
+- **Contratos previos intactos**: `--ack-sha` ledger-only, `DELIVERED`/`EXCLUDED`, `SURVIVE`
+  canónico, `TBD` exit 1, `sheet-clear`, `RECT-STALE` sobre el rect vivo, `REPLACE-SHA`,
+  `ORPHAN-*` y `EVIDENCE-UNTRACKED` — todos los casos del selftest verdes (18 → 21).
