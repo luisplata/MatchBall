@@ -25,6 +25,12 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     zlib-limit    DBT-3: la declaracion existe y el gate la consulta (>= 1)
     evidence      DRL-2: el reporte del drill re-hashea su cuerpo y esta versionado; uno solo
                   en `Temp/` (ignorado) cuenta como ausente y falla EVIDENCE-UNTRACKED
+    capture-diff  DRL-4: `changed ⊆ bbox` y `>= 1`; fuera del bbox → DIFF-OUTSIDE, sin cambio
+                  → DIFF-EMPTY, tamanos distintos → ERROR (nada de hashes de captura)
+    capture-manifest  DRL-3: el px declarado es el del PNG, una captura de un color falla y el
+                  manifiesto cubre exactamente las filas cableadas con captura
+    capture-declared  DRL-3: una fila cableada sin captura solo pasa declarada en
+                  `CAPTURE_EXCEPTIONS`; una declaracion que envejece da CAPTURA-STALE
 
 Uso:
     python tools/art/selftest_art_gates.py
@@ -45,9 +51,11 @@ from pathlib import Path
 
 import art_ledger as ledger_mod
 import audit_art_manifest as audit
+import check_capture_diff as capture_diff
 import check_placeholder_wiring as wiring
 import check_placeholders as check
 import generate_placeholders as gen
+from PIL import Image
 
 ROOT = gen.REPO_ROOT
 SANDBOX = ROOT / "Temp" / "art-selftest"
@@ -763,6 +771,140 @@ def case_evidence() -> list[str]:
     return failures
 
 
+def case_capture_declared() -> list[str]:
+    """DRL-3: una fila cableada sin captura solo pasa declarada; la lista envejece ruidosa."""
+    failures: list[str] = []
+    rows = wiring.read_map()
+    pending = [row["pieza"] for row in rows
+               if row["estado"] == "cableado" and not row["captura"]]
+    print("cableadas sin captura: %s" % (", ".join(pending) or "-"))
+    allowed, declared, _ = wiring.capture_report(rows, pending)
+    if allowed or len(declared) != len(pending):
+        failures.append("una fila declarada en CAPTURE_EXCEPTIONS sigue fallando: %s" % allowed)
+    if not any("ball_state_frozen_01.png" in note for note in declared):
+        failures.append("la excepcion declarada no se imprime por nombre: %s" % declared)
+
+    undeclared, _, _ = wiring.capture_report(rows, ["ui_tutorial_dim_01.png"])
+    print("no declarada: %s" % (undeclared[0] if undeclared else "-"))
+    if len(undeclared) != 1 or "sin captura declarada" not in undeclared[0]:
+        failures.append("una fila sin captura y sin declarar deberia fallar: %s" % undeclared)
+
+    # La lista cerrada se mide en la otra direccion: si la fila ya declara captura, la
+    # declaracion envejecio y el gate tiene que acusarla (no quedar verde por silencio).
+    stale = [dict(row) for row in rows]
+    for row in stale:
+        if row["pieza"] == "ball_state_frozen_01.png":
+            row["captura"] = "ball_state_frozen_01.png"
+    stale_failures, _, _ = wiring.capture_report(stale, [])
+    print("excepcion envejecida: %s" % (stale_failures[0] if stale_failures else "-"))
+    if not stale_failures or "CAPTURA-STALE" not in stale_failures[0]:
+        failures.append("una excepcion que ya tiene captura deberia dar CAPTURA-STALE: %s"
+                        % stale_failures)
+    return failures
+
+
+def case_capture_manifest() -> list[str]:
+    """DRL-3: px declarados, captura uniforme y cobertura; el manifiesto es falsable."""
+    failures: list[str] = []
+    work = fresh("capture-manifest")
+    captures = work / "captures"
+    captures.mkdir()
+    piece = "ui_test_01.png"
+
+    sandbox_map = work / "map.md"
+    sandbox_map.write_text(
+        "```csv\n" + ",".join(capture_diff.MAP_COLUMNS) + "\n"
+        + "%s,image,Assets/Scenes/Game.unity,N,Image,m_Sprite,cableado,-,-,%s\n"
+        % (piece, piece) + "```\n", encoding="utf-8")
+    manifest = work / "captures-v1.md"
+
+    def write_manifest(px: str = "4x4", colours: int = 1) -> None:
+        manifest.write_text(
+            "```csv\n" + ",".join(capture_diff.COLUMNS) + "\n"
+            + '%s,%s,20x20,"4,3,4,4",%d\n' % (piece, px, colours) + "```\n", encoding="utf-8")
+
+    def measure():
+        return capture_diff.verify_manifest(manifest, map_path=sandbox_map, captures=captures)
+
+    png = captures / piece
+    image = Image.new("RGBA", (4, 4), (7, 8, 9, 255))
+    image.save(png)
+    write_manifest(colours=1)
+
+    with swapped(ledger_mod, CAPTURE_EXCEPTIONS={}):
+        uniform, _ = measure()
+        print("uniforme: %s" % (uniform[0] if uniform else "-"))
+        if not any("un solo color" in failure for failure in uniform):
+            failures.append("un PNG de un solo color deberia fallar: %s" % uniform)
+
+        image.putpixel((0, 0), (200, 0, 200, 255))
+        image.save(png)
+        write_manifest(colours=2)
+        ok, notes = measure()
+        # El rig y el manifiesto se versionan con el commit: en el sandbox la unica condicion
+        # que no se puede cumplir es `git ls-files`, y por eso se filtra junto con `Temp/`.
+        kept = [failure for failure in ok
+                if not failure.startswith(("EVIDENCE-UNTRACKED", "RIG:"))]
+        print("dos colores: %d hallazgo(s) -> %s" % (len(kept), kept or notes[0]))
+        if kept:
+            failures.append("una captura valida de 2 colores no deberia fallar: %s" % kept)
+
+        image.resize((8, 4)).save(png)
+        wrong, _ = measure()
+        print("px mentidos: %s" % (wrong[0] if wrong else "-"))
+        if not any("manifiesto declara" in failure for failure in wrong):
+            failures.append("un px declarado distinto del PNG deberia fallar: %s" % wrong)
+
+        with swapped(capture_diff, RIG=work / "no-existe.cs"):
+            untracked, _ = measure()
+        if not any(failure.startswith("RIG:") for failure in untracked):
+            failures.append("sin el rig versionado, la captura no es regenerable: %s" % untracked)
+    return failures
+
+
+def case_capture_diff() -> list[str]:
+    """DRL-4: `changed ⊆ bbox` y `changed >= 1`, medido sobre el marco y sin hashes."""
+    failures: list[str] = []
+    work = fresh("capture-diff")
+    bbox = (4, 3, 6, 5)
+    base = Image.new("RGBA", (20, 20), (10, 20, 30, 255))
+    before = work / "before.png"
+    base.save(before)
+
+    same = work / "same.png"
+    base.save(same)
+    inside = work / "inside.png"
+    inside_image = base.copy()
+    inside_image.putpixel((5, 4), (255, 0, 255, 255))
+    inside_image.save(inside)
+    outside = work / "outside.png"
+    outside_image = base.copy()
+    outside_image.putpixel((15, 15), (255, 0, 255, 255))
+    outside_image.save(outside)
+
+    cases = (
+        ("sin cambio", same, "DIFF-EMPTY", 0, 0),
+        ("un px dentro", inside, "PASS", 1, 0),
+        ("un px fuera", outside, "DIFF-OUTSIDE", 1, 1),
+    )
+    for name, path, verdict, changed, parked in cases:
+        issues, measured, total, outside_count = capture_diff.diff(before, path, bbox, 20, 20)
+        print("%s: %s (%d cambiados, %d fuera)" % (name, measured, total, outside_count))
+        if issues:
+            failures.append("%s: el gate devolvio un error: %s" % (name, issues))
+        if measured != verdict or total != changed or outside_count != parked:
+            failures.append("%s: se esperaba %s con %d dentro / %d fuera, midio %s con %d / %d"
+                            % (name, verdict, changed, parked, measured, total, outside_count))
+
+    bigger = work / "bigger.png"
+    Image.new("RGBA", (40, 40), (0, 0, 0, 255)).save(bigger)
+    issues, measured, _, _ = capture_diff.diff(before, bigger, bbox, 20, 20)
+    print("tamanos distintos: %s -> %s" % (measured, issues[0] if issues else "-"))
+    if measured != "ERROR" or not issues:
+        failures.append("dos marcos de distinto tamano deberian dar ERROR: %s" % measured)
+    return failures
+
+
 def case_zlib_limit() -> list[str]:
     """DBT-3: la declaracion existe y el gate la consulta."""
     failures: list[str] = []
@@ -854,6 +996,9 @@ CASES = {
     "wiring-mono": case_wiring_mono,
     "zlib-limit": case_zlib_limit,
     "evidence": case_evidence,
+    "capture-diff": case_capture_diff,
+    "capture-manifest": case_capture_manifest,
+    "capture-declared": case_capture_declared,
 }
 
 
