@@ -148,8 +148,10 @@ redondeo del producto Gamma).
 > se deja la frase sin cumplir a propósito. Para cerrarla hay que elegir una: (a) borrar la
 > frase, o (b) subir el piso a `> 0.0067`. No se toca código para ninguna de las dos.
 
-`SURVIVE` sólo se evalúa con host declarado (`--hosts`) o cuando el mapa del slice 2 declara el
-host vivo; sin host no hay con qué medir y el gate lo omite, en vez de inventar un verde.
+`SURVIVE` se evalúa con los hosts vivos del mapa desde `arte-trajeado-v1` (S1, DBT-2): la
+corrida canónica imprime una línea por host (`20` hoy) con `L_tinte(relleno)` y el delta, y
+`n/a` está prohibido. `--hosts` queda como override de review. En este slice (antes de S1) el
+host sólo existía con `--hosts`, y sin host el gate lo omitía en vez de inventar un verde.
 
 ### 1a.7 Ledger y manifest (APH-9 / T-07)
 
@@ -167,17 +169,35 @@ genéricos: cada uno nombra el artefacto (§9 v3 o la decisión de design), el r
 efecto en los conteos (APH-11). El `classify()` rechaza el generador si un motivo cae en un
 genérico.
 
-`--ack-sha` es el único reconocimiento: con un sha de ledger distinto del render, el generador
-**no escribe nada** y sale 1 nombrando pieza, sha viejo y sha nuevo; con `--ack-sha <pieza>`
-reescribe sólo esa celda.
+`--ack-sha` **cambió de contrato en `arte-trajeado-v1` (S1)** y ya no es un flag de escritura:
+es un comando **ledger-only** que reescribe sólo la celda `sha256` de esa fila, y sale 1 sin
+tocar nada cuando la fila es `DELIVERED` (`DELIVERED-IMMUTABLE`) o cuando el sha en disco no es
+el del render derivado (`ACK-REFUSED`). El reconocimiento de un arte entregado es `--deliver`,
+que exige una fila de `Docs/art/deliveries-v1.csv` con autor.
 
 ```
-$ python tools/art/generate_placeholders.py --out Temp/art-tmp
-ui_tutorial_bubble_body_01.png SHA: ledger 0000…, render f456e8… (reconocer con --ack-sha ui_tutorial_bubble_body_01.png)
-FALLA  nada escrito: 1 hallazgos
-$ python tools/art/generate_placeholders.py --out Temp/art-tmp --ack-sha ui_tutorial_bubble_body_01.png
-escritos 33 PNG en Temp/art-tmp y el ledger Temp/art-tmp/placeholders-v1.csv
+$ python tools/art/generate_placeholders.py --out Temp/art-t14 --twice
+twice       33 piezas identicas en dos corridas
+escritos 33 PNG en Temp/art-t14 y el ledger Temp/art-t14/placeholders-v1.csv
+
+# (se corrompe a proposito la celda sha256 de una fila, como un pin viejo)
+$ python tools/art/generate_placeholders.py --out Temp/art-t14
+ui_tutorial_bubble_body_01.png SHA: ledger 0000…, render f456e8… (reconocer con --ack-sha ui_tutorial_bubble_body_01.png, que es ledger-only y no escribe PNG)
+ui_tutorial_bubble_body_01.png WRITE-REFUSED: disco f456e8… != ledger 0000… y sin fila en deliveries-v1.csv
+FALLA  nada escrito: 2 hallazgos (0 archivos escritos)
+$ echo $?
+1
+
+$ python tools/art/generate_placeholders.py --out Temp/art-t14 --ack-sha ui_tutorial_bubble_body_01.png
+ACK  ui_tutorial_bubble_body_01.png: sha256 0000… -> f456e8…
+escrito Temp/art-t14/placeholders-v1.csv: 1 celdas sha256 (0 PNG)
+$ echo $?
+0
 ```
+
+Este transcript es de la corrida real de S1 (transcrito, no compuesto); la corrida completa,
+con el conteo de archivos del guard y las dos negativas (`DELIVERED-IMMUTABLE`, `ACK-REFUSED`),
+está en `Docs/art/verify/arte-trajeado-v1.md` §S1.
 
 `--freeze-guid` sale 2 mientras no existan los `.meta` (los escribe Unity en el slice 1b):
 
