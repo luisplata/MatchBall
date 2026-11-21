@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Gate del cableado de placeholders: resuelve el mapa y audita el diff contra la allowlist.
 
-Fuente: el bloque ```csv de `Docs/art/placeholders-v1.md` (37 filas: 20 `cableado`,
-13 `sin_slot`, 4 `bloqueado`). Este script NO escribe nada: lee el mapa, lee el YAML de
+Fuente: el bloque ```csv de `Docs/art/placeholders-v1.md` (hoy 37 filas: **36 del cohorte NEW**
+—20 `cableado`, 13 `sin_slot`, 3 `bloqueado`— mas **1 REPLACE** con slot vivo,
+`ball_state_frozen_01`). Este script NO escribe nada: lee el mapa, lee el YAML de
 Unity como texto (sin abrir Unity, sin PyYAML) y compara.
 
 Que prueba:
 
-    MAPA       37 filas, 10 columnas, pieza a pieza == ledger, estados en 20/13/4
+    MAPA       una fila por pieza del cohorte NEW del ledger (no una constante), estado del
+               mapa compatible con el del ledger, y cada fila extra es una REPLACE de §9
     ASSET      el `asset` de cada fila `cableado` existe en el working tree
     NODO       el `nodo` resuelve a un GameObject de ese asset (walk de m_Father)
     CAMPO      la clave declarada es una de las que admite su `slot_tipo`
-    VALOR      el campo declarado lleva el GUID de SU pieza segun el ledger, y para las
-               filas sin nodo su GUID aparece al menos una vez en el asset
+    VALOR      el campo declarado lleva el GUID de SU pieza segun el ledger (o la procedencia,
+               para una REPLACE), y para las filas sin nodo su GUID aparece al menos una vez
     SPRITESWAP `m_Transition` en 2, el sprite de estado declarado con el GUID de su pieza y un
                `m_PressedSprite` no vacio (APW-4b: un boton que no muestra nada al presionar
                esta roto, no "recortado")
@@ -24,6 +26,13 @@ Que prueba:
     CAPTURA    cada fila `cableado` con `captura` tiene su PNG (las vacias son pendientes)
     DIFF       con --diff REF, cada linea cambiada toca solo claves permitidas de SU fila,
                ningun `.cs` y ningun asset fuera del mapa (APW-4, APW-4b, APW-6)
+
+El cohorte y los buckets se DERIVAN (CTR-4): el conjunto NEW sale del ledger
+(`Docs/art/placeholders-v1.csv`), no de un literal, y el estado del mapa tiene que ser el que
+el ledger permite (una `BLOCKED_*` solo puede figurar `bloqueado`). Asi `20 + 13 + 3 = 36`
+sobrevive a una entrega o a una exclusion sin tocar este archivo. Las filas REPLACE de §9 que
+ganaron slot (hoy solo `ball_state_frozen_01` → `FreezerMono.prefab#freezeSprite`) se cuentan
+aparte: no son cobertura del cohorte NEW y no entran en esos tres buckets.
 
 El gate de DIFF no tiene default a proposito: `--diff HEAD` sobre un arbol limpio compara el
 arbol consigo mismo y da un verde vacio. Se corre con la base del slice
@@ -53,6 +62,8 @@ TOOLS = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAP_FILE = REPO_ROOT / "Docs" / "art" / "placeholders-v1.md"
 LEDGER = REPO_ROOT / "Docs" / "art" / "placeholders-v1.csv"
+PROVENANCE = REPO_ROOT / "Docs" / "art" / "provenance-v1.csv"
+MANIFEST = REPO_ROOT / "Docs" / "art" / "manifest-refresh-visual-v1.md"
 CAPTURES = REPO_ROOT / "Docs" / "art" / "captures" / "placeholders-v1"
 
 FENCED_CSV_RE = re.compile(r"(?ms)^```csv\r?\n(.*?)^```")
@@ -61,13 +72,24 @@ GO_REF_RE = re.compile(r"fileID: (-?\d+)")
 GUID_RE = re.compile(r"(?m)^guid: ([0-9a-f]{32})\s*$")
 COLUMNS = ("pieza", "slot_tipo", "asset", "nodo", "componente", "campo", "estado",
            "tint_original", "transition_original", "captura")
-EXPECTED = {"cableado": 20, "sin_slot": 13, "bloqueado": 4}
-EXPECTED_ROWS = 37
-
+# CTR-4: los tres estados de una fila del mapa. El cohorte NO es un literal: sale del ledger
+# (ver `cohort_from_ledger`), y es lo que permite que 20 + 13 + 3 = 36 sobreviva a una entrega
+# o a una exclusion sin editar este archivo.
+MAP_STATES = ("cableado", "sin_slot", "bloqueado")
+# Estado del ledger -> estados que el mapa puede declarar para esa pieza. Una BLOCKED_* sin
+# PNG solo puede figurar `bloqueado`: si el mapa la cablea, se esta dibujando lo que el ledger
+# prohibe.
+LEDGER_STATE_TO_MAP = {
+    "GENERATED": ("cableado", "sin_slot"),
+    "DELIVERED": ("cableado", "sin_slot"),
+    "EXCLUDED": ("cableado", "sin_slot"),
+    "BLOCKED_PX": ("bloqueado",),
+    "BLOCKED_BY_DESIGN": ("bloqueado",),
+}
 # APW-4: la allowlist del diff, por `slot_tipo`. `selectable_state` agrega la excepcion
 # `spriteswap` de APW-4b (m_Transition 1->2 y los dos sprites de m_SpriteState).
 BASE_KEYS = {"m_Sprite", "m_Color", "m_Enabled", "m_IsActive",
-             "doneSprite", "activeSprite", "normalSprite"}
+             "doneSprite", "activeSprite", "normalSprite", "freezeSprite"}
 SLOT_KEYS = {
     "image": BASE_KEYS,
     "image+alfa_host": BASE_KEYS,
@@ -82,10 +104,13 @@ MAP_FIELDS = {
     "image": {"m_Sprite"},
     "image+alfa_host": {"m_Sprite"},
     "image+tinte_design": {"m_Sprite"},
-    "serialized_sprite_field": {"doneSprite", "activeSprite", "normalSprite"},
+    "serialized_sprite_field": {"doneSprite", "activeSprite", "normalSprite", "freezeSprite"},
     "selectable_state": {"m_SpriteState.m_PressedSprite", "m_SpriteState.m_DisabledSprite",
                          "m_SpriteState.m_NormalSprite"},
 }
+# CTR-4: una fila `serialized_sprite_field` puede vivir en un `MonoBehaviour` propio, no solo en
+# `Image`/`Button`/`TutorialStepDots` (hoy `FreezerMono.freezeSprite`).
+COMPONENTS = ("Image", "Button", "TutorialStepDots", "MonoBehaviour")
 FORBIDDEN_SUFFIXES = (".cs",)
 
 
@@ -117,11 +142,51 @@ def read_map(path: Path = MAP_FILE) -> list[dict]:
     return rows
 
 
-def read_ledger_guids() -> dict[str, str]:
+def read_ledger_rows() -> list[dict]:
     if not LEDGER.is_file():
-        return {}
+        return []
     with LEDGER.open(newline="", encoding="utf-8") as handle:
-        return {row["pieza"]: row["guid"] for row in csv.DictReader(handle) if row.get("guid")}
+        return list(csv.DictReader(handle))
+
+
+def read_ledger_guids() -> dict[str, str]:
+    """GUID por pieza: el ledger para el cohorte NEW y la procedencia para las REPLACE.
+
+    CTR-4 necesita el guid de `ball_state_frozen_01`, y su fila ya no vive en el ledger: vive
+    en `provenance-v1.csv` (PRV-1). Sin esta segunda fuente la afirmacion "tiene slot" seria
+    inverificable — el campo se resolveria contra un guid inexistente y la fila se saltearia.
+    """
+    guids: dict[str, str] = {}
+    for row in read_ledger_rows():
+        if row.get("guid"):
+            guids[row["pieza"]] = row["guid"]
+    if PROVENANCE.is_file():
+        with PROVENANCE.open(newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                if row.get("guid"):
+                    guids.setdefault(row["pieza"], row["guid"])
+    return guids
+
+
+def cohort_from_ledger() -> dict[str, str]:
+    """`pieza -> estado` del cohorte NEW derivado del ledger (36 filas hoy)."""
+    return {row["pieza"]: (row.get("estado") or "").strip() for row in read_ledger_rows()}
+
+
+def manifest_replace_pieces(path: Path | None = None) -> set[str]:
+    """Las piezas `estado=REPLACE` de §9: la unica otra familia que el mapa puede nombrar."""
+    try:
+        text = (path or MANIFEST).read_text(encoding="utf-8")
+    except OSError as error:
+        raise MapError("no se pudo leer %s: %s" % (path or MANIFEST, error)) from error
+    blocks = FENCED_CSV_RE.findall(text)
+    if len(blocks) != 1:
+        raise MapError("%s tiene %d bloques ```csv: el contrato tiene que ser uno"
+                       % (MANIFEST.name, len(blocks)))
+    reader = csv.reader(blocks[0].splitlines())
+    next(reader, None)
+    return {cells[0].strip() for cells in reader
+            if len(cells) > 1 and cells[1].strip() == "REPLACE"}
 
 
 def read_ledger_paths() -> set[str]:
@@ -146,19 +211,28 @@ def live_image_color(row: dict):
     return None
 
 
-def hosts_from_map(path: Path | None = None) -> dict[str, tuple[float, float, float]]:
-    """DBT-2: un host por fila `cableado`, leido del mapa sin abrir Unity.
+def hosts_from_map(path: Path | None = None,
+                   cohort: set[str] | None = None) -> dict[str, tuple[float, float, float]]:
+    """DBT-2: un host por fila `cableado` DEL COHORTE NEW, leido del mapa sin abrir Unity.
 
     - `image`, `image+alfa_host`, `selectable_state`, `serialized_sprite_field`: el `m_Color`
       vivo del `Image` de ese nodo.
-    - `serialized_sprite_field` sin `Image` (los 3 dots): `1/1/1`, declarado.
+    - `serialized_sprite_field` sin `Image` (los 3 dots, `FreezerMono.freezeSprite`): `1/1/1`,
+      declarado.
     - `image+tinte_design`: el tinte oscuro ES el efecto (excepcion que el propio mapa
       declara); el host que decide si el contenido sobrevive es blanco, y `tint_original`
       queda intacto en el mapa.
+
+    El cohorte lo decide el ledger (CTR-4), no el mapa: una fila `REPLACE` cableada no tiene
+    render derivado contra el cual medir `SURVIVE`, asi que no aporta host. Sin este recorte,
+    el gate acusaria "host declarado para una pieza fuera del cohorte NEW" por una fila que el
+    propio contrato manda tener.
     """
+    if cohort is None:
+        cohort = set(cohort_from_ledger())
     hosts: dict[str, tuple[float, float, float]] = {}
     for row in read_map(path or MAP_FILE):
-        if row["estado"] != "cableado":
+        if row["estado"] != "cableado" or row["pieza"] not in cohort:
             continue
         if row["slot_tipo"] == "image+tinte_design":
             hosts[row["pieza"]] = (1.0, 1.0, 1.0)
@@ -275,8 +349,14 @@ def has_key(doc: str, name: str) -> bool:
     return re.search(r"(?m)^\s{0,4}%s:" % re.escape(name), doc) is not None
 
 
-def component_docs(path: Path, node: str, component: str) -> list[str]:
-    """Los documentos del componente sobre el GameObject del nodo, sin abrir Unity."""
+def component_docs(path: Path, node: str, component: str,
+                   declared: str | None = None) -> list[str]:
+    """Los documentos del componente sobre el GameObject del nodo, sin abrir Unity.
+
+    `MonoBehaviour` (CTR-4) no tiene claves fijas: se reconoce por la clave `declared` que la
+    fila del mapa nombra (`freezeSprite`) teniendo un valor serializado. Sin `declared` la rama
+    no existe: cualquier documento 114 de un nodo arbitrario seria un falso positivo.
+    """
     nodes = node_paths(path)
     if node not in nodes:
         return []
@@ -294,6 +374,8 @@ def component_docs(path: Path, node: str, component: str) -> list[str]:
             found.append(doc)
         elif component == "TutorialStepDots" and any(
                 has_key(doc, key) for key in ("normalSprite", "activeSprite", "doneSprite")):
+            found.append(doc)
+        elif component == "MonoBehaviour" and declared and declared_value(doc, declared) is not None:
             found.append(doc)
     return found
 
@@ -331,7 +413,14 @@ def check_values(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], in
     checked = 0
     cache: dict[Path, list[str]] = {}
     for row in rows:
-        if row["estado"] != "cableado" or row["pieza"] not in guids:
+        if row["estado"] != "cableado":
+            continue
+        if row["pieza"] not in guids:
+            # CTR-4: una fila cableada sin guid en el ledger NI en la procedencia no se puede
+            # verificar, y saltearla seria un verde vacio ("tiene slot" sin medir el campo).
+            failures.append("FALTA %s: no hay guid congelado (ledger ni provenance) contra el "
+                            "cual resolver %s.%s"
+                            % (row["pieza"], row["nodo"], row["campo"]))
             continue
         asset = REPO_ROOT / row["asset"]
         if not asset.is_file():
@@ -344,12 +433,13 @@ def check_values(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], in
             else:
                 checked += 1
             continue
-        key = (asset, row["nodo"], row["componente"])
+        key = (asset, row["nodo"], row["componente"], row["campo"])
         if key not in cache:
-            cache[key] = component_docs(asset, row["nodo"], row["componente"])
+            cache[key] = component_docs(asset, row["nodo"], row["componente"], row["campo"])
         docs = cache[key]
         if not docs:
-            failures.append("%s: el nodo '%s' no tiene un %s legible" % (row["pieza"], row["nodo"], row["componente"]))
+            failures.append("%s: el nodo '%s' no tiene un %s legible"
+                            % (row["pieza"], row["nodo"], row["componente"]))
             continue
         value = None
         for doc in docs:
@@ -361,7 +451,7 @@ def check_values(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], in
             continue
         found = parse_sprite(value)
         if found != guid:
-            failures.append("%s: %s.%s = %s, el ledger congela %s"
+            failures.append("FALTA %s: %s.%s = %s, el ledger congela %s"
                             % (row["pieza"], row["nodo"], row["campo"], found or "sin sprite", guid))
             continue
         checked += 1
@@ -406,22 +496,47 @@ def check_values(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], in
 # --------------------------------------------------------------------------- checks
 
 
-def check_map(rows: list[dict]) -> list[str]:
+def check_map(rows: list[dict]) -> tuple[list[str], dict[str, str], dict[str, int], list[dict]]:
+    """El mapa contra el ledger (cohorte NEW) y contra §9 (las REPLACE que ganaron slot).
+
+    Devuelve `(hallazgos, guids, buckets del cohorte NEW, filas REPLACE cableadas)`. Los
+    buckets se cuentan SOLO sobre el cohorte NEW: una REPLACE con slot no es cobertura del
+    cohorte, y meterla en los 20/13/3 seria contar dos veces la misma pantalla (CTR-4).
+    """
     failures: list[str] = []
-    if len(rows) != EXPECTED_ROWS:
-        failures.append("MAPA: %d filas, el cohorte congela %d" % (len(rows), EXPECTED_ROWS))
-    counts = {estado: sum(1 for row in rows if row["estado"] == estado) for estado in EXPECTED}
-    for estado, wanted in EXPECTED.items():
-        if counts[estado] != wanted:
-            failures.append("MAPA: %d %s, se esperan %d" % (counts[estado], estado, wanted))
-    unknown = sorted({row["estado"] for row in rows} - set(EXPECTED))
-    for estado in unknown:
-        failures.append("MAPA: estado '%s' desconocido" % estado)
-    ledger_guids = read_ledger_guids()
+    states = cohort_from_ledger()
+    replace_pieces = manifest_replace_pieces()
+    if not states:
+        failures.append("MAPA: el ledger no declara el cohorte NEW (%s)"
+                        % LEDGER.relative_to(REPO_ROOT).as_posix())
     names = [row["pieza"] for row in rows]
     for duplicate in sorted({name for name in names if names.count(name) > 1}):
         failures.append("MAPA: %s repetida" % duplicate)
-    return failures, ledger_guids, counts
+
+    new_rows = [row for row in rows if row["pieza"] in states]
+    replace_rows = [row for row in rows if row["pieza"] not in states]
+    for row in replace_rows:
+        if row["pieza"] not in replace_pieces:
+            failures.append("MAPA: %s no es del cohorte NEW ni una REPLACE de §9" % row["pieza"])
+        elif row["estado"] != "cableado":
+            # Una REPLACE con slot vivo y sin cablear es una afirmacion a medias: o se cablea
+            # (y se imprime aparte) o no entra al mapa.
+            failures.append("MAPA: %s es REPLACE de §9 y el mapa la declara '%s'"
+                            % (row["pieza"], row["estado"]))
+    mapped = {row["pieza"] for row in new_rows}
+    for pieza in sorted(set(states) - mapped):
+        failures.append("MAPA: %s esta en el ledger y no en el mapa" % pieza)
+    for row in new_rows:
+        allowed = LEDGER_STATE_TO_MAP.get(states[row["pieza"]], ())
+        if row["estado"] not in allowed:
+            failures.append("MAPA: %s estado '%s' en el mapa contra '%s' del ledger"
+                            % (row["pieza"], row["estado"], states[row["pieza"]]))
+    unknown = sorted({row["estado"] for row in rows} - set(MAP_STATES))
+    for estado in unknown:
+        failures.append("MAPA: estado '%s' desconocido" % estado)
+    counts = {estado: sum(1 for row in new_rows if row["estado"] == estado)
+              for estado in MAP_STATES}
+    return failures, read_ledger_guids(), counts, replace_rows
 
 
 def check_rows(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], list[str]]:
@@ -469,7 +584,7 @@ def check_rows(rows: list[dict], guids: dict[str, str]) -> tuple[list[str], list
                 cache[asset] = {}
         if row["nodo"] not in cache[asset]:
             failures.append("%s: el nodo '%s' no resuelve en %s" % (pieza, row["nodo"], row["asset"]))
-        if row["componente"] not in ("Image", "Button", "TutorialStepDots"):
+        if row["componente"] not in COMPONENTS:
             failures.append("%s: componente '%s' fuera de la allowlist" % (pieza, row["componente"]))
     return failures, pending
 
@@ -580,7 +695,7 @@ def main(argv: list[str]) -> int:
 
     try:
         rows = read_map(args.map or MAP_FILE)
-        map_failures, guids, counts = check_map(rows)
+        map_failures, guids, counts, replace_rows = check_map(rows)
         row_failures, pending = check_rows(rows, guids)
         value_failures, valued = check_values(rows, guids)
         leak_failures, scanned = check_guid_leaks(rows, guids)
@@ -596,8 +711,13 @@ def main(argv: list[str]) -> int:
             if row["estado"] == "cableado":
                 print("PLAN  %-40s %-26s %s" % (row["pieza"], row["slot_tipo"],
                                                 row["nodo"] if row["nodo"] != "-" else row["asset"]))
-    print("MAPA        %d filas: %d cableado, %d sin_slot, %d bloqueado"
-          % (len(rows), counts["cableado"], counts["sin_slot"], counts["bloqueado"]))
+    cohort = sum(counts.values())
+    print("MAPA        %d NEW: %d cableado, %d sin_slot, %d bloqueado"
+          % (cohort, counts["cableado"], counts["sin_slot"], counts["bloqueado"]))
+    for row in replace_rows:
+        print("REPLACE     %d %s: %s" % (len(replace_rows), row["estado"], row["pieza"]))
+    print("FILAS       %d en el mapa (%d del cohorte NEW + %d REPLACE con slot)"
+          % (len(rows), cohort, len(replace_rows)))
     print("GUID        %d piezas con guid congelado | %d campos resueltos contra su pieza"
           % (len(guids), valued))
     print("DIFF        %s" % (("allowlist contra %s" % args.diff) if args.diff is not None

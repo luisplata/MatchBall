@@ -20,6 +20,8 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     replace-sha   PRV-2: BASELINE / DELIVERED / UNKNOWN; solo UNKNOWN falla, con los dos shas
     replace-guid  PRV-3: el swap no mueve las referencias; un guid nuevo falla con los dos
     orphan        PRV-4: las 4 declaradas; una quinta → UNDECLARED y una con consumidor → STALE
+    wiring-mono   CTR-4: `MonoBehaviour.freezeSprite` resuelve contra la procedencia y el
+                  vaciado da FALTA; los buckets del mapa suman el cohorte del ledger
     zlib-limit    DBT-3: la declaracion existe y el gate la consulta (>= 1)
 
 Uso:
@@ -34,6 +36,7 @@ import argparse
 import contextlib
 import hashlib
 import io
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -600,8 +603,9 @@ def case_replace_sha() -> list[str]:
                         % (REPLACE, [(v.pieza, v.detail) for v in unknown]))
     elif "0" * 12 not in unknown[0].detail or disk[:12] not in unknown[0].detail:
         failures.append("REPLACE-SHA no imprime los dos shas: %s" % unknown[0].detail)
-    if "0/85 reemplazadas" not in info.replace("%d/" % len(rows), "0/85"):
-        failures.append("el auditor no imprime el contador de reemplazadas: %s" % info[-300:])
+    if "0/%d reemplazadas" % len(rows) not in info:
+        failures.append("el auditor no imprime el contador de reemplazadas (0/%d): %s"
+                        % (len(rows), info[-300:]))
 
     declared = deliveries_copy(work, [(REPLACE, disk, "rehearsal", "2026-11-20")])
     with swapped(audit, PROVENANCE=broken, DELIVERIES=declared):
@@ -613,9 +617,8 @@ def case_replace_sha() -> list[str]:
     if left:
         failures.append("una entrega declarada no deberia fallar REPLACE-SHA: %s"
                         % [(v.pieza, v.detail) for v in left])
-    if "1/85 reemplazadas" not in summary.replace("%d/" % len(rows), "1/85") or \
-            "1 DELIVERED" not in summary:
-        failures.append("el contador no subio a 1 DELIVERED: %s" % summary)
+    if "1/%d reemplazadas" % len(rows) not in summary or "1 DELIVERED" not in summary:
+        failures.append("el contador no subio a 1 DELIVERED (1/%d): %s" % (len(rows), summary))
     return failures
 
 
@@ -726,6 +729,63 @@ def case_zlib_limit() -> list[str]:
     return failures
 
 
+def case_wiring_mono() -> list[str]:
+    """CTR-4: `MonoBehaviour.freezeSprite` resuelve contra la procedencia, y el vaciado da FALTA."""
+    failures: list[str] = []
+    work = fresh("wiring-mono")
+    piece = "ball_state_frozen_01.png"
+    prefab = work / "FreezerMono.prefab"
+    original = ROOT / "Assets" / "Prefabs" / "Ballzone" / "FreezerMono.prefab"
+    prefab.write_bytes(original.read_bytes())
+    relative = prefab.relative_to(ROOT).as_posix()
+    map_path = work / "mapa.md"
+    map_path.write_text(
+        "```csv\n%s\n%s,serialized_sprite_field,%s,FreezerMono,MonoBehaviour,freezeSprite,"
+        "cableado,-,-,\n```\n" % (",".join(wiring.COLUMNS), piece, relative), encoding="utf-8")
+    guids = {piece: ledger_mod.provenance_index(ledger_mod.read_provenance())[piece]["guid"]}
+    rows = wiring.read_map(map_path)
+    problems, resolved = wiring.check_values(rows, guids)
+    print("freezeSprite declarado: %d campo(s) resuelto(s), %d hallazgo(s)"
+          % (resolved, len(problems)))
+    if problems or resolved != 1:
+        failures.append("el campo freezeSprite no resuelve contra el guid de la procedencia: %s"
+                        % (problems or "0 campos medidos"))
+
+    empty = work / "vaciado.prefab"
+    text = original.read_text(encoding="utf-8")
+    emptied = re.sub(r"(?m)^  freezeSprite: \{fileID: \d+, guid: [0-9a-f]{32}, type: 3\}$",
+                     "  freezeSprite: {fileID: 0}", text, count=1)
+    if emptied == text:
+        failures.append("el prefab no declara freezeSprite: el caso no prueba nada")
+    empty.write_text(emptied, encoding="utf-8")
+    empty_map = work / "vaciado.md"
+    empty_map.write_text(
+        "```csv\n%s\n%s,serialized_sprite_field,%s,FreezerMono,MonoBehaviour,freezeSprite,"
+        "cableado,-,-,\n```\n"
+        % (",".join(wiring.COLUMNS), piece, empty.relative_to(ROOT).as_posix()),
+        encoding="utf-8")
+    problems, _ = wiring.check_values(wiring.read_map(empty_map), guids)
+    print("slot vaciado: %d hallazgo(s) -> %s"
+          % (len(problems), problems[0] if problems else "-"))
+    if len(problems) != 1 or not problems[0].startswith("FALTA %s" % piece):
+        failures.append("un freezeSprite vacio deberia dar un FALTA nombrando %s: %s"
+                        % (piece, problems))
+
+    real, _, counts, replace_rows = wiring.check_map(wiring.read_map())
+    cohort = len(wiring.cohort_from_ledger())
+    total = sum(counts.values())
+    print("mapa real: %d = %d + %d + %d | REPLACE cableadas: %s"
+          % (total, counts["cableado"], counts["sin_slot"], counts["bloqueado"],
+             [row["pieza"] for row in replace_rows]))
+    if real:
+        failures.append("el mapa real no cierra: %s" % real)
+    if total != cohort:
+        failures.append("los buckets suman %d y el ledger declara %d piezas" % (total, cohort))
+    if [row["pieza"] for row in replace_rows] != [piece]:
+        failures.append("la unica REPLACE cableada deberia ser %s" % piece)
+    return failures
+
+
 CASES = {
     "fixture": case_fixture,
     "rect-stale": case_rect_stale,
@@ -742,6 +802,7 @@ CASES = {
     "replace-sha": case_replace_sha,
     "replace-guid": case_replace_guid,
     "orphan": case_orphan,
+    "wiring-mono": case_wiring_mono,
     "zlib-limit": case_zlib_limit,
 }
 

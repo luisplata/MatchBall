@@ -2,11 +2,11 @@
 """Genera los placeholders PNG del cohorte NEW de la sec.9 del contrato de arte.
 
 Fuente de verdad: el bloque ```csv de la sec.9 de ``Docs/art/manifest-refresh-visual-v1.md``
-(las filas NEW; hoy 37). Este script NO inventa medidas: lee ``px_entrega``, ``border``,
+(las filas NEW; hoy 36). Este script NO inventa medidas: lee ``px_entrega``, ``border``,
 ``max_tex``, ``pivot`` y ``ppu`` de esa tabla y escribe, por pieza:
 
     * ``Assets/Sprites/<pieza>``  PNG RGBA 8-bit, tamano exacto ``px_entrega``.
-    * ``Docs/art/placeholders-v1.csv``  ledger derivado (hoy 33 GENERATED + 4 BLOCKED_*).
+    * ``Docs/art/placeholders-v1.csv``  ledger derivado (hoy 33 GENERATED + 3 BLOCKED_*).
       Nunca se escribe a mano.
 
 El cohorte NO es una constante: se deriva de la sec.9 (``122 = R + N``) y el ledger lo
@@ -15,6 +15,10 @@ archivo: ``BLOCKED_PX`` (falta canvas en §9) y ``BLOCKED_BY_DESIGN`` (decision 
 abierta). Su fila lleva ``motivo`` no vacio con el artefacto que las desbloquea, el rol que
 decide y el efecto en los conteos (APH-11). Una ``DELIVERED``/``EXCLUDED`` que ya esta en el
 ledger se preserva verbatim: regenerar no puede reescribir una decision de entrega.
+
+``ball_state_frozen_01`` YA NO esta aca: §9 la declara REPLACE de ``Assets/Sprites/iceBall.png``
+(su slot es ``FreezerMono.prefab`` → ``MonoBehaviour.freezeSprite``), asi que no se renderiza
+ni se clasifica — la mide ``provenance-v1.csv``, no el ledger NEW.
 
 Familias visuales (APH-5). El contrato exige que un placeholder no se pueda confundir con
 arte, y que su borde 9-slice sea verificable al pixel:
@@ -158,24 +162,18 @@ BLOCKED = {
     "ui_tutorial_bubble_tail_left_01.png": ("BLOCKED_PX",
         "la desbloquea §9 v3 del contrato con px_entrega definido para la cola y border "
         "l/b/r/t al pix. La decide el " + CONTRACT_OWNER + ". Efecto en los conteos: pasa a "
-        "GENERATED, 34 GENERATED + 1 BLOCKED_PX + 2 BLOCKED_BY_DESIGN = 37."),
+        "GENERATED, 34 GENERATED + 1 BLOCKED_PX + 1 BLOCKED_BY_DESIGN = 36."),
     "ui_tutorial_caption_pill_01.png": ("BLOCKED_PX",
         "la desbloquea §9 v3 del contrato con px_entrega definido para la pildora respetando "
         "h >= 48 (24 de padding + 16 de texto) y border l/b/r/t al pix. La decide el "
         + CONTRACT_OWNER + ". Efecto en los conteos: pasa a GENERATED, 34 GENERATED + 1 "
-        "BLOCKED_PX + 2 BLOCKED_BY_DESIGN = 37."),
+        "BLOCKED_PX + 1 BLOCKED_BY_DESIGN = 36."),
     "ui_tutorial_spotlight_fill_01.png": ("BLOCKED_BY_DESIGN",
         "la desbloquea una decision escrita en sdd/placeholders-arte-v2 (design, obs #4046) "
         "con uno de dos resultados: exclusion permanente (estado EXCLUDED, sin PNG) o "
         "placeholder con marcador verificable que el gate distinga del arte al 100%. La firma "
-        "el " + DESIGN_OWNER + ". Efecto en los conteos: EXCLUDED deja 37 = 33 GENERATED + 2 "
-        "BLOCKED_PX + 1 BLOCKED_BY_DESIGN + 1 EXCLUDED."),
-    "ball_state_frozen_01.png": ("BLOCKED_BY_DESIGN",
-        "la desbloquea una decision escrita en sdd/placeholders-arte-v2 (design, obs #4046) "
-        "con uno de dos resultados: exclusion permanente (estado EXCLUDED, sin PNG) o "
-        "placeholder con marcador verificable que impida leerlo como escarcha entregada. La "
-        "firma el " + DESIGN_OWNER + ". Efecto en los conteos: EXCLUDED deja 37 = 33 "
-        "GENERATED + 2 BLOCKED_PX + 1 BLOCKED_BY_DESIGN + 1 EXCLUDED."),
+        "el " + DESIGN_OWNER + ". Efecto en los conteos: EXCLUDED deja 36 = 33 GENERATED + 2 "
+        "BLOCKED_PX + 0 BLOCKED_BY_DESIGN + 1 EXCLUDED."),
 }
 
 # Base literal de la mano (normalizada 0..1, y crece hacia abajo). Las 5 poses son la misma

@@ -1,8 +1,15 @@
 # Placeholders v1 — mapa pieza → slot
 
-Una fila por pieza del cohorte NEW (§9 de `manifest-refresh-visual-v1.md`), 37 en total:
-**20 `cableado` + 13 `sin_slot` + 4 `bloqueado`**. Es la **única** fuente del cableado: una
-pieza que no está acá no se cablea, y todo `nodo` tiene que resolver en su `asset`.
+Una fila por pieza del cohorte NEW (§9 de `manifest-refresh-visual-v1.md`), 36 en total:
+**20 `cableado` + 13 `sin_slot` + 3 `bloqueado`**, más **1 fila `REPLACE` con slot vivo**
+(`ball_state_frozen_01.png`, cableada), 37 filas en el bloque. Es la **única** fuente del
+cableado: una pieza que no está acá no se cablea, y todo `nodo` tiene que resolver en su `asset`.
+
+La fila `REPLACE` no cuenta en los tres buckets del cohorte NEW: se imprime aparte
+(`REPLACE 1 cableado: ball_state_frozen_01.png`, CTR-4) porque su PNG no lo genera el
+placeholder sino que sale de `Assets/Sprites/iceBall.png`, y su procedencia la congela
+`provenance-v1.csv`, no el ledger NEW. Está en el mapa porque tiene un slot vivo que nadie más
+declara: sin esta fila, "tiene slot" sería una afirmación sin medición.
 
 El bloque ```csv de abajo es el que lee `tools/art/check_placeholder_wiring.py`: la prosa de
 este archivo existe para personas y no se parsea.
@@ -15,8 +22,8 @@ este archivo existe para personas y no se parsea.
 | `slot_tipo` | `image` · `image+alfa_host` · `image+tinte_design` · `serialized_sprite_field` · `selectable_state` |
 | `asset` | prefab/escena/PNG que contiene el slot (`-` si la pieza no se cablea) |
 | `nodo` | path del GameObject dentro del asset (`-` si no hay nodo propio) |
-| `componente` | componente dueño del campo (`Image`, `Button`, `TutorialStepDots`) |
-| `campo` | clave que se toca, exactamente como la serializa Unity |
+| `componente` | componente dueño del campo (`Image`, `Button`, `TutorialStepDots`, `MonoBehaviour`) |
+| `campo` | clave que se toca, exactamente como la serializa Unity (`freezeSprite` entra por acá: es un `Sprite` serializado en un `MonoBehaviour`, no en un `Image`) |
 | `estado` | `cableado` · `sin_slot` · `bloqueado` (una fila bloqueada puede nombrar su nodo: existe y hoy esta vacio, `m_Sprite: {fileID: 0}`, pero no se cablea) |
 | `tint_original` | `m_Color` vivo **antes** de normalizar, `r/g/b/a`; `-` si no se toca el tinte |
 | `transition_original` | `m_Transition` vivo antes de la excepción; `-` si no se toca |
@@ -120,7 +127,7 @@ ui_hud_score_pill_ai_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_hud_panel_player_01.png,image,-,-,-,-,sin_slot,-,-,
 game_board_zone_veil_01.png,image+tinte_design,Assets/Scenes/Game.unity,TimeLineToStart/Canva/Canvas/Image/Image,Image,m_Sprite,cableado,0/0/0/0.29803923,-,game_board_zone_veil_01.png
 ball_state_selected_ring_01.png,image,-,-,-,-,sin_slot,-,-,
-ball_state_frozen_01.png,image,-,-,-,-,bloqueado,-,-,
+ball_state_frozen_01.png,serialized_sprite_field,Assets/Prefabs/Ballzone/FreezerMono.prefab,FreezerMono,MonoBehaviour,freezeSprite,cableado,-,-,
 ball_state_matched_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_menu_bg_panel_01.png,image,-,-,-,-,sin_slot,-,-,
 ui_common_btn_primary_pressed_01.png,selectable_state,Assets/Scenes/MainMenu.unity,Canvas/Configuration/Contenedor/SubContainer/Button_Audio,Button,m_SpriteState.m_PressedSprite,cableado,1/1/1/1,1,ui_common_btn_primary_pressed_01.png

@@ -41,11 +41,18 @@ Reglas duras:
 | A — Tutorial / onboarding | 23 | 0 | 23 |
 | B — HUD de partida | 12 | 6 | 6 |
 | C — Tablero / gameplay (mundo, PPU 100) | 14 | 13 | 1 |
-| D — Bolas | 15 | 12 | 3 |
+| D — Bolas | 15 | 13 | 2 |
 | E — BallPass / pases | 14 | 14 | 0 |
 | F — Menú / login / matching / resultados / store | 37 | 33 | 4 |
 | G — Héroes | 7 | 7 | 0 |
-| **Total** | **122** | **85** | **37** |
+| **Total** | **122** | **86** | **36** |
+
+**Nota de reclasificación (CTR-3, `arte-trajeado-v1`).** `ball_state_frozen_01` pasó de
+`NEW`/`BLOCKED_BY_DESIGN` a `REPLACE` de `Assets/Sprites/iceBall.png` (1024×1024, guid
+`558ffd99…`): el slot existe y está vivo — `Assets/Prefabs/Ballzone/FreezerMono.prefab`
+→ `MonoBehaviour.freezeSprite`, instanciado dos veces en `Game.unity`. Por eso el reparto es
+**86 REPLACE / 36 NEW** (antes 85/37) y las bloqueadas son **3**, no 4. La aritmética de §3 y
+del §2 previo (85/37) describe el estado anterior a esta fila; el ledger y los gates leen de §9.
 
 La pieza 122 es `ui_menu_bg_panel_01.png` (grupo F, NEW): arte propio del panel `MainMenu/Contenedor`.
 Antes de la v2 el manifiesto cerraba en 121 / 85 / 36; el panel se atendía recortando `ui_menu_bg_01` y el
@@ -144,7 +151,7 @@ Columnas: **archivo** (`<nombre>.png`) · **px** actuales leídos del archivo ·
 | `ball_power_ray_01.png` | 192×192 | REPLACE | — | address `POWERUP_RAY` · origen: `Assets/Sprites/BALLPASS/BOLAS GIF/BOLAS ESPECIALES3.png` |
 | `ball_power_shell_01.png` | 192×192 | REPLACE | — | sin address · origen: `Assets/Sprites/BALLPASS/BOLAS GIF/BOLAS ESPECIALES7.png` |
 | `ball_state_selected_ring_01.png` | TBD | NEW | — | px propuesto 480×480; hoy no hay estado visual de selección |
-| `ball_state_frozen_01.png` | TBD | NEW | — | px propuesto 416×416, overlay de congelado |
+| `ball_state_frozen_01.png` | 1024×1024 | REPLACE | — | overlay de congelado · origen: `Assets/Sprites/iceBall.png` · consumida por `Assets/Prefabs/Ballzone/FreezerMono.prefab` (`MonoBehaviour.freezeSprite`, 2 instancias en `Game.unity`) |
 | `ball_state_matched_01.png` | TBD | NEW | — | px propuesto 96×96, destello al juntar 3 |
 
 **Corrección v2 — Joker/Lead estaban cruzados.** La v1 asignaba `ESPECIALES1` a Lead y `ESPECIALES2` a
@@ -240,7 +247,8 @@ origen, **el px cambia con él** (Lead 206×204 → 191×191, Joker 191×191 →
 marca †. Hoy esas `Image` del prefab tienen `m_Sprite: {fileID: 0}` (color plano) y **no existe ni el
 path ni el `.meta`** que RT-9 manda conservar. Operativamente son NEW, así que se reclasificaron como
 tales: su columna **px es TBD** (el canvas de entrega va en la nota, como en todas las NEW) y
-**nacerán con GUID nuevo**. Con eso el reparto del §2 queda en **85 REPLACE / 37 NEW**: las 85 REPLACE
+**nacerán con GUID nuevo**. Con eso el reparto del §2 queda en **85 REPLACE / 37 NEW** (hoy **86 / 36**
+tras la reclasificación de `ball_state_frozen_01` en CTR-3, ver la nota de §2): las 85 REPLACE
 restantes resolvieron todas a un PNG/JPEG en disco y su px sale del header real del archivo.
 
 ### Los 10 rects congelados (9 assets)
@@ -298,11 +306,11 @@ no hay archivo que los tenga).
 
 ### `px_entrega` de las 6 piezas que superan 2048
 
-`maxTextureSize` es **2048** en los 85 `.meta` verificados. En 6 piezas REPLACE el header supera ese techo
+`maxTextureSize` es **2048** en los 86 `.meta` verificados. En 6 piezas REPLACE el header supera ese techo
 y el importador downsamplea sin avisar: el juego nunca ve el px declarado. La resolución es **bajar el px
 de entrega**, no subir el techo (4096 costaría ~13 MB RGBA en un backdrop de mundo, sin necesidad
-demostrada). `px_entrega` es el canvas que el cliente debe dibujar: en las **79 REPLACE restantes**
-`px_entrega = px_actual`; en las **37 NEW** es el canvas propuesto en el §3.
+demostrada). `px_entrega` es el canvas que el cliente debe dibujar: en las **80 REPLACE restantes**
+`px_entrega = px_actual`; en las **36 NEW** es el canvas propuesto en el §3.
 
 | Pieza | px del archivo | `px_entrega` | regla |
 |---|---|---|---|
@@ -396,7 +404,7 @@ mostrar el lienzo entero) queda descartado por evidencia, no por tolerancia.
   entry es sub-objeto (todas son GUID de asset).
 - **Joker/Lead**: las 3 fuentes (Addressables, `.meta` del GUID y prefab consumidor) coinciden →
   `ball_power_lead_01` = `BOLAS ESPECIALES2` y `ball_power_joker_01` = `BOLAS ESPECIALES1` (§3).
-- **conteo**: 122 filas · **85 REPLACE** · **37 NEW** · 0 duplicados.
+- **conteo**: 122 filas · **86 REPLACE** · **36 NEW** · 0 duplicados.
 - **nombres**: `^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$` → 122/122 pasan.
 - **rects**: de los 25 assets con `spriteMode: 2`, **16 ya tienen `rect` == header** y **9 acumulan 10
   rects** que no coinciden; los 10 están congelados en §3.
@@ -501,7 +509,7 @@ ball_power_joker_01.png,REPLACE,Assets/Sprites/BALLPASS/BOLAS GIF/BOLAS ESPECIAL
 ball_power_ray_01.png,REPLACE,Assets/Sprites/BALLPASS/BOLAS GIF/BOLAS ESPECIALES3.png,192x192,192x192,1,1,0/0/0/0,2048,0.5/0.5,100,POWERUP_RAY
 ball_power_shell_01.png,REPLACE,Assets/Sprites/BALLPASS/BOLAS GIF/BOLAS ESPECIALES7.png,192x192,192x192,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ball_state_selected_ring_01.png,NEW,-,TBD,480x480,1,-,0/0/0/0,2048,0.5/0.5,100,-
-ball_state_frozen_01.png,NEW,-,TBD,416x416,1,-,0/0/0/0,2048,0.5/0.5,100,-
+ball_state_frozen_01.png,REPLACE,Assets/Sprites/iceBall.png,1024x1024,1024x1024,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ball_state_matched_01.png,NEW,-,TBD,96x96,1,-,0/0/0/0,2048,0.5/0.5,100,-
 ui_pass_banner_01.png,REPLACE,Assets/Sprites/ballpassBanner.png,4096x1596,2048x1596,1,1,0/0/0/0,2048,0.5/0.5,100,-
 ui_pass_icon_pass_01.png,REPLACE,Assets/Sprites/Pase.png,129x73,129x73,1,1,0/0/0/0,2048,0.5/0.5,100,-
