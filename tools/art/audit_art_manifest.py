@@ -36,6 +36,14 @@ Cohorte NEW (ledger derivado, `tools/art/art_ledger.py`):
   EXCLUDED-PNG      una EXCLUDED no puede tener PNG en disco
   COHORT-SUM        122 = R + N y N = la suma de las cinco etiquetas (ART-3)
 
+Cohorte REPLACE (procedencia congelada, `Docs/art/provenance-v1.csv`, PRV-1..4):
+
+  REPLACE-LEDGER    una fila por REPLACE con origen+guid+sha256+px_actual+px_entrega
+  REPLACE-SHA       BASELINE / DELIVERED (sha distinto CON fila en deliveries) / UNKNOWN
+  REPLACE-GUID      ledger vs .meta, sin colision entre cohortes; el guid sobrevive al swap
+  ORPHAN-UNDECLARED REPLACE con 0 consumidores y rol != sin_pantalla
+  ORPHAN-STALE      REPLACE declarada sin pantalla que gano consumidor
+
 `provenance-v1.csv` es un archivo SEPARADO del ledger derivado y por una razon dura: el
 generador reescribe `placeholders-v1.csv` entero desde disco en cada corrida, asi que un sha de
 REPLACE guardado ahi se auto-sanaria y REPLACE-SHA no podria observar nunca un reemplazo. Se
@@ -652,6 +660,162 @@ def _provenance_totals(rows: list[dict]) -> str:
         len(guids), len(rows) - len(guids))
 
 
+def check_provenance(pieces: dict[str, Piece], ledger_rows: list[dict],
+                     assets_root: Path) -> tuple[list[Violation], list[str], dict]:
+    """PRV-1..4: cobertura del ledger, los tres estados de `REPLACE-SHA`, el GUID y las huerfanas.
+
+    Todo se DERIVA: no hay un 85 ni un 86 escrito aca. El denominador es la cantidad de REPLACE
+    de sec.9 que el ledger de procedencia declara, y por eso S3 (86) no toca este archivo.
+    """
+    violations: list[Violation] = []
+    info: list[str] = []
+    summary = {"rows": 0, "replaced": 0, "orphans": 0}
+
+    def fail(rule: str, pieza: str, detail: str) -> None:
+        violations.append(Violation(rule, pieza, detail))
+
+    try:
+        declared_rows = ledger_mod.read_provenance(PROVENANCE)
+    except ledger_mod.LedgerError as error:
+        raise ToolError(str(error)) from error
+
+    replace_names = set(pieces)
+    try:
+        relative = PROVENANCE.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        relative = str(PROVENANCE)
+    if not declared_rows:
+        fail("REPLACE-LEDGER", "-",
+             "falta %s: la procedencia se congela una vez con --capture-provenance" % relative)
+        return violations, info, summary
+
+    index: dict[str, dict] = {}
+    for row in declared_rows:
+        pieza = (row.get("pieza") or "").strip()
+        if not pieza:
+            fail("REPLACE-LEDGER", "-", "fila sin pieza en %s" % relative)
+            continue
+        if pieza in index:
+            fail("REPLACE-LEDGER", pieza, "%d filas de procedencia (se exige 1)"
+                 % sum(1 for other in declared_rows if (other.get("pieza") or "").strip() == pieza))
+            continue
+        index[pieza] = row
+    for pieza in sorted(replace_names - set(index)):
+        fail("REPLACE-LEDGER", pieza, "REPLACE de sec.9 sin fila en %s" % relative)
+    for pieza in sorted(set(index) - replace_names):
+        fail("REPLACE-LEDGER", pieza, "fila de %s que no es REPLACE de sec.9" % relative)
+
+    # PRV-1: las seis columnas del baseline, pieza por pieza. La cobertura se cuenta ANTES de
+    # fallar para que el detalle diga 84/85 y no el indice de la fila.
+    required = ("origen", "guid", "sha256", "px_actual", "px_entrega")
+    problems: dict[str, list[str]] = {}
+    for pieza in sorted(replace_names & set(index)):
+        row = index[pieza]
+        found = ["'%s' vacio" % column for column in required
+                 if not (row.get(column) or "").strip()]
+        if (row.get("guid") or "").strip() and not re.fullmatch(
+                r"[0-9a-f]{32}", row["guid"].strip()):
+            found.append("guid '%s' no es 32 hex" % row["guid"])
+        if (row.get("sha256") or "").strip() and not re.fullmatch(
+                r"[0-9a-f]{64}", row["sha256"].strip()):
+            found.append("sha256 '%s' no es 64 hex" % row["sha256"])
+        if (row.get("px_actual") or "").strip() and parse_px(row["px_actual"]) is None:
+            found.append("px_actual '%s' no es WxH" % row["px_actual"])
+        if (row.get("px_entrega") or "").strip() and parse_px(row["px_entrega"]) is None:
+            found.append("px_entrega '%s' no es WxH" % row["px_entrega"])
+        if (row.get("rol") or "").strip() not in ledger_mod.ROLES:
+            found.append("rol '%s' fuera de %s"
+                         % (row.get("rol") or "", "/".join(ledger_mod.ROLES)))
+        expected_origin = pieces[pieza].row["origen"]
+        if (row.get("origen") or "").strip() != expected_origin:
+            found.append("origen '%s' != sec.9 '%s'"
+                         % ((row.get("origen") or "").strip(), expected_origin))
+        if found:
+            problems[pieza] = found
+    covered = len(replace_names) - len(problems)
+    for pieza in sorted(problems):
+        fail("REPLACE-LEDGER", pieza, "%s (cobertura %d/%d)"
+             % ("; ".join(problems[pieza]), covered, len(replace_names)))
+    guids = {(index[pieza].get("guid") or "").strip() for pieza in replace_names & set(index)}
+    info.append("REPLACE-LEDGER  %d/%d filas con pieza+origen+guid+sha256+px (%d guid distintos)"
+                % (covered, len(replace_names), len(guids - {""})))
+
+    # PRV-2: BASELINE / DELIVERED / UNKNOWN. El denominador es el cohorte, no un literal.
+    deliveries = read_deliveries()
+    states = Counter()
+    for pieza in sorted(replace_names & set(index)):
+        row = index[pieza]
+        piece = pieces[pieza]
+        origin = REPO_ROOT / piece.row["origen"]
+        if not origin.is_file():
+            states["UNKNOWN"] += 1
+            fail("REPLACE-SHA", pieza, "no existe %s" % piece.row["origen"])
+            continue
+        disk = sha256_of(origin)
+        baseline = (row["sha256"] or "").strip().lower()
+        if disk == baseline:
+            states["BASELINE"] += 1
+            continue
+        if ledger_mod.delivery_rows(deliveries, pieza, disk):
+            states["DELIVERED"] += 1
+            info.append("REPLACE-SHA  %s: DELIVERED, sha %s declarado en deliveries-v1.csv"
+                        % (pieza, disk[:12]))
+        else:
+            states["UNKNOWN"] += 1
+            fail("REPLACE-SHA", pieza, "UNKNOWN: ledger %s != disco %s y deliveries-v1.csv no"
+                 " declara ese sha" % (baseline or "(vacio)", disk))
+    replaced = states["DELIVERED"]
+    info.append("REPLACE-SHA  %d/%d reemplazadas (%d BASELINE, %d DELIVERED, %d UNKNOWN)"
+                % (replaced, len(replace_names), states["BASELINE"], states["DELIVERED"],
+                   states["UNKNOWN"]))
+
+    # PRV-3: el GUID es del .meta, no de los bytes. Sobrevive al swap o el swap esta mal hecho.
+    new_guids = {(row.get("guid") or "").strip() for row in ledger_rows}
+    origins_by_guid: dict[str, set[str]] = {}
+    for pieza in sorted(replace_names & set(index)):
+        row = index[pieza]
+        guid = (row.get("guid") or "").strip()
+        piece = pieces[pieza]
+        if piece.meta is not None and guid and piece.meta.guid != guid:
+            fail("REPLACE-GUID", pieza, "ledger %s != .meta %s (un reimport que cambia el guid no"
+                 " es un swap: quema las referencias)" % (guid, piece.meta.guid))
+        if guid:
+            origins_by_guid.setdefault(guid, set()).add(piece.row["origen"].strip())
+        if guid and guid in new_guids:
+            fail("REPLACE-GUID", pieza, "el guid %s tambien es una pieza NEW: colision entre"
+                 " cohortes" % guid)
+    for guid, origins in sorted(origins_by_guid.items()):
+        if len(origins) > 1:
+            fail("REPLACE-GUID", sorted(origins)[0], "guid %s reclamado por %d origenes: %s"
+                 % (guid, len(origins), ", ".join(sorted(origins))))
+    shared = len(replace_names & set(index)) - len(origins_by_guid)
+    if shared:
+        info.append("REPLACE-GUID  %d filas comparten guid por declarar el mismo origen (un"
+                    " archivo, dos roles): no es colision" % shared)
+
+    # PRV-4: las 4 huerfanas declaradas, medidas contra el barrido GUID->YAML.
+    declared = {pieza for pieza in index
+                if pieza in replace_names
+                and (index[pieza].get("rol") or "").strip() == ledger_mod.ROLE_NO_SCREEN}
+    mentions = guid_mentions(assets_root, {piece.meta.guid for piece in pieces.values()
+                                           if piece.meta is not None})
+    measured = {pieza for pieza in replace_names
+                if pieces[pieza].meta is not None
+                and not mentions.get(pieces[pieza].meta.guid)}
+    for pieza in sorted(measured - declared):
+        fail("ORPHAN-UNDECLARED", pieza, "REPLACE con 0 consumidores y rol != sin_pantalla"
+             " (PRV-4 declara exactamente %d)" % len(ledger_mod.ORPHAN_MOTIVO))
+    for pieza in sorted(declared - measured):
+        files = sorted(mentions.get(pieces[pieza].meta.guid, set()))
+        fail("ORPHAN-STALE", pieza, "declarada sin pantalla y hoy tiene %d consumidor(es): %s"
+             % (len(files), ", ".join(files[:3]) or "-"))
+    info.append("ORPHAN      %d REPLACE sin pantalla: %s"
+                % (len(declared), ", ".join(sorted(declared))))
+
+    summary.update(rows=len(declared_rows), replaced=replaced, orphans=len(declared))
+    return violations, info, summary
+
+
 # ------------------------------------------------------------------------ auditor
 
 
@@ -904,6 +1068,13 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
     checked = dict(pieces)
     checked.update(new_pieces)
 
+    # cohorte REPLACE: la procedencia congelada (PRV-1..4). Deriva su denominador de sec.9.
+    provenance_counts = {"rows": 0, "replaced": 0, "orphans": 0}
+    provenance_violations, provenance_info, provenance_counts = check_provenance(
+        pieces, ledger_rows, assets_root)
+    violations.extend(provenance_violations)
+    info.extend(provenance_info)
+
     # reglas meta vs fila
     px_pending: list[str] = []
     for name, piece in checked.items():
@@ -1030,6 +1201,9 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             "generated": sum(1 for row in ledger_rows if row["estado"] == GENERATED),
             "delivered": sum(1 for row in ledger_rows if row["estado"] == DELIVERED),
             "excluded": sum(1 for row in ledger_rows if row["estado"] == EXCLUDED),
+            "provenance": provenance_counts["rows"],
+            "replaced": provenance_counts["replaced"],
+            "orphans": provenance_counts["orphans"],
         },
     }
 
@@ -1161,6 +1335,10 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "LEDGER NEW  %d filas | %d GENERATED, %d DELIVERED, %d EXCLUDED registradas"
         % (counts["ledger"], counts["generated"], counts["delivered"], counts["excluded"])
     )
+    print(
+        "PROCEDENCIA %d filas REPLACE | %d/%d reemplazadas | %d sin pantalla"
+        % (counts["provenance"], counts["replaced"], counts["replace"], counts["orphans"])
+    )
     print("VIOLACIONES %d en %d reglas" % (len(violations), len(by_rule)))
     print("")
 
@@ -1197,6 +1375,11 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "EXCLUDED-MOTIVO": "EXCLUDED exige motivo no vacio (ART-4)",
         "EXCLUDED-PNG": "EXCLUDED no puede tener PNG en disco (ART-4)",
         "COHORT-SUM": "las dos identidades del cohorte: 122 = R + N y N = la suma de 5",
+        "REPLACE-LEDGER": "fila de procedencia con pieza+origen+guid+sha256+px (PRV-1)",
+        "REPLACE-SHA": "BASELINE / DELIVERED / UNKNOWN: se reemplazo? (PRV-2)",
+        "REPLACE-GUID": "el guid es del .meta y sobrevive al swap (PRV-3)",
+        "ORPHAN-UNDECLARED": "REPLACE con 0 consumidores sin declarar (PRV-4)",
+        "ORPHAN-STALE": "REPLACE declarada sin pantalla que gano consumidor (PRV-4)",
     }
     for rule in sorted(by_rule):
         print("%-18s %7d  %s" % (rule, len(by_rule[rule]), descriptions.get(rule, "")))
@@ -1238,7 +1421,8 @@ def _print_refs(result: dict) -> None:
         by_fileid.update(piece.refs_by_fileid)
 
     print("")
-
+    print("REFERENCIAS POR GUID (%d REPLACE, .unity/.prefab/.asset/.mat/.controller)"
+          % len(pieces))
     print("  total %d referencias en %d archivos" % (total, files))
     print("  por fileID: %s" % ", ".join("%d=%d" % (key, value) for key, value in sorted(by_fileid.items(), key=lambda kv: -kv[1])))
     sprite_refs = sum(count for file_id, count in by_fileid.items() if file_id not in (2800000, 11400000))
@@ -1273,6 +1457,11 @@ def build_json(result: dict, manifest: Path, exit_code: int) -> dict:
         "violations": [violation.as_dict() for violation in result["violations"]],
         "violations_by_rule": dict(sorted(by_rule.items())),
         "info": result["info"],
+        "provenance": {
+            "rows": result["counts"]["provenance"],
+            "replaced": result["counts"]["replaced"],
+            "orphans": result["counts"]["orphans"],
+        },
         "refs": {
             "total": sum(piece.refs_total for piece in pieces.values()),
             "by_fileid": {str(key): value for key, value in sorted(by_fileid.items())},
