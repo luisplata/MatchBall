@@ -133,6 +133,10 @@ GENERATED = "GENERATED"
 BLOCKED_ESTADOS = ledger_mod.BLOCKED_STATES
 DELIVERED = "DELIVERED"
 EXCLUDED = "EXCLUDED"
+# Las dos etiquetas que §9 puede declarar. Cualquier otra es COHORT-SUM nombrando pieza y
+# etiqueta (DBT-5) y NO entra en las identidades del cohorte: antes se salteaba y el gate
+# terminaba en `122 = 86 + 35`, que describia la consecuencia y no la causa.
+SECTION_STATES = ("NEW", "REPLACE")
 
 NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$")
 GUID_RE = re.compile(r"^guid: ([0-9a-f]{32})\s*$", re.MULTILINE)
@@ -939,8 +943,13 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
             continue
         if not NAME_RE.match(row["pieza"]):
             fail("NAME-REGEX", row["pieza"], "no cumple ^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\\.png$")
-        if row["estado"] not in ("REPLACE", "NEW"):
-            fail("ESTADO", row["pieza"], "estado '%s' no es REPLACE ni NEW" % row["estado"])
+        if row["estado"] not in SECTION_STATES:
+            # DBT-5: la etiqueta inventada se nombra ANTES de cualquier identidad de cohorte y
+            # sale COHORT-SUM (exit 1). El exit 2 queda para el §9 ausente o ilegible (DBT-4).
+            fail("COHORT-SUM", row["pieza"],
+                 "estado '%s' fuera de %s (las cinco del ledger son %s); una fila se clasifica"
+                 " antes de la identidad del cohorte"
+                 % (row["estado"], "/".join(SECTION_STATES), "/".join(ledger_mod.STATES)))
         if row["estado"] == "REPLACE" and row["origen"] in ("-", ""):
             fail("ESTADO", row["pieza"], "REPLACE sin path de origen")
         if row["estado"] == "NEW" and row["origen"] != "-":
@@ -1072,7 +1081,18 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
                 if disk_sha != ledger_sha:
                     fail("DELIVERY-SHA", pieza, "ledger %s != disco %s"
                          % (ledger_sha or "(vacio)", disk_sha))
-            piece = Piece(row=new_by_pieza.get(pieza) or {"pieza": pieza})
+            declared_row = new_by_pieza.get(pieza)
+            if declared_row is None:
+                # DBT-5: una fila del ledger cuyo §9 no la clasifica (etiqueta inventada) no
+                # tiene columnas que medir. Se nombra aca y se saltea: construir el Piece con
+                # un dict pelado hacia que la regla de border reventara con KeyError en vez
+                # de reportar el hallazgo que ya existe.
+                fail("COHORT-SUM", pieza,
+                     "estado '%s': la fila del ledger no se clasifica en la sec.9, asi que no"
+                     " entra a la identidad del cohorte ni a las reglas de meta"
+                     % ((row["estado"] or "").strip() or "(vacio)"))
+                continue
+            piece = Piece(row=declared_row)
             piece.size, piece.kind = image_size(source)
             piece.meta_path = Path(str(source) + ".meta")
             if piece.meta_path.is_file():

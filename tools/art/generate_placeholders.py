@@ -103,6 +103,10 @@ MANIFEST_COLUMNS = ("pieza", "estado", "origen", "px_actual", "px_entrega", "mod
                     "mode_actual", "border", "max_tex", "pivot", "ppu", "address")
 LEDGER_COLUMNS = ledger_mod.LEDGER_COLUMNS
 STATES = ledger_mod.STATES
+# Las dos etiquetas que §9 puede declarar en su columna `estado`. Todo lo que no sea una de
+# estas dos es COHORT-SUM nombrando pieza y etiqueta (DBT-5), nunca un exit 2: el 2 queda
+# reservado al §9 ausente o ilegible como bloque (DBT-4).
+SECTION_STATES = ("NEW", "REPLACE")
 EXPECTED_ROWS = ledger_mod.EXPECTED_ROWS
 NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+_[0-9]{2}\.png$")
 GUID_RE = re.compile(r"^guid: ([0-9a-f]{32})\s*$", re.MULTILINE)
@@ -317,11 +321,17 @@ def read_manifest(path: Path) -> Manifest:
             continue
         if len(cells) != len(MANIFEST_COLUMNS):
             raise ContractError("fila con %d columnas en la sec.9: %s" % (len(cells), cells[0]))
+        if cells[1] not in SECTION_STATES:
+            # DBT-5: la etiqueta se clasifica ANTES de la identidad del cohorte. Una etiqueta
+            # inventada es una fila nombrada (exit 1 COHORT-SUM), no un §9 ilegible (exit 2):
+            # saltearla hacia que 122 = 86 + N no cerrara y el gate mintiera sobre la causa.
+            raise RowError(cells[0], "estado", "COHORT-SUM",
+                           "la etiqueta '%s' no es %s (una fila se clasifica antes de la "
+                           "identidad del cohorte)"
+                           % (cells[1], " ni ".join(SECTION_STATES)))
         total += 1
         if cells[1] == "REPLACE":
             replace += 1
-            continue
-        if cells[1] != "NEW":
             continue
         try:
             rows.append(Row(

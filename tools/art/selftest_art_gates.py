@@ -16,6 +16,8 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     legible       DBT-1: el ratio se mide; cambiar la placa cambia el numero y puede fallar
     tbd           DBT-4: una fila nombrada sale 1 (TBD-CAMPO); un §9 ilegible sigue saliendo 2
     cohort-sum    ART-3: una etiqueta inventada en el ledger falla COHORT-SUM con pieza
+    cohort-manifest  DBT-5: una etiqueta inventada en §9 sale 1 COHORT-SUM en las dos rutas
+                  (check y auditor), sin traceback; el §9 ilegible sigue saliendo 2
     provenance    PRV-1: la captura cubre R/R, es one-shot (CAPTURE-IMMUTABLE) y --add no reescribe
     replace-sha   PRV-2: BASELINE / DELIVERED / UNKNOWN; solo UNKNOWN falla, con los dos shas
     replace-guid  PRV-3: el swap no mueve las referencias; un guid nuevo falla con los dos
@@ -527,6 +529,45 @@ def case_cohort_sum() -> list[str]:
     return failures
 
 
+def case_cohort_manifest() -> list[str]:
+    """DBT-5: un `estado` inventado en §9 sale 1 COHORT-SUM en las DOS rutas, sin traceback;
+    el §9 ilegible sigue saliendo 2 (la frontera de DBT-4 no se mueve)."""
+    failures: list[str] = []
+    work = fresh("cohort-manifest")
+    doctored = manifest_copy(work, [(
+        "ui_tutorial_dim_01.png,NEW,-,TBD,4x4,1,-,0/0/0/0,2048,0.5/0.5,100,-",
+        "ui_tutorial_dim_01.png,ARTE,-,TBD,4x4,1,-,0/0/0/0,2048,0.5/0.5,100,-")])
+    for name, function, flags in (("check", check.main, ["--contract", str(doctored)]),
+                                  ("audit", audit.main, ["--manifest", str(doctored)])):
+        try:
+            code, output = capture(function, flags)
+        except BaseException as error:  # un traceback no es un veredicto: el caso lo falla
+            failures.append("%s: un estado inventado termino en %s (%s)"
+                            % (name, type(error).__name__, error))
+            continue
+        print("%s estado=ARTE: exit %d" % (name, code))
+        if code != 1:
+            failures.append("%s: un estado inventado deberia salir 1, salio %d" % (name, code))
+        if "Traceback" in output:
+            failures.append("%s: el gate imprimio un traceback: %s" % (name, output.strip()))
+        if "COHORT-SUM" not in output:
+            failures.append("%s: falta COHORT-SUM: %s" % (name, output.strip()))
+        elif PIECE not in output or "ARTE" not in output:
+            failures.append("%s: COHORT-SUM no nombra pieza y etiqueta: %s"
+                            % (name, output.strip()))
+
+    empty = work / "sin-seccion.md"
+    empty.write_text("# sin bloque csv\n", encoding="utf-8")
+    for name, function, flags in (("check", check.main, ["--contract", str(empty)]),
+                                  ("audit", audit.main, ["--manifest", str(empty)])):
+        code, _ = capture(function, flags)
+        print("%s sec.9 ilegible: exit %d" % (name, code))
+        if code != 2:
+            failures.append("%s: un §9 ilegible deberia seguir saliendo 2, salio %d"
+                            % (name, code))
+    return failures
+
+
 def case_provenance() -> list[str]:
     """PRV-1: la captura es one-shot, cubre 85/85 y `--add` no reescribe una fila."""
     failures: list[str] = []
@@ -989,6 +1030,7 @@ CASES = {
     "legible": case_legible,
     "tbd": case_tbd,
     "cohort-sum": case_cohort_sum,
+    "cohort-manifest": case_cohort_manifest,
     "provenance": case_provenance,
     "replace-sha": case_replace_sha,
     "replace-guid": case_replace_guid,

@@ -42,7 +42,8 @@ real deje los tres gates en verde sin `--ack-sha`.
 sin exigir `--hosts`: la corrida canonica imprime una linea por host y `n/a` esta prohibido.
 `--hosts` es el override de review.
 
-Exit code: 0 = PASS / 1 = hay hallazgos / 2 = §9 ilegible (una fila nombrada es 1: DBT-4).
+Exit code: 0 = PASS / 1 = hay hallazgos / 2 = §9 ilegible (una fila nombrada es 1: DBT-4, y
+un `estado` inventado en §9 es 1 `COHORT-SUM`: DBT-5).
 
 Uso:
     python tools/art/check_placeholders.py
