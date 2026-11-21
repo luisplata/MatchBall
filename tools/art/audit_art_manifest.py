@@ -11,6 +11,8 @@ Que compara (regla -> columna de sec.9 -> archivo):
   NAME-REGEX        pieza          regex de nombres RT-7
   CSV-ROW           -              122 filas, 12 columnas, sin duplicados
   ESTADO            estado         REPLACE con origen, NEW sin archivo
+  COHORT-SUM        estado         etiqueta fuera de NEW/REPLACE o identidades que no cierran
+                                   (DBT-5: se nombra ANTES de la identidad del cohorte)
   ORIGEN-EXISTS     origen         el path declarado existe en el working tree
   FORMAT-JPG        origen         ASC-5: nada de JPG en la entrega
   PX-ENTREGA        px_entrega     header del archivo == px_entrega (CTR-1)
@@ -1440,6 +1442,7 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "NAME-REGEX": "regex de nombres RT-7",
         "CSV-ROW": "122 filas, 12 columnas, sin duplicados",
         "ESTADO": "REPLACE con origen / NEW sin archivo",
+        "COHORT-SUM": "etiqueta fuera de NEW/REPLACE, o las dos identidades no cierran",
         "ORIGEN-EXISTS": "el path de origen existe",
         "META-EXISTS": "el .meta del origen existe y tiene guid",
         "FORMAT-JPG": "ASC-5: la entrega es PNG, no JPG",
