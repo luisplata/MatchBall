@@ -787,3 +787,153 @@ esta tabla esperándolo.
   rect vivo, `REPLACE-SHA` en sus tres estados y `ORPHAN-*` siguen verdes en el selftest (17/17).
 - **Baseline del auditor**: 4, sin una quinta. Cualquier hallazgo nuevo habría sido un defecto
   introducido por este slice; no lo hay.
+
+## §S4a — el drill del cohorte `new`, con evidencia versionada (T-30…T-33)
+
+**Lo que prueba**: los bytes de una NEW entran, el import no mueve la geometría y el árbol queda
+igual. El cohorte sale del **ledger**, no de la §9: `estado=GENERATED` → 33 piezas con `path` y
+`px` del propio CSV. Hoy la §9 declara 36 NEW (2 `BLOCKED_PX` + 1 `BLOCKED_BY_DESIGN` sin PNG);
+el drill mide las 33 que tienen archivo.
+
+### S4a.1 La negativa se prueba antes que la positiva (DRL-1)
+
+`SelectTargets` gana `case "new"` y se NIEGA con exit 2 antes de planificar. Corrida real con una
+fila `GENERATED` menos en el ledger (la pieza se quitó y se restauró con `git checkout`):
+
+```
+<b>ArtSyntheticBatch</b> APPLY · cohorte `new`
+[ArtSyntheticBatch] cohorte `new`: 32 filas GENERATED en Docs/art/placeholders-v1.csv · la sec.9
+                    declara 36 NEW · esperado 33
+[ArtSyntheticBatch] no se pudo construir el cohorte: COHORT 32 != 33
+[ArtSyntheticBatch] DRILL new terminado · exit 2
+```
+
+`git status --porcelain -- Assets` antes y después de esa corrida: idéntico (vacío). El reporte
+versionado no se reescribió: `git status --porcelain -- Docs/art/evidence` vacío y su sha256 sigue
+siendo `943b23c4…`, porque la negativa ocurre antes de `WriteReport`. La negativa es un **conteo**,
+no una intención: no hay un `33` escrito en la selección de piezas, hay un `33` escrito en la
+expectativa (`ExpectedGeneratedCohort`).
+
+### S4a.2 La corrida real
+
+33/33, desde el editor abierto (`BatchDrillNew`, el mismo método que corre en batchmode):
+
+```
+| Piezas | 33 |
+| exact | 33 |
+| cierre | 33/33 exact |
+| defectos (cropped/offset/tinted/mismatch) | 0 |
+| skipped | 0 |
+| errores | 0 |
+| arbol restaurado | si |
+| restauracion byte-identica | si, en las 33 piezas tocadas |
+sha256: 07b98bcf68ad4992117125783e777558e04bcca3b6ab091c1bd74da8edef7220
+```
+
+Reporte: `Docs/art/evidence/drill-new-v1.md` (**trackeado**, `git ls-files --error-unmatch` = 0,
+sha256 del archivo `943b23c41c0278887a642378f1001f57157b2f6202097312130d82407c827598`).
+Cada pieza trae `rect`/`border`/`ppu` medidos por `MeasureGeometry` (eran datos que ya se medían
+y no se imprimían) y sus dos sha; el cierre `sha256:` es del **cuerpo**, y el auditor lo re-hashea
+sin abrir Unity.
+
+### S4a.3 Los 33 PNG, byte por byte
+
+Medido con `sha256` de disco **antes** de la primera corrida y **después** de la última (tres
+corridas completas del drill y dos negativas de cohorte). Las 33 coinciden; ninguna fila se apoya
+en un `git status` limpio. Son 30 sha distintos, no 33: tres pares comparten bytes porque el
+generador emite el mismo render derivado (`dim_01`/`zone_veil_01`, ambos 4x4 planos; `avatar_frame_player`/
+`avatar_frame_ai`; `btn_primary_pressed`/`btn_primary_disabled`).
+
+| Pieza | sha256 (pre == post) |
+|---|---|
+| `ui_tutorial_dim_01.png` | `84595179392c2754adbac6c6f6e53be180854cea518afc2485d66a8942b5e37c` |
+| `ui_tutorial_bubble_body_01.png` | `f456e8daa342afeb9eee68576b17a6f4a86568c5e1ee9c9761886ba3c064a9df` |
+| `ui_tutorial_spotlight_ring_01.png` | `0aec37be39de2772ab66e0f4c6a6d7f652cb5cf0fff1981192e9f30571f66801` |
+| `ui_tutorial_hand_tap_01.png` | `d81db9a611a21d236aea29fe6ef030f2d2516abe44b6c2d531b905538bc63db3` |
+| `ui_tutorial_hand_tap_02.png` | `d96b1f199a729c0134d4b465435db9cf223f34a3e0a9e3acff64ef964d3ad640` |
+| `ui_tutorial_hand_tap_03.png` | `849e7bf4b94a864b66c21cba411ae1618dfbf2cf384b52f23371777096cb038c` |
+| `ui_tutorial_hand_point_left_01.png` | `4e6df99320509a371c73d574c87a3f16967454b7f8850dd8c29bb21f9a3cf12a` |
+| `ui_tutorial_hand_point_right_01.png` | `8631bef36a7acc05cca6fdd6b2c7a6e53043a39ab7552d6433a3712caffa011a` |
+| `ui_tutorial_icon_star_01.png` | `31af2daf438025833a14a733f94a931375f8e35e09b1028f75a8d5b03ab9206d` |
+| `ui_tutorial_step_dot_normal_01.png` | `38d996a0ef47ac1d161c422882b11eef0437e64ffad1463f049d99b74c680938` |
+| `ui_tutorial_step_dot_active_01.png` | `580d53517ad304af082022a66caccb5aab4da53c1dbe34d5707de3cdb94de235` |
+| `ui_tutorial_step_dot_done_01.png` | `cc1506961d840409c9bbdf20a9b4606884ef952ab712979c758e5c0a26a4e37a` |
+| `ui_tutorial_btn_skip_normal_01.png` | `45d478bbefd5eda8a4916d0715a9212c47b337be342a3fe7b71a9f2f6438a761` |
+| `ui_tutorial_btn_skip_pressed_01.png` | `143a0f834bbf844a0ebd55d765dcafb04f382634df312414f886068381f0b1a0` |
+| `ui_tutorial_btn_continue_normal_01.png` | `2288f967b774349397c2f20d99fc4890b8669c99a1fd954516b9bcf200b9ef95` |
+| `ui_tutorial_btn_continue_pressed_01.png` | `2c059af89b60e758018f6ed92ff0fa6cb6a2f9d6fc13bc8df91a11fe385332be` |
+| `ui_tutorial_btn_retry_normal_01.png` | `6aa428699c23393e2daf60bb4ce644e6c0add81bff55a8e27b2629621b6d5dbd` |
+| `ui_tutorial_btn_retry_pressed_01.png` | `723e385ce6a88bea2e63abb9fe957d71c8d69057178a40da1866c2ce79243a90` |
+| `ui_tutorial_panel_retry_01.png` | `a9290c5a80774c8c1439ae9522f237477363c839ec9b2e1b7c3654a7f5a6e7f4` |
+| `ui_tutorial_icon_danger_01.png` | `46ac5432bcd4907284a01218f14c1f2ce15f7313608a947a78be021767d4dc9a` |
+| `ui_hud_btn_settings_pressed_01.png` | `f6bbfad249ff4ac588d1b8d7ecf9c671a0b5a0834de680345edfc43d40ffeb1b` |
+| `ui_hud_avatar_frame_player_01.png` | `27f70f7c6edd2e0adb5c722f968cbf8f36b8176d49ac4a4c21639d7be37e7a66` |
+| `ui_hud_avatar_frame_ai_01.png` | `27f70f7c6edd2e0adb5c722f968cbf8f36b8176d49ac4a4c21639d7be37e7a66` |
+| `ui_hud_score_pill_player_01.png` | `321608ffed3a0f624e1f6b5638f84e1dbb3c81939266e74b7d0c6308d5eb970d` |
+| `ui_hud_score_pill_ai_01.png` | `9ced20046e5711ceef491719818ad2c04dd80efa6f052aa737e383a6ff7346c9` |
+| `ui_hud_panel_player_01.png` | `1e65bba13e1e902f60c72792831772dfde15bf4fe6e8a48c48b6fadd5d0b0f4f` |
+| `game_board_zone_veil_01.png` | `84595179392c2754adbac6c6f6e53be180854cea518afc2485d66a8942b5e37c` |
+| `ball_state_selected_ring_01.png` | `5c2379f28388734f047f2e1bcb0b9b0fffa47ba1e9bed61129c04f5b80c6b66b` |
+| `ball_state_matched_01.png` | `7dc9b034732feafdd872ace1d25566c5d4e2f030f07d424e71741ac8270caadc` |
+| `ui_common_btn_primary_pressed_01.png` | `deb6f37a93c593e6f532f5ed987ab00e9562a2249f61a3fba5297c0648a9ea41` |
+| `ui_common_btn_primary_disabled_01.png` | `deb6f37a93c593e6f532f5ed987ab00e9562a2249f61a3fba5297c0648a9ea41` |
+| `ui_menu_bg_panel_01.png` | `b578da84e1b1bcf2f592f4f447ac5e05bcc655075dbd1b7fad4e8c928ab53833` |
+| `ui_menu_btn_play_pressed_01.png` | `ebba522a8ed43f583f1249f4eb734426d654259fca78d1dd48823f315f5de592` |
+
+`git status --porcelain -- Assets` al cerrar: vacío. No se tocó ningún `.meta`, ni `ProjectSettings`,
+ni un PNG fuera del cohorte.
+
+### S4a.4 `EVIDENCE-UNTRACKED` (DRL-2)
+
+El gate nuevo del auditor exige tres cosas, en este orden, y **cada una se puede falsar**:
+
+1. el path `Docs/art/evidence/drill-new-v1.md` existe (un reporte sólo en `Temp/` es invisible: la
+   regla lo nombra y, si encuentra uno, dice dónde está el que no cuenta);
+2. la última línea es `sha256: <hex>` y re-hashea el cuerpo previo — se lee con
+   `read_bytes().decode()`, **no** `read_text()`, porque la traducción de fin de línea de Python
+   rompería el hash por una razón ajena al gate (medido: `e995cbfd…` declarado vs `9ae9be2c…`
+   medido en la primera corrida, que es exactamente el bug que el caso de selftest congela);
+3. `git ls-files --error-unmatch` lo conoce.
+
+```
+$ python tools/art/selftest_art_gates.py --only evidence
+ausente:      1 hallazgo -> el reporte del drill no existe en Temp/art-selftest/evidence/no-existe.md
+solo en Temp/: 1 hallazgo -> el reporte existe y re-hashea pero `git ls-files --error-unmatch`
+                             no lo conoce: no esta versionado
+sha forjado:  1 hallazgo -> sha256 del cuerpo declarado 0000… != medido 849d6aff…
+real:         0 hallazgos -> EVIDENCE  Docs/art/evidence/drill-new-v1.md versionado ·
+                              sha256 07b98bcf68ad4992 · 33 filas · 33/33 exact
+```
+
+Con el reporte sólo en el working tree (antes de commitearlo) el auditor daba **5** violaciones
+en 3 reglas: la quinta era ésta. Con el reporte commiteado vuelve a **4 en 2 reglas**.
+
+### S4a.5 Estado al cerrar S4a (árbol post-commit)
+
+```
+$ python tools/art/audit_art_manifest.py         # exit 1 — el baseline declarado, sin una más
+VIOLACIONES 4 en 2 reglas                        # FORMAT-JPG 3 + MODE-TARGET 1
+  EVIDENCE  Docs/art/evidence/drill-new-v1.md versionado · 33 filas · 33/33 exact
+
+$ python tools/art/check_placeholders.py         # exit 0
+RESULTADO   PASS  (33 GENERATED, 3 bloqueadas; 36 filas)
+
+$ python tools/art/check_placeholder_wiring.py --plan   # exit 0
+MAPA        36 NEW: 20 cableado, 13 sin_slot, 3 bloqueado · 1 REPLACE cableado
+
+$ python tools/art/selftest_art_gates.py         # exit 0
+RESULTADO   PASS  (18 casos, 0 hallazgos)         # 17 de S1/S2/S3 + evidence
+```
+
+### S4a.6 Lo que este slice NO toca
+
+- **S4b entero**: ni `ArtCaptureRig.cs`, ni `captures-v1.md`, ni `check_capture_diff.py`, ni
+  `--require-captures`. El bbox y el gate de capturas son el PR siguiente.
+- **Cero arte nuevo**: los 33 PNG salen byte-idénticos; el swap sintético es el mismo patrón
+  `synthetic-v1` que ya corría sobre las REPLACE.
+- **Cero `.meta`, cero `ProjectSettings`**: el drill reescribe el `.meta` original y lo verifica
+  con `restore-first`; si no quedara idéntico, exit 4.
+- **Contratos de S1/S2/S3 intactos**: `--ack-sha` ledger-only, `DELIVERED`/`EXCLUDED`,
+  `PX_ENTREGA_PENDING 6/6`, `SURVIVE` canónico, `TBD` exit 1, `sheet-clear`, `RECT-STALE` sobre el
+  rect vivo, `REPLACE-SHA` en sus tres estados, `ORPHAN-*` y `COHORT 122 = 86 + 36` — todos los
+  casos del selftest verdes.

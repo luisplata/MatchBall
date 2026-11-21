@@ -23,6 +23,8 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     wiring-mono   CTR-4: `MonoBehaviour.freezeSprite` resuelve contra la procedencia y el
                   vaciado da FALTA; los buckets del mapa suman el cohorte del ledger
     zlib-limit    DBT-3: la declaracion existe y el gate la consulta (>= 1)
+    evidence      DRL-2: el reporte del drill re-hashea su cuerpo y esta versionado; uno solo
+                  en `Temp/` (ignorado) cuenta como ausente y falla EVIDENCE-UNTRACKED
 
 Uso:
     python tools/art/selftest_art_gates.py
@@ -714,6 +716,53 @@ def case_orphan() -> list[str]:
     return failures
 
 
+def case_evidence() -> list[str]:
+    """DRL-2: el reporte re-hashea y esta versionado; uno solo en `Temp/` no es evidencia."""
+    failures: list[str] = []
+    work = fresh("evidence")
+
+    def report(path: Path, tamper: bool = False) -> None:
+        body = "# drill\n\n| Piezas | 1 |\n| exact | 1 |\n\n"
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+        # write_bytes, no write_text: en Windows `write_text` traduce "\n" a "\r\n" y el sha del
+        # cuerpo dejaria de re-hashear por una razon que no tiene nada que ver con el gate.
+        path.write_bytes((body + "sha256: " + ("0" * 64 if tamper else digest) + "\n")
+                         .encode("utf-8"))
+
+    missing = audit.check_evidence(work / "no-existe.md")[0]
+    print("ausente: %d hallazgo(s) -> %s" % (len(missing), missing[0].detail if missing else "-"))
+    if len(missing) != 1 or "no existe" not in missing[0].detail:
+        failures.append("un reporte ausente deberia dar EVIDENCE-UNTRACKED: %s" % missing)
+
+    untracked = work / "drill-new-v1.md"
+    report(untracked)
+    found = audit.check_evidence(untracked)[0]
+    print("solo en Temp/: %d hallazgo(s) -> %s"
+          % (len(found), found[0].detail if found else "-"))
+    if len(found) != 1 or found[0].rule != "EVIDENCE-UNTRACKED":
+        failures.append("un reporte en Temp/ deveria fallar EVIDENCE-UNTRACKED: %s" % found)
+    elif "versionado" not in found[0].detail:
+        failures.append("el hallazgo no dice que el reporte no esta versionado: %s"
+                        % found[0].detail)
+
+    tampered = work / "drill-tampered-v1.md"
+    report(tampered, tamper=True)
+    forged = audit.check_evidence(tampered)[0]
+    print("sha forjado: %d hallazgo(s) -> %s"
+          % (len(forged), forged[0].detail if forged else "-"))
+    if len(forged) != 1 or "sha256" not in forged[0].detail:
+        failures.append("un sha de cuerpo que no re-hashea deberia fallar: %s" % forged)
+
+    real, info = audit.check_evidence()
+    print("real: %d hallazgo(s) -> %s" % (len(real), info[0] if info else "-"))
+    if real:
+        failures.append("el reporte versionado del drill falla: %s"
+                        % [(v.rule, v.detail) for v in real])
+    elif not info:
+        failures.append("el gate no reporta la evidencia cuando pasa")
+    return failures
+
+
 def case_zlib_limit() -> list[str]:
     """DBT-3: la declaracion existe y el gate la consulta."""
     failures: list[str] = []
@@ -804,6 +853,7 @@ CASES = {
     "orphan": case_orphan,
     "wiring-mono": case_wiring_mono,
     "zlib-limit": case_zlib_limit,
+    "evidence": case_evidence,
 }
 
 

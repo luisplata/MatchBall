@@ -44,6 +44,12 @@ Cohorte REPLACE (procedencia congelada, `Docs/art/provenance-v1.csv`, PRV-1..4):
   ORPHAN-UNDECLARED REPLACE con 0 consumidores y rol != sin_pantalla
   ORPHAN-STALE      REPLACE declarada sin pantalla que gano consumidor
 
+Reporte del drill (DRL-2, `Docs/art/evidence/drill-new-v1.md`):
+
+  EVIDENCE-UNTRACKED el reporte existe, re-hashea su propio cuerpo y `git ls-files` lo conoce.
+                     Un reporte SOLO bajo `Temp/` (ignorado) cuenta como ausente: "la corrida
+                     dejo un archivo" no es evidencia si el archivo no esta versionado.
+
 `provenance-v1.csv` es un archivo SEPARADO del ledger derivado y por una razon dura: el
 generador reescribe `placeholders-v1.csv` entero desde disco en cada corrida, asi que un sha de
 REPLACE guardado ahi se auto-sanaria y REPLACE-SHA no podria observar nunca un reemplazo. Se
@@ -76,6 +82,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import struct
@@ -93,6 +100,7 @@ ADDRESSABLES_GROUPS = ASSETS_ROOT / "AddressableAssetsData" / "AssetGroups"
 LEDGER = ledger_mod.LEDGER
 DELIVERIES = ledger_mod.DELIVERIES
 PROVENANCE = ledger_mod.PROVENANCE
+EVIDENCE_REPORT = REPO_ROOT / "Docs" / "art" / "evidence" / "drill-new-v1.md"
 SPRITES_DIR = ASSETS_ROOT / "Sprites"
 
 CONSUMER_SUFFIXES = (".unity", ".prefab", ".asset", ".mat", ".controller")
@@ -816,6 +824,64 @@ def check_provenance(pieces: dict[str, Piece], ledger_rows: list[dict],
     return violations, info, summary
 
 
+# ------------------------------------------------------ reporte del drill (DRL-1/DRL-2)
+
+
+def _report_body(text: str) -> tuple[str, str]:
+    """`(cuerpo, sha declarado)`: el reporte cierra con `sha256: <hex>` del cuerpo previo.
+
+    Se decodifica sin traducir fin de linea (`read_bytes().decode`, no `read_text`): el sha es
+    sobre BYTES, y `read_text` convertiria `\\r\\n` en `\\n` y romperia el re-hasheo.
+    """
+    lines = text.splitlines(keepends=True)
+    if not lines or not lines[-1].startswith("sha256: "):
+        return text, ""
+    return "".join(lines[:-1]), lines[-1][len("sha256: "):].strip()
+
+
+def check_evidence(report: Path | None = None) -> tuple[list[Violation], list[str]]:
+    """DRL-2: el reporte del drill existe, re-hashea y esta VERSIONADO.
+
+    El orden de las tres condiciones no es casual: primero que el sha del cuerpo re-hashee (se
+    puede probar sobre cualquier copia), despues `git ls-files --error-unmatch` (solo lo puede
+    probar el archivo real). Un reporte en `Temp/` es, por definicion, invisible al repo: se
+    reporta como ausente y se nombra el path que el gate miro.
+    """
+    path = Path(report) if report is not None else EVIDENCE_REPORT
+    try:
+        shown = path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        shown = str(path)
+    if not path.is_file():
+        detail = "el reporte del drill no existe en %s" % shown
+        stale = sorted((REPO_ROOT / "Temp").rglob("drill-new*.md"))
+        if stale:
+            detail += ("; hay uno sin versionar en %s (Temp/ esta ignorado, no cuenta como"
+                       " evidencia)" % stale[0].relative_to(REPO_ROOT).as_posix())
+        return [Violation("EVIDENCE-UNTRACKED", shown, detail)], []
+
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    body, declared = _report_body(text)
+    if not declared:
+        return [Violation("EVIDENCE-UNTRACKED", shown,
+                          "el reporte no cierra con la linea `sha256:` de su propio cuerpo"
+                          " (DRL-2: no se puede re-hashear sin volver a correr el drill)")], []
+    measured = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    if declared != measured:
+        return [Violation("EVIDENCE-UNTRACKED", shown,
+                          "sha256 del cuerpo declarado %s != medido %s"
+                          % (declared[:16], measured[:16]))], []
+    if not ledger_mod.git_tracked(path):
+        return [Violation("EVIDENCE-UNTRACKED", shown,
+                          "el reporte existe y re-hashea pero `git ls-files --error-unmatch` no"
+                          " lo conoce: no esta versionado")], []
+
+    rows = re.findall(r"(?m)^\| `([a-z0-9_]+\.png)` \| [0-9]+x[0-9]+ \| \*\*(\w+)\*\*", text)
+    exact = sum(1 for _, verdict in rows if verdict == "Exact")
+    return [], ["EVIDENCE    %s versionado · sha256 %s · %d filas · %d/%d exact"
+                % (shown, measured[:16], len(rows), exact, len(rows))]
+
+
 # ------------------------------------------------------------------------ auditor
 
 
@@ -1074,6 +1140,11 @@ def audit(manifest: Path, assets_root: Path, with_refs: bool) -> dict:
         pieces, ledger_rows, assets_root)
     violations.extend(provenance_violations)
     info.extend(provenance_info)
+
+    # reporte del drill (DRL-2): versionado o no hay evidencia
+    evidence_violations, evidence_info = check_evidence()
+    violations.extend(evidence_violations)
+    info.extend(evidence_info)
 
     # reglas meta vs fila
     px_pending: list[str] = []
@@ -1380,6 +1451,7 @@ def print_report(result: dict, manifest: Path, with_refs: bool, verbose: bool, l
         "REPLACE-GUID": "el guid es del .meta y sobrevive al swap (PRV-3)",
         "ORPHAN-UNDECLARED": "REPLACE con 0 consumidores sin declarar (PRV-4)",
         "ORPHAN-STALE": "REPLACE declarada sin pantalla que gano consumidor (PRV-4)",
+        "EVIDENCE-UNTRACKED": "el reporte del drill existe, re-hashea y esta versionado (DRL-2)",
     }
     for rule in sorted(by_rule):
         print("%-18s %7d  %s" % (rule, len(by_rule[rule]), descriptions.get(rule, "")))
