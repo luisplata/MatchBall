@@ -26,7 +26,13 @@ Que prueba:
     CAPTURA    cada fila `cableado` con `captura` tiene su PNG (las vacias son pendientes; una
                excepcion declarada en `art_ledger.CAPTURE_EXCEPTIONS` no es un hueco)
     DIFF       con --diff REF, cada linea cambiada toca solo claves permitidas de SU fila,
-               ningun `.cs` y ningun asset fuera del mapa (APW-4, APW-4b, APW-6)
+               ningun `.cs` fuera del tooling declarado y ningun asset fuera del mapa y de la
+               procedencia (APW-4, APW-4b, APW-6). Un hallazgo por path, no por hunk.
+
+La allowlist del DIFF tiene dos excepciones declaradas y cerradas: `TOOLING_ALLOWED` (los paths
+exactos del tooling `ArtContract` que el cambio versiona) y el `.meta` de cualquier `origen` de
+`provenance-v1.csv` (los assets que §9 nombra como REPLACE). Un `.cs` de juego y un asset fuera
+del contrato siguen fallando: la allowlist no se ensancha, se nombra.
 
 El cohorte y los buckets se DERIVAN (CTR-4): el conjunto NEW sale del ledger
 (`Docs/art/placeholders-v1.csv`), no de un literal, y el estado del mapa tiene que ser el que
@@ -115,6 +121,17 @@ MAP_FIELDS = {
 # `Image`/`Button`/`TutorialStepDots` (hoy `FreezerMono.freezeSprite`).
 COMPONENTS = ("Image", "Button", "TutorialStepDots", "MonoBehaviour")
 FORBIDDEN_SUFFIXES = (".cs",)
+# APW-6: el diff de un PR de arte no puede tocar codigo, y la unica excepcion es el tooling
+# que el propio cambio versiona. La lista es CERRADA y nombra paths exactos, por la misma razon
+# que `PX_ENTREGA_PENDING` o `CAPTURE_EXCEPTIONS`: una entrada nueva es un diff de codigo con
+# su review, no una celda que se agrega para poner el gate en verde. Un `.cs` de juego sigue
+# fallando, y un asset fuera de la procedencia tambien.
+TOOLING_ALLOWED = (
+    "Assets/Editor/ArtContract/ArtCaptureRig.cs",
+    "Assets/Editor/ArtContract/ArtCaptureRig.cs.meta",
+    "Assets/Editor/ArtContract/ArtMetaMigrator.cs",
+    "Assets/Editor/ArtContract/ArtSyntheticBatch.cs",
+)
 
 
 class MapError(Exception):
@@ -198,6 +215,20 @@ def read_ledger_paths() -> set[str]:
         return set()
     with LEDGER.open(newline="", encoding="utf-8") as handle:
         return {row["path"] for row in csv.DictReader(handle) if row.get("path", "-") != "-"}
+
+
+def read_contract_assets() -> set[str]:
+    """Los `origen` de `provenance-v1.csv`: los assets que §9 nombra como REPLACE.
+
+    El `.meta` de uno de ellos es una fila del contrato, no un asset suelto. S1b borro el bloque
+    `sprites[]` muerto de 9 de esos `.meta`, y sin esta lista el diff de un PR de arte lo lee
+    como "asset fuera del mapa". Lo que cambia dentro de esos archivos lo juzga `REPLACE-SHA`
+    sobre BYTES, no este gate; aca solo se declara que el path es del contrato y esta revisado.
+    """
+    if not PROVENANCE.is_file():
+        return set()
+    with PROVENANCE.open(newline="", encoding="utf-8") as handle:
+        return {(row.get("origen") or "").strip() for row in csv.DictReader(handle)} - {""}
 
 
 def live_image_color(row: dict):
@@ -616,6 +647,19 @@ def check_guid_leaks(rows: list[dict], guids: dict[str, str]) -> tuple[list[str]
 KEY_RE = re.compile(r"^\s*-?\s*([A-Za-z_][A-Za-z0-9_]*):")
 
 
+def header_path(raw: str) -> str:
+    """El path de una cabecera `+++ b/...`, sin los adornos que git le agrega.
+
+    Git entrecomilla el path (con escapes estilo C) cuando tiene espacios y le pega un TAB a la
+    cabecera. Sin limpiarlo, `Assets/Sprites/V3_images/sombra 2.png.meta` no matchea el mapa
+    por un caracter invisible y el hallazgo miente sobre la causa.
+    """
+    text = raw.rstrip("\t").strip()
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return text
+
+
 def changed_lines(base: str) -> list[tuple[str, str, int, str]]:
     """(file, kind, line, text) por linea cambiada, con --unified=0 contra `base`."""
     result = subprocess.run(["git", "diff", "-U0", "--no-color", base, "--", "Assets"],
@@ -625,7 +669,7 @@ def changed_lines(base: str) -> list[tuple[str, str, int, str]]:
     out, current, line = [], None, 0
     for raw in result.stdout.splitlines():
         if raw.startswith("+++ b/"):
-            current = raw[6:]
+            current = header_path(raw[6:])
             continue
         if raw.startswith("@@"):
             match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
@@ -639,25 +683,50 @@ def changed_lines(base: str) -> list[tuple[str, str, int, str]]:
     return out
 
 
+def dedupe(findings: list[str]) -> list[str]:
+    """Un hallazgo por causa, en el orden en que aparecieron.
+
+    `git diff -U0` emite una entrada por hunk, asi que el mismo path puede llegar decenas de
+    veces (46 para un `.meta` con 46 hunks). Repetirlo no agrega informacion: el hallazgo es el
+    path, y el conteo del gate tiene que poder leerse.
+    """
+    seen: set[str] = set()
+    unique: list[str] = []
+    for finding in findings:
+        if finding in seen:
+            continue
+        seen.add(finding)
+        unique.append(finding)
+    return unique
+
+
 def check_diff(rows: list[dict], base: str) -> list[str]:
     failures: list[str] = []
     by_node = {(row["asset"], row["nodo"]): row for row in rows if row["nodo"] != "-"}
     mapped_assets = {row["asset"] for row in rows if row["asset"] != "-"}
     placeholder_paths = read_ledger_paths()
+    contract_assets = read_contract_assets()
+    tooling = set(TOOLING_ALLOWED)
     line_cache: dict[str, tuple[dict[int, int], dict[str, int]]] = {}
-    code_reported: set[str] = set()
     for path, kind, line, text in changed_lines(base):
         if path is None:
             continue
         suffix = Path(path).suffix.lower()
+        # El tooling versionado del cambio (APW-6): paths exactos, no un patron. Lo que hay
+        # adentro lo revisa el diff de codigo, no la allowlist de cableado.
+        if path in tooling:
+            continue
         if suffix in FORBIDDEN_SUFFIXES:
-            if path not in code_reported:
-                code_reported.add(path)
-                failures.append("DIFF: %s es codigo (APW-6 prohibe .cs)" % path)
+            failures.append("DIFF: %s es codigo (APW-6 prohibe .cs: la allowlist de tooling es"
+                            " %s)" % (path, ", ".join(TOOLING_ALLOWED)))
             continue
         # Los bytes del cohorte (PNG y su .meta) no son una referencia de cableado: los
         # aprieta generate_placeholders.py --check y el auditor (NEW-SHA / NEW-META / NEW-GUID).
         if path in placeholder_paths or (suffix == ".meta" and path[: -len(".meta")] in placeholder_paths):
+            continue
+        # El `.meta` de un asset que la procedencia declara es parte del contrato: S1b limpio su
+        # bloque muerto. Un `.meta` fuera del contrato sigue siendo un asset no declarado.
+        if suffix == ".meta" and path[: -len(".meta")] in contract_assets:
             continue
         if path not in mapped_assets:
             failures.append("DIFF: %s no esta en el mapa" % path)
@@ -683,7 +752,7 @@ def check_diff(rows: list[dict], base: str) -> list[str]:
         if key not in SLOT_KEYS[row["slot_tipo"]]:
             failures.append("DIFF: %s:%d %s '%s' no esta permitida en la fila %s"
                             % (path, line, kind, key, row["pieza"]))
-    return failures
+    return dedupe(failures)
 
 
 def capture_report(rows: list[dict], pending: list[str]) -> tuple[list[str], list[str], list[str]]:

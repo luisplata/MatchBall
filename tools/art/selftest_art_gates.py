@@ -18,6 +18,9 @@ son la prueba falsable de la spec; ninguno es un "smoke test":
     cohort-sum    ART-3: una etiqueta inventada en el ledger falla COHORT-SUM con pieza
     cohort-manifest  DBT-5: una etiqueta inventada en §9 sale 1 COHORT-SUM en las dos rutas
                   (check y auditor), sin traceback; el §9 ilegible sigue saliendo 2
+    diff-allowlist  APW-6: el diff admite el tooling declarado y el `.meta` de un origen de la
+                  procedencia; un `.cs` de juego y un asset fuera del contrato fallan, y el
+                  mismo path se cuenta una vez (no una por hunk)
     provenance    PRV-1: la captura cubre R/R, es one-shot (CAPTURE-IMMUTABLE) y --add no reescribe
     replace-sha   PRV-2: BASELINE / DELIVERED / UNKNOWN; solo UNKNOWN falla, con los dos shas
     replace-guid  PRV-3: el swap no mueve las referencias; un guid nuevo falla con los dos
@@ -69,6 +72,9 @@ RETRY = "ui_tutorial_btn_retry_normal_01.png"
 BLOCKED = "ui_tutorial_spotlight_fill_01.png"
 REPLACE = "ui_common_btn_primary_normal_01.png"
 ORPHAN = "ui_common_divider_01.png"
+# La base del arte del change: `--diff` es el unico modo que prueba algo y su transcript es el
+# del verify. El caso `diff-allowlist` la mide de verdad, y si el ref no existe lo dice.
+DIFF_BASE = "5014093"
 
 
 def fresh(name: str) -> Path:
@@ -946,6 +952,53 @@ def case_capture_diff() -> list[str]:
     return failures
 
 
+def case_diff_allowlist() -> list[str]:
+    """APW-6: el diff de un PR de arte admite SOLO el tooling declarado y el `.meta` de un
+    origen de la procedencia; un `.cs` de juego o un asset fuera del contrato siguen fallando,
+    y el mismo path se cuenta una vez, no una por hunk."""
+    failures: list[str] = []
+    rows = wiring.read_map()
+    tooling = wiring.TOOLING_ALLOWED[0]
+    contract = sorted(wiring.read_contract_assets())[0] + ".meta"
+    foreign = "Assets/Sprites/BALLPASS/fuera-del-contrato.png.meta"
+    code = "Assets/Scripts/App/Game.cs"
+
+    changed = [(tooling, "add", 10, "  m_Name: ArtCaptureRig"),
+               (tooling, "add", 11, "  m_EditorVersion: 6000.3.10f1")]
+    # Tres hunks sobre el MISMO `.meta` del contrato: el hallazgo, si lo hubiera, es uno.
+    changed += [(contract, "add", line, "") for line in (196, 197, 240)]
+    changed += [(foreign, "add", line, "") for line in (3, 4, 5)]
+    changed += [(code, "add", line, "") for line in (7, 8)]
+
+    with swapped(wiring, changed_lines=lambda base: list(changed)):
+        findings = wiring.check_diff(rows, "no-hace-falta-una-base-real")
+    print("allowlist: %d hallazgo(s) -> %s" % (len(findings), findings))
+    if len(findings) != 2:
+        failures.append("el diff deberia dejar 2 hallazgos (un .cs de juego y un asset fuera del"
+                        " contrato), dejo %d: %s" % (len(findings), findings))
+    if any("no esta en el mapa" in finding and foreign not in finding for finding in findings):
+        failures.append("el path fuera del contrato no se nombra: %s" % findings)
+    if any(target in finding for finding in findings
+           for target in ("DIFF: %s " % tooling, "DIFF: %s " % contract)):
+        failures.append("el tooling declarado o el .meta del contrato siguen fallando: %s"
+                        % findings)
+    if not any(finding.startswith("DIFF: %s es codigo" % code) for finding in findings):
+        failures.append("un .cs de juego deberia fallar nombrando el path: %s" % findings)
+
+    # La direccion real: sobre el arbol del cambio y su base, el gate no tiene nada que decir.
+    try:
+        real = wiring.check_diff(rows, DIFF_BASE)
+    except wiring.MapError as error:
+        print("base %s no disponible (%s): se omite la medicion real" % (DIFF_BASE, error))
+        real = None
+    if real is not None:
+        print("arbol real contra %s: %d hallazgo(s)" % (DIFF_BASE, len(real)))
+        if real:
+            failures.append("el arbol del cambio no cierra contra su base %s: %s"
+                            % (DIFF_BASE, real))
+    return failures
+
+
 def case_zlib_limit() -> list[str]:
     """DBT-3: la declaracion existe y el gate la consulta."""
     failures: list[str] = []
@@ -1031,6 +1084,7 @@ CASES = {
     "tbd": case_tbd,
     "cohort-sum": case_cohort_sum,
     "cohort-manifest": case_cohort_manifest,
+    "diff-allowlist": case_diff_allowlist,
     "provenance": case_provenance,
     "replace-sha": case_replace_sha,
     "replace-guid": case_replace_guid,
