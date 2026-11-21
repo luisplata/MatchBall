@@ -155,6 +155,8 @@ real: 0 RECT-STALE, 4 violaciones
 Las dos direcciones están probadas: el `.meta` real `PlayerAvatar.png.meta` (`spriteMode: 1`,
 bloque muerto `271,71 746x631`) mide **0**; el fixture `tools/art/fixtures/rect-stale/mode2-1344x768.png.meta`
 (`spriteMode: 2`, rect `321,249 10x28` sobre lienzo `1344x768`) mide **1**. La regla no quedó muda.
+(Tras S1b el bloque real desapareció: la dirección "mode 1 → 0" pasa a probarse con
+`mode1-residual-1344x768.png.meta`; ver §S1b.2.)
 
 ### S1.6 DBT-1 / DBT-2 / DBT-3 / DBT-4
 
@@ -239,3 +241,161 @@ terminar, `git status --porcelain -- Docs Assets` está vacío.
   `DELIVERED`/`EXCLUDED` verbatim y `guard_write()` protege los bytes.
 - `collisions()` sólo compara contra `Assets/` cuando el destino **es** `Assets/Sprites`: una
   corrida de ensayo en `Temp/` no entrega y no puede colisionar con lo ya entregado.
+
+## §S1b — los 10 rects muertos, borrados por el migrador (T-15…T-17)
+
+`size:exception` declarado: los 9 `.meta` son **salida del serializer de Unity**, no código
+revisable línea a línea. Se acepta por muestreo + gate propio. Los 33 PNG NEW no se tocaron:
+`git status --porcelain -- "*.png"` vacío antes y después.
+
+### S1b.1 La operación y su plan (T-15 / T-16)
+
+`ArtMetaMigrator.BuildPlan` gana `sheet-clear` cuando `ModeNow == ModeTarget == 1 && staleRects`
+(la pieza ya está en Single y el `.meta` todavía serializa sub-sprites). En Single el importer no
+expone las rects y el data provider 2D sólo escribe en Multiple, así que
+`ClearSheetSprites()` es un round-trip: **Multiple → `SetSpriteRects(Array.Empty<SpriteRect>())`
+→ Single → `SaveAndReimport`**. La verificación **re-parsea** el `.meta`
+(`SheetSpriteCount` + `SheetHasStaleRect`): una sola entrada que sobreviva es
+`RECT-CLEAR-FAILED`, `LogError`, y el apply sale **4** — nunca un log verde. Los planes con
+`sheet-clear` se excluyen de `StartAssetEditing`, porque con la importación diferida el re-parse
+leería el bloque viejo y daría un fallo falso.
+
+Dry-run sobre el árbol real — `python tools/art/audit_art_manifest.py --plan` (espejo de sólo
+lectura, 0 escrituras) y `ArtMetaMigrator.DryRun` en el editor abierto. **10 ops sobre 9 `.meta`**:
+
+```
+PLAN  game_board_shadow_mid_01.png
+      asset   Assets/Sprites/V3_images/sombra 2.png  (guid fe1e615ea23596446a79254f62873b1a)
+      op1    sheet-clear    rect "sombra 2_0" 105,2 159x165 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  ui_menu_avatar_player_01.png
+      asset   Assets/Sprites/PlayerAvatar.png  (guid 80793527c4e2c0843a5ef10a262777f6)
+      op1    sheet-clear    rect "PlayerAvatar_0" 271,71 746x631 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  ui_menu_avatar_npc_01.png
+      asset   Assets/Sprites/NpcAvatar.png  (guid 996c402736a5ed84ebf2d7f809bef329)
+      op1    sheet-clear    rect "NpcAvatar_0" 63,155 905x675 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  hero_rojo_portrait_idle_01.png
+      asset   Assets/Sprites/Heroes/rojo_idle.png  (guid c385d6896bfd3e04e919ebc124d6b4ee)
+      op1    sheet-clear    rect "rojo_idle_0" 175,0 716x1024 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  hero_rojo_portrait_happy_01.png
+      asset   Assets/Sprites/Heroes/rojo_alegre.png  (guid 7c968f1d484f63d4d97eba7f28d1fb45)
+      op1    sheet-clear    rect "rojo_alegre_0" 40,0 723x1024 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  hero_rojo_portrait_angry_01.png
+      asset   Assets/Sprites/Heroes/rojo_enojo.png  (guid 3617c5dfa6f6e9a4f910347fbaa75fa1)
+      op1    sheet-clear    rect "rojo_enojo_0" 88,0 925x1024 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  hero_rojo_portrait_determined_01.png
+      asset   Assets/Sprites/Heroes/rojo_determinacion.png  (guid 7eff919c860052f498742cbaa5faecb4)
+      op1    sheet-clear    rect "rojo_determinacion_0" 24,0 924x1009 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  hero_rojo_portrait_surprised_01.png
+      asset   Assets/Sprites/Heroes/rojo_sorpresa.png  (guid c275f44f572fa0e4ea521a65c2eff1be)
+      op1    sheet-clear    rect "rojo_sorpresa_0" 177,0 606x1024 -> bloque vaciado (2 -> 0 rects -> 1)
+
+PLAN  hero_rojo_banner_01.png
+      asset   Assets/Sprites/Heroes/HeroeRojo.png  (guid aa48d609dc0280e47bcb8867e0f45604)
+      op1    sheet-clear    rect "HeroeRojo_0" 321,249 10x28 -> bloque vaciado (2 -> 0 rects -> 1)
+      op2    sheet-clear    rect "HeroeRojo_1" 326,0 696x768 -> bloque vaciado (2 -> 0 rects -> 1)
+
+TOTAL 9 piezas con operaciones planificadas | 0 ocurrencias de fileID a remapear
+MODO  dry-run: 0 escrituras (el unico que escribe es ArtMetaMigrator con apply=true)
+```
+
+9 piezas, 10 ops ( `hero_rojo_banner_01` acumula dos), 0 refs: este op no cambia el modo, así
+que no hay `fileID-remap`. `ball_shadow_01` (el `MODE-TARGET` de la deuda) sigue en el plan de
+`all` y **no** se aplicó aquí: es S3/su propia corrida.
+
+### S1b.2 Aplicación y cierre (T-17)
+
+Aplicado por MCP contra el editor abierto (`DarkVoid.ArtContract.ArtMetaMigrator.Apply`), no por
+`-batchmode` (el proyecto ya está abierto y lockea la instancia). Glob real:
+
+```
+game_board_shadow_mid_01*,ui_menu_avatar_player_01*,ui_menu_avatar_npc_01*,hero_rojo_*
+```
+
+Desvío declarado: el comando literal de T-17 (`game_board_shadow_mid_01,ui_menu_avatar_player_01,
+ui_menu_avatar_npc_01,hero_rojo_*`) selecciona **6** piezas y no 9, porque `BuildGlob` compara
+contra `Pieza` **con** extensión (`.png`) y sólo los términos con `*` matchean; los tres términos
+sin comodín no resolvían. Se agregó `*` a cada término. Nada más cambió en la selección.
+
+Prueba de cierre — las tres aserciones:
+
+```
+$ git status --porcelain -- Assets      # sólo los 9 .meta, cero PNG
+ M Assets/Sprites/Heroes/HeroeRojo.png.meta
+ M Assets/Sprites/Heroes/rojo_alegre.png.meta
+ M Assets/Sprites/Heroes/rojo_determinacion.png.meta
+ M Assets/Sprites/Heroes/rojo_enojo.png.meta
+ M Assets/Sprites/Heroes/rojo_idle.png.meta
+ M Assets/Sprites/Heroes/rojo_sorpresa.png.meta
+ M Assets/Sprites/NpcAvatar.png.meta
+ M Assets/Sprites/PlayerAvatar.png.meta
+ M "Assets/Sprites/V3_images/sombra 2.png.meta"
+
+$ git diff --stat -- Assets
+ 9 files changed, 9 insertions(+), 229 deletions(-)
+```
+
+El diff es exactamente el bloque: se borran las entradas `sprites:` y se agrega `sprites: []`.
+`guid`, `spriteMode`, `spriteBorder`, `spritePivot`, `spritePixelsToUnits`, `maxTextureSize` y
+`internalIDToNameTable` no se mueven — ninguna referencia puede quedar colgada, porque el
+`fileID` vivo (`21300000`) es el mismo antes y después.
+
+```
+$ sed -n '/spriteSheet:/,/mipmapLimitGroupName/p' <cada uno de los 9 .meta> | head -3
+  spriteSheet:
+    serializedVersion: 2
+    sprites: []        # <- cero entradas en los 9
+```
+
+**Corrección al criterio de T-17**: `grep -c spriteSheet` **no** puede dar `0` en Unity 6. El
+serializer escribe siempre la clave en Single, con `sprites: []`. Prueba de que no es una
+regresión de este slice: `Assets/Sprites/BALLPASS/BALLPASS9.png.meta` —que nunca tuvo bloque—
+también da `grep -c spriteSheet` = 1. El criterio verificable (y el que se usa) es **cero
+entradas `sprites[]`**, que es lo que mide `SheetSpriteCount()` y lo que el re-parse del
+migrador exige para no emitir `RECT-CLEAR-FAILED`.
+
+Contadores del auditor, **antes → después**:
+
+| Regla | Antes de S1b | Después de S1b |
+|---|---|---|
+| `FORMAT-JPG` | 3 | 3 |
+| `MODE-TARGET` | 1 | 1 |
+| `RECT-STALE` | **0** (S1 ya mide el sprite vivo) | **0** |
+| **Total** | **4** | **4** |
+
+El total **no se movió**, y eso es lo correcto: S1 ya había bajado 14 → 4 midiendo el sprite
+vivo. S1b no "arregla" una violación contada; evita que vuelva. La prueba de que la regla sigue
+viva es el fixture:
+
+```
+CASE  fixture
+fixture mode2: 1 rect
+fixture mode1 con 1 sprite(s) serializado(s): 0 rect vivo
+PlayerAvatar spriteMode 1: 0 rect, 0 sprite(s) serializado(s)
+  OK
+CASE  rect-stale
+real: 0 RECT-STALE, 4 violaciones
+  OK
+RESULTADO   PASS  (12 casos, 0 hallazgos)
+```
+
+El `spriteMode: 2` sigue midiendo **1**; el `spriteMode: 1` con bloque serializado sigue midiendo
+**0** (ahora contra `mode1-residual-1344x768.png.meta`, porque el bloque real ya no existe); el
+árbol real afirma 0 entradas. Los otros dos gates, sin cambio:
+`check_placeholders.py` PASS `33 GENERATED, 4 bloqueadas` · `check_placeholder_wiring.py --plan`
+PASS `20 cableado, 13 sin_slot, 4 bloqueado` · `audit_art_manifest.py` exit 1 con **4**.
+
+### S1b.3 Riesgos que quedan
+
+- `rect-resync` (el op de las piezas que **sí** quedan en Multiple) usa `TextureImporter.spritesheet`,
+  que en Unity 6 compila con `CS0618` y el propio warning dice que el acceso "has been removed".
+  `sheet-clear` usa el data provider (camino correcto); el de `rect-resync` puede ser un no-op
+  silencioso y merece su propio chequeo cuando toque una pieza mode 2.
+- El re-parse es la única prueba de que el bloque murió. Si una versión futura de Unity
+  serializara el bloque desde otro estado, `SheetSpriteCount` lo ve igual (parsea el YAML).

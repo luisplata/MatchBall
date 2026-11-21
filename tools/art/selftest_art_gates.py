@@ -43,6 +43,7 @@ import generate_placeholders as gen
 ROOT = gen.REPO_ROOT
 SANDBOX = ROOT / "Temp" / "art-selftest"
 FIXTURE = ROOT / "tools" / "art" / "fixtures" / "rect-stale" / "mode2-1344x768.png.meta"
+DEAD_BLOCK = ROOT / "tools" / "art" / "fixtures" / "rect-stale" / "mode1-residual-1344x768.png.meta"
 PLAYER_AVATAR = ROOT / "Assets" / "Sprites" / "PlayerAvatar.png.meta"
 PIECE = "ui_tutorial_dim_01.png"
 RETRY = "ui_tutorial_btn_retry_normal_01.png"
@@ -124,7 +125,7 @@ def violation_count(result: dict, rule: str) -> int:
 
 
 def case_fixture() -> list[str]:
-    """CTR-2: el fixture mode 2 mide su rect; PlayerAvatar mode 1 no mide ninguno."""
+    """CTR-2: el fixture mode 2 mide su rect; el mode 1 con bloque muerto no mide ninguno."""
     failures: list[str] = []
     meta = audit.read_meta(FIXTURE)
     rects = audit.live_rects(meta, (1344, 768))
@@ -132,18 +133,34 @@ def case_fixture() -> list[str]:
     if len(rects) != 1 or rects[0]["rect"] != (321, 249, 10, 28):
         failures.append("fixture mode2 deberia medir 1 rect (321,249 10x28), midio %s"
                         % (rects,))
+    # El bloque muerto era el de PlayerAvatar; S1b lo borro, asi que el falso positivo se
+    # prueba sobre un .meta de fixture con spriteMode 1 y un rect serializado distinto del
+    # lienzo. Sin este fixture la direccion "mode 1 -> 0 hallazgos" quedaria sin evidencia.
+    dead_meta = audit.read_meta(DEAD_BLOCK)
+    if dead_meta is None:
+        failures.append("no se pudo leer %s" % DEAD_BLOCK.name)
+    else:
+        dead_rects = audit.live_rects(dead_meta, (1344, 768))
+        print("fixture mode1 con %d sprite(s) serializado(s): %d rect vivo"
+              % (len(dead_meta.sprites), len(dead_rects)))
+        if not dead_meta.sprites:
+            failures.append("el fixture mode 1 deberia serializar un bloque muerto")
+        if dead_meta.sprite_mode != 1:
+            failures.append("el fixture mode 1 tiene spriteMode %s" % dead_meta.sprite_mode)
+        if dead_rects:
+            failures.append("spriteMode 1 no deberia medir el bloque serializado, midio %s"
+                            % (dead_rects,))
     real = audit.read_meta(PLAYER_AVATAR)
     if real is None:
         failures.append("no se pudo leer %s" % PLAYER_AVATAR.name)
     else:
-        print("PlayerAvatar spriteMode %s: %d rect" % (real.sprite_mode,
-                                                       len(audit.live_rects(real, (1344, 768)))))
+        print("PlayerAvatar spriteMode %s: %d rect, %d sprite(s) serializado(s)"
+              % (real.sprite_mode, len(audit.live_rects(real, (1344, 768))), len(real.sprites)))
         if audit.live_rects(real, (1344, 768)):
             failures.append("PlayerAvatar (spriteMode 1) no deberia medir rects muertos")
-        dead = [sprite for sprite in real.sprites]
-        if not dead:
-            failures.append("PlayerAvatar ya no tiene bloque serializado: el fixture no prueba"
-                            " el falso positivo")
+        if real.sprites:
+            failures.append("PlayerAvatar conserva %d sprite(s) serializado(s): el sheet-clear"
+                            " de S1b no corrio sobre el arbol real" % len(real.sprites))
     return failures
 
 
