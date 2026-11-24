@@ -40,6 +40,15 @@ namespace Presentation.Tutorial
         /// <summary>Below this canvas height the two-set layout takes over (see the design's 568 px).</summary>
         private const float CompactCanvasHeight = 568f;
 
+        /// <summary>
+        /// The danger strip grows to fit its label instead of clipping it. The copy box yields the
+        /// strip's real height plus a gap, measured from the strip's own top edge, so a two-line
+        /// hint can never share pixels with the body text.
+        /// </summary>
+        private const float DangerStripMinHeight = 44f;
+        private const float DangerStripPadding = 16f;
+        private const float DangerStripGap = 10f;
+
         /// <summary>Skip's size and inset. Both sets are applied by <see cref="ApplyLayout"/>.</summary>
         private const float CompactSkipWidth = 80f;
         private const float CompactSkipHeight = 36f;
@@ -232,7 +241,83 @@ namespace Presentation.Tutorial
         public void ShowDanger(bool visible)
         {
             _dangerRequested = visible;
-            if (dangerHint != null) dangerHint.SetActive(visible && !_compact);
+
+            var show = visible && !_compact;
+            if (dangerHint != null) dangerHint.SetActive(show);
+            if (show) ApplyDangerStrip();
+
+            // The body has to yield the strip's band while it is up, otherwise the orange hint and
+            // the last line of copy share pixels.
+            ApplyCopyInsets(_compact);
+        }
+
+        /// <summary>
+        /// Grows the strip downwards until its label fits, keeping the top edge where the design put
+        /// it. Idempotent: a second call with the same preferred height moves nothing.
+        /// </summary>
+        private void ApplyDangerStrip()
+        {
+            if (dangerHint == null) return;
+
+            var rect = dangerHint.transform as RectTransform;
+            if (rect == null) return;
+
+            var label = dangerHint.GetComponentInChildren<TMPro.TMP_Text>(true);
+            var needed = label != null
+                ? Mathf.Max(DangerStripMinHeight, label.preferredHeight + DangerStripPadding)
+                : DangerStripMinHeight;
+
+            var delta = needed - rect.sizeDelta.y;
+            if (Mathf.Approximately(delta, 0f)) return;
+
+            rect.sizeDelta = new Vector2(rect.sizeDelta.x, needed);
+            rect.anchoredPosition = new Vector2(rect.anchoredPosition.x,
+                rect.anchoredPosition.y - delta * 0.5f);
+        }
+
+        /// <summary>
+        /// Insets the copy box and sets the autosizing range. Split out of <see cref="ApplyLayout"/>
+        /// because the box also changes whenever the danger strip appears or disappears.
+        /// </summary>
+        private void ApplyCopyInsets(bool compact)
+        {
+            // Copy strip: 228..444 in full, 116..200 (one line) in compact. Autosizing is what keeps
+            // the promise that the body never drops below 24 px: the rich text title rides at 125 %
+            // of whatever size fits, so it stays bigger than the body in both modes.
+            var copyMin = compact ? new Vector2(16f, 116f) : new Vector2(28f, 228f);
+            var copyMax = compact ? new Vector2(-16f, -40f) : new Vector2(-28f, -76f);
+            var copyMaxSize = compact ? CompactFontSize : FullFontSize;
+
+            if (dangerHint != null && dangerHint.activeSelf && panel != null)
+            {
+                var strip = dangerHint.transform as RectTransform;
+                if (strip != null)
+                {
+                    // corners[1] is the strip's top-left; the panel's pivot makes its local Y the
+                    // same axis the copy offsets use.
+                    var corners = new Vector3[4];
+                    strip.GetWorldCorners(corners);
+                    var stripTop = panel.InverseTransformPoint(corners[1]).y;
+                    copyMin.y = stripTop + DangerStripGap + panel.rect.height * panel.pivot.y;
+                }
+            }
+
+            if (_copies == null) return;
+
+            foreach (var rect in _copies)
+            {
+                if (rect == null) continue;
+
+                rect.offsetMin = copyMin;
+                rect.offsetMax = copyMax;
+
+                var text = rect.GetComponent<TMPro.TMP_Text>();
+                if (text == null) continue;
+
+                text.enableAutoSizing = true;
+                text.fontSizeMin = MinimalFontSize;
+                text.fontSizeMax = copyMaxSize;
+            }
         }
 
         /// <summary>
@@ -369,33 +454,13 @@ namespace Presentation.Tutorial
                 compact ? new Vector2(200f, 52f) : new Vector2(280f, 84f),
                 compact ? new Vector2(0f, 56f) : new Vector2(0f, 84f));
 
-            // Copy strip: 228..444 in full, 116..200 (one line) in compact. Autosizing is what keeps
-            // the promise that the body never drops below 24 px: the rich text title rides at 125 %
-            // of whatever size fits, so it stays bigger than the body in both modes.
-            var copyMin = compact ? new Vector2(16f, 116f) : new Vector2(28f, 228f);
-            var copyMax = compact ? new Vector2(-16f, -40f) : new Vector2(-28f, -76f);
-            var copyMaxSize = compact ? CompactFontSize : FullFontSize;
-
-            if (_copies != null)
-            {
-                foreach (var rect in _copies)
-                {
-                    if (rect == null) continue;
-                    rect.offsetMin = copyMin;
-                    rect.offsetMax = copyMax;
-
-                    var text = rect.GetComponent<TMPro.TMP_Text>();
-                    if (text == null) continue;
-
-                    text.enableAutoSizing = true;
-                    text.fontSizeMin = MinimalFontSize;
-                    text.fontSizeMax = copyMaxSize;
-                }
-            }
-
             // The strip has no room in the compact bubble: it is suppressed there and comes back
             // with its last requested state when the frame grows again.
             if (dangerHint != null) dangerHint.SetActive(_dangerRequested && !compact);
+            if (dangerHint != null && dangerHint.activeSelf) ApplyDangerStrip();
+
+            // The copy insets depend on whether the strip is actually up, so they come after it.
+            ApplyCopyInsets(compact);
 
             if (tail != null)
             {
