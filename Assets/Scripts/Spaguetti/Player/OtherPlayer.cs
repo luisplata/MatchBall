@@ -30,8 +30,8 @@ public class OtherPlayer : MonoBehaviour
     [SerializeField] private TextMeshProUGUI nameText;
 
     [Header("Rival AI")]
-    [Tooltip("Easy yerra seguido; Hard es el default; Perfect juega siempre el máximo exacto.")]
-    [SerializeField] private AiDifficulty aiLevel = AiDifficulty.Hard;
+    [Tooltip("Easy yerra seguido; Normal es el default; Perfect juega siempre el máximo exacto.")]
+    [SerializeField] private AiDifficulty aiLevel = AiDifficulty.Normal;
 
     public TextMeshProUGUI ScoreText => scoreText;
     public TextMeshProUGUI NameText => nameText;
