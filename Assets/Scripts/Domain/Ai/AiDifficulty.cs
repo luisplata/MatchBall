@@ -39,11 +39,11 @@ namespace Domain.Ai
         {
             switch (level)
             {
-                case AiDifficulty.Easy: return 4f;
-                case AiDifficulty.Normal: return 3f;
+                case AiDifficulty.Easy: return 2.4f;
+                case AiDifficulty.Normal: return 1.0f;
                 case AiDifficulty.Default:
-                case AiDifficulty.Hard: return 2.5f;
-                default: return 2f;
+                case AiDifficulty.Hard: return 0.6f;
+                default: return 0.35f;
             }
         }
     }

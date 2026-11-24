@@ -3,6 +3,7 @@ using Commander;
 using Commander.Commands;
 using Cysharp.Threading.Tasks;
 using Domain.Ai;
+using Domain.Services;
 using UnityEngine;
 
 /// <summary>
@@ -26,6 +27,9 @@ public sealed class AiMachine : IAiMachine
 {
     private const float MinCadenceSeconds = 0.25f;
 
+    /// <summary>How much of the level's beat the rival keeps when its board is about to lose.</summary>
+    private const float DangerCadenceFactor = 0.35f;
+
     private readonly IPlayer _player;
     private readonly IGameManager _gameManager;
     private readonly int _seed;
@@ -38,6 +42,7 @@ public sealed class AiMachine : IAiMachine
     private int _loop;
     private int _decisionCount;
     private AiState _state = AiState.Stopped;
+    private float _nextCadence;
 
     public AiMachine(IPlayer player, IGameManager gameManager, int seed, float difficulty,
         float cadenceSeconds)
@@ -47,6 +52,7 @@ public sealed class AiMachine : IAiMachine
         _seed = seed;
         _difficulty = Mathf.Clamp01(difficulty);
         _cadenceSeconds = Mathf.Max(MinCadenceSeconds, cadenceSeconds);
+        _nextCadence = _cadenceSeconds;
     }
 
     public bool CanPlay()
@@ -128,11 +134,15 @@ public sealed class AiMachine : IAiMachine
             if (loop != _loop) return;
 
             // Delta time, so a paused game does not burn the rival's thinking window.
-            await UniTask.Delay((int) (_cadenceSeconds * 1000f));
+            await UniTask.Delay((int) (_nextCadence * 1000f));
             if (loop != _loop) return;
 
             // The freeze may have started while thinking: wait it out instead of playing through.
             await UniTask.WaitUntil(() => !_suspended || loop != _loop);
+            if (loop != _loop) return;
+
+            // The board is the real limiter: never stack a decision on a command still animating.
+            await UniTask.WaitUntil(() => !_player.IsBusy() || loop != _loop);
             if (loop != _loop) return;
 
             if (_player.IsGameOver())
@@ -155,6 +165,8 @@ public sealed class AiMachine : IAiMachine
     private void DecideAndAct()
     {
         var snapshot = AiSnapshotBuilder.Build(_player);
+        _nextCadence = NextCadence(snapshot);
+
         var decision = AiPolicy.Decide(snapshot, _difficulty, NextSeed());
         LogDecision(snapshot, decision);
 
@@ -170,6 +182,20 @@ public sealed class AiMachine : IAiMachine
                 ClickPowerUp(decision.Action.PowerUpIndex);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Reaction floor for the wait that follows this move. A fixed beat made the rival play a fifth
+    /// as often as a human; under pressure it now answers in a third of its level's beat, and the
+    /// floor keeps the tap readable instead of robotic.
+    /// </summary>
+    private float NextCadence(AiBoardSnapshot snapshot)
+    {
+        var cadence = snapshot.Risk == BalanceRisk.Strong
+            ? _cadenceSeconds * DangerCadenceFactor
+            : _cadenceSeconds;
+
+        return Mathf.Max(MinCadenceSeconds, cadence);
     }
 
     private void QueueTap(PathType side)

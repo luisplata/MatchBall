@@ -54,7 +54,9 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
 
     public bool IsBusy()
     {
-        return !_aiMachine.CanPlay();
+        // Same meaning as the human players: a command is in flight. The controls flag still
+        // counts, so a frozen board never reports itself free.
+        return _commandQueue.IsBusy() || !_aiMachine.CanPlay();
     }
 
     public void ClearCommands()
