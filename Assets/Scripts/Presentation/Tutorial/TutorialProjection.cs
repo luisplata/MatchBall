@@ -10,8 +10,10 @@ namespace Presentation.Tutorial
     /// <remarks>
     /// <see cref="Camera.WorldToScreenPoint"/> is not used because the LetterBoxer rewrites
     /// <c>cam.rect</c>: the camera renders into a sub-rect of the screen, so the viewport has to be
-    /// scaled by <see cref="Camera.pixelRect"/> before it becomes a screen point. The target canvas is
-    /// Screen Space Overlay, which is why the rectangle conversion passes a null camera.
+    /// scaled by <see cref="Camera.pixelRect"/> before it becomes a screen point. The rectangle
+    /// conversion needs the canvas' own camera when the canvas is Screen Space - Camera: passing
+    /// <c>null</c> is only valid for Overlay, and on a camera-space canvas it returns coordinates
+    /// scaled by the canvas' lossy scale (≈95x here), which puts every callout off screen.
     /// </remarks>
     internal static class TutorialProjection
     {
@@ -41,7 +43,23 @@ namespace Presentation.Tutorial
                 pixelRect.x + viewport.x * pixelRect.width,
                 pixelRect.y + viewport.y * pixelRect.height);
 
-            return RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, screenPoint, null, out local);
+            return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvas, screenPoint, EventCameraFor(canvas, cam), out local);
+        }
+
+        /// <summary>
+        /// The camera the rectangle conversion must use: <c>null</c> for a Screen Space - Overlay
+        /// canvas, and the canvas' own camera for Screen Space - Camera.
+        /// </summary>
+        private static Camera EventCameraFor(RectTransform canvas, Camera fallback)
+        {
+            var owner = canvas.GetComponentInParent<Canvas>();
+            if (owner == null) return null;
+
+            var root = owner.rootCanvas;
+            if (root.renderMode == RenderMode.ScreenSpaceOverlay) return null;
+
+            return root.worldCamera != null ? root.worldCamera : fallback;
         }
     }
 }
