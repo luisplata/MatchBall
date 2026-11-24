@@ -8,8 +8,9 @@ using UnityEngine;
 namespace Infra.Reward
 {
     /// <summary>
-    /// Gold reward. A "gold" body grants its amount times <see cref="GoldMultiplier" /> GOLD,
-    /// which keeps the historical payout (100 in the table pays 1000) in one visible place.
+    /// Gold reward. A "gold" body is multiplied by <see cref="GoldMultiplier" /> exactly once, in
+    /// <see cref="ResolveAmount" />, and both the label and the grant read it from there: the row
+    /// advertises the amount the player actually receives (100 in the table shows and pays 1000).
     /// </summary>
     public sealed class GoldRewardHandler : IRewardHandler
     {
@@ -34,7 +35,7 @@ namespace Infra.Reward
                 return new RewardDisplayData(TypeId, TypeId);
             }
 
-            return new RewardDisplayData(GoldIconKey, $"{amount} Gold");
+            return new RewardDisplayData(GoldIconKey, $"{ResolveAmount(amount)} Gold");
         }
 
         public async UniTask<RewardGrantOutcome> GrantAsync(string body)
@@ -45,8 +46,17 @@ namespace Infra.Reward
                 return RewardGrantOutcome.Skipped;
             }
 
-            await _inventoryRepository.IncrementCurrency(GoldCurrencyId, amount * GoldMultiplier);
+            await _inventoryRepository.IncrementCurrency(GoldCurrencyId, ResolveAmount(amount));
             return RewardGrantOutcome.Granted;
+        }
+
+        /// <summary>
+        /// The single place the table amount becomes the real payout. <see cref="Describe" /> and
+        /// <see cref="GrantAsync" /> must both go through it; that is what keeps the row honest.
+        /// </summary>
+        private static int ResolveAmount(int amount)
+        {
+            return amount * GoldMultiplier;
         }
 
         private static bool TryReadAmount(string body, out int amount)
