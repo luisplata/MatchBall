@@ -28,6 +28,13 @@ public class OtherPlayer : MonoBehaviour
     [SerializeField] private TextMeshProUGUI scoreText;
     [SerializeField] private TextMeshProUGUI nameText;
 
+    [Header("Rival AI")]
+    [Tooltip("0 = juega óptimo, 1 = casi al azar. El default es conservador a propósito.")]
+    [SerializeField, Range(0f, 1f)] private float aiDifficulty = 0.3f;
+
+    [Tooltip("Segundos entre decisiones. El piso real es 0.25s.")]
+    [SerializeField, Min(0.25f)] private float aiCadenceSeconds = 3f;
+
     public TextMeshProUGUI ScoreText => scoreText;
     public TextMeshProUGUI NameText => nameText;
 
@@ -79,7 +86,8 @@ public class OtherPlayer : MonoBehaviour
         }
         else
         {
-            Player2 = new MachinePlayer(this, gameManager, freezePlayerMono, randomToUsePowerUp);
+            Player2 = new MachinePlayer(this, gameManager, freezePlayerMono, randomToUsePowerUp,
+                aiDifficulty, aiCadenceSeconds);
         }
 
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);

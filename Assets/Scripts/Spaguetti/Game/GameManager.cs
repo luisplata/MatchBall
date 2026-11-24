@@ -277,8 +277,11 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
             // Both boards are dead for either outcome. GameOver also makes a queued FreezeBall's
             // EnableControls a no-op, so a straggler command cannot revive a finished board.
             Player1.GameOver();
-            player2.GetPlayer()?.GameOver();
         }
+
+        // P2 dies on every resolved result, PvP or not: in PvE the machine used to keep tapping
+        // behind the game-over panel. GameOver is what ends its cycle, and it cannot be resumed.
+        player2.GetPlayer()?.GameOver();
     }
 
     #region IGameWinConditionContext Implementation
@@ -301,6 +304,9 @@ public class GameManager : MonoBehaviour, IGameManager, IGameWinConditionContext
         // The tutorial never creates the AI player, so its commands were never queued.
         if (player2 != null && player2.GetPlayer() != null)
         {
+            // Ending the board is what stops the AI loop: clearing its commands only suspends it,
+            // and a suspended loop would survive the scene teardown holding destroyed references.
+            player2.GetPlayer().GameOver();
             ServiceLocator.Instance.GetService<ICommandQueue>().ClearCommands(player2.GetPlayer());
             ServiceLocator.Instance.GetService<ICommandQueue>().RemovePlayer(player2.GetPlayer());
         }

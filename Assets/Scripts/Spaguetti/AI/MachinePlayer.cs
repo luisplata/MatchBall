@@ -21,14 +21,14 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     private bool _readyToPlay;
 
     public MachinePlayer(OtherPlayer otherPlayer, IGameManager gameManager, FreezePlayerMono freezePlayerMono,
-        int randomToUsePowerUp)
+        int randomToUsePowerUp, float difficulty, float cadenceSeconds)
     {
         _otherPlayer = otherPlayer;
         _freezePlayerMono = freezePlayerMono;
         _balance = otherPlayer.Balance;
         _ballZone = otherPlayer.BallZone;
         Id = "Machine";
-        _aiMachine = new AiMachine(this, gameManager, randomToUsePowerUp);
+        _aiMachine = new AiMachine(this, gameManager, randomToUsePowerUp, difficulty, cadenceSeconds);
         _commandQueue = new CommandQueue();
         //configure the onGetPoint From IA
         _balance.OnGetPoints += OnGetPoints;
@@ -60,7 +60,10 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     public void ClearCommands()
     {
         _commandQueue.ClearCommands();
-        _aiMachine.StopAI();
+        // Emptying the queue is not the same as ending the match: an ice ball used to kill the
+        // cycle here and nothing ever restarted it, so the rival went silent for the rest of the
+        // game. Suspending keeps the state and the freeze's EnableControls resumes it.
+        _aiMachine.Suspend();
     }
 
     public void EnableControls()
@@ -138,6 +141,7 @@ internal class MachinePlayer : IPlayer, IMediatorBalance, IMediatorBallZone
     public void GameOver()
     {
         _isGameOver = true;
+        _aiMachine.NotifyGameOver();
     }
 
     public IBalance GetBalance()

@@ -100,6 +100,21 @@ public class BallZone : MonoBehaviour, IBallZone
         return _ballIndex < _balls.Length - _overFlow - 1;
     }
 
+    /// <summary>
+    /// Reads the next ball without consuming it. <see cref="GetFirstBall"/> *is* the tap — it pops
+    /// the ball, shifts the queue and fires a sound — so anything that only needs to look (the
+    /// rival's policy) has to come through here.
+    /// </summary>
+    public Ball PeekFirstBall()
+    {
+        return _balls.Length > 0 ? _balls[0] : null;
+    }
+
+    public IReadOnlyList<PowerUpA> GetPowerUps()
+    {
+        return _powerUps;
+    }
+
     public Ball GetFirstBall()
     {
         var ball = _balls[0];
@@ -336,4 +351,6 @@ public interface IBallZone
     bool CanCreatePowerUp();
     bool IsHavePowerUps();
     PowerUpA GetFirstPowerUp();
+    Ball PeekFirstBall();
+    IReadOnlyList<PowerUpA> GetPowerUps();
 }

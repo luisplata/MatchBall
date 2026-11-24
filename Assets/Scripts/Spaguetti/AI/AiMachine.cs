@@ -2,124 +2,51 @@
 using Commander;
 using Commander.Commands;
 using Cysharp.Threading.Tasks;
+using Domain.Ai;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
-public class AiMachine : IAiMachine
+/// <summary>
+/// How the rival's decision cycle is doing. <see cref="Stopped"/> is teardown only; a freeze
+/// produces <see cref="Suspended"/> and never destroys the cycle.
+/// </summary>
+public enum AiState
 {
-    private readonly int _randomToUsePowerUp;
+    Waiting,
+    Suspended,
+    Stopped,
+    GameOver
+}
+
+/// <summary>
+/// The rival's decision cycle: one async loop with an explicit state, instead of a chain of
+/// TeaTime graphs. The old chain broke on <c>ClearCommands</c> and nothing could restart it
+/// because its first state had already returned; a loop can be suspended and resumed in place.
+/// </summary>
+public sealed class AiMachine : IAiMachine
+{
+    private const float MinCadenceSeconds = 0.25f;
+
+    private readonly IPlayer _player;
+    private readonly IGameManager _gameManager;
+    private readonly int _seed;
+    private readonly float _difficulty;
+    private readonly float _cadenceSeconds;
+
     private bool _canPlay = true;
-    private TeaTime _waitFirstPlayerMove, _tryBallInRandomPath, _waitTimeState, _checkIfICanUsePowerUp, _usePowerUp;
-    private float _deltaLocal = 0f;
-    
-    // Track current active state for debugging and stopping
-    private TeaTime _currentActiveTeaTime;
-    private string _currentStateName = "IDLE";
+    private bool _suspended;
+    private bool _running;
+    private int _loop;
+    private int _decisionCount;
+    private AiState _state = AiState.Stopped;
 
-    public AiMachine(IPlayer player, IGameManager gameManager, int randomToUsePowerUp)
+    public AiMachine(IPlayer player, IGameManager gameManager, int seed, float difficulty,
+        float cadenceSeconds)
     {
-        _randomToUsePowerUp = randomToUsePowerUp;
-        _waitFirstPlayerMove = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
-        _tryBallInRandomPath = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
-        _waitTimeState = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
-        _checkIfICanUsePowerUp = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
-        _usePowerUp = new TeaTime(ServiceLocator.Instance.GetService<ITeaTimeManager>().GetMonoBehaviour());
-
-        _waitFirstPlayerMove.Pause().Loop(h =>
-        {
-            if (gameManager.GetFirstPlayer().IsReadyToPlay())
-            {
-                h.Break();
-            }
-        }).Add(() => 
-        { 
-            _currentStateName = "WAIT_TIME_STATE";
-            _waitTimeState.Play(); 
-        });
-
-        _waitTimeState.Pause().Add(() => { _deltaLocal = 0f; }).Loop(h =>
-        {
-            _deltaLocal += h.deltaTime;
-            if (_canPlay && _deltaLocal >= 3f)
-            {
-                h.Break();
-            }
-        }).Add(() =>
-        {
-            if (!player.IsGameOver())
-            {
-                _currentStateName = "CHECK_IF_CAN_USE_POWERUP";
-                _checkIfICanUsePowerUp.Play();
-            }
-        });
-        _tryBallInRandomPath.Pause().Add(() =>
-        {
-            //get random path
-            PathType path;
-            if (player.GetBalance().GetLeftPath().GetOnlyBalls() - player.GetBalance().GetRightPath().GetOnlyBalls() >=
-                3)
-            {
-                path = PathType.Right;
-            }
-            else if (player.GetBalance().GetLeftPath().GetOnlyBalls() -
-                     player.GetBalance().GetRightPath().GetOnlyBalls() <= -3)
-            {
-                path = PathType.Left;
-            }
-            else
-            {
-                var randomPath = Random.Range(0, 2);
-                path = randomPath == 0 ? PathType.Left : PathType.Right;
-            }
-
-            ServiceLocator.Instance.GetService<ICommandQueue>()
-                .AddCommand(new TryBallInBalanceCommand(player.GetBallZone(), path, player.GetBalance()), player);
-        }).Add(() =>
-        {
-            if (!player.IsGameOver())
-            {
-                _currentStateName = "WAIT_TIME_STATE";
-                _waitTimeState.Play();
-            }
-        });
-
-        _checkIfICanUsePowerUp.Pause().Add(() =>
-        {
-            //Validate if I can use the powerup
-            if (player.GetBallZone().IsHavePowerUps() && DiceTry())
-            {
-                _currentStateName = "USE_POWERUP";
-                _usePowerUp.Play();
-            }
-            else
-            {
-                _currentStateName = "TRY_BALL_IN_RANDOM_PATH";
-                _tryBallInRandomPath.Play();
-            }
-        });
-
-        _usePowerUp.Pause()
-            .Add(() =>
-            {
-                Debug.Log($"[AiMachine] I can use Powerup!");
-                player.GetBallZone().GetFirstPowerUp().Click();
-            })
-            .Add(() => 
-            { 
-                _currentStateName = "WAIT_TIME_STATE";
-                _waitTimeState.Play(); 
-            });
-    }
-
-    private bool DiceTry()
-    {
-        var range = Random.Range(0, 100);
-        Debug.Log($"range is {range}");
-#if UNITY_EDITOR
-        return range <= 90;
-#else
-        return range >= _randomToUsePowerUp;
-#endif
+        _player = player ?? throw new ArgumentNullException(nameof(player));
+        _gameManager = gameManager;
+        _seed = seed;
+        _difficulty = Mathf.Clamp01(difficulty);
+        _cadenceSeconds = Mathf.Max(MinCadenceSeconds, cadenceSeconds);
     }
 
     public bool CanPlay()
@@ -127,34 +54,152 @@ public class AiMachine : IAiMachine
         return _canPlay;
     }
 
+    /// <summary>
+    /// Controls on/off, mapped onto resume/suspend. The freeze uses this path, so unfreezing can
+    /// never revive a stopped or finished machine.
+    /// </summary>
     public void SetCanPlay(bool canplay)
     {
         _canPlay = canplay;
+        if (canplay) Resume();
+        else Suspend();
     }
 
     public void StartAI()
     {
-        _currentStateName = "WAIT_FIRST_PLAYER_MOVE";
-        _waitFirstPlayerMove.Play();
+        if (_running) return;
+
+        _running = true;
+        _suspended = false;
+        _loop++;
+        _state = AiState.Waiting;
+        RunAsync(_loop).Forget();
     }
 
     public void StopAI()
     {
-        Debug.Log($"[AiMachine] Stopping AI. Current state was: {_currentStateName}");
-        
-        // Pause all TeaTime instances
-        _waitFirstPlayerMove.Pause();
-        _tryBallInRandomPath.Pause();
-        _waitTimeState.Pause();
-        _checkIfICanUsePowerUp.Pause();
-        _usePowerUp.Pause();
-        
-        _currentStateName = "STOPPED";
+        _running = false;
+        _suspended = false;
+        _loop++;
+        _state = AiState.Stopped;
+    }
+
+    public void Suspend()
+    {
+        if (!_running) return;
+        _suspended = true;
+        _state = AiState.Suspended;
+    }
+
+    public void Resume()
+    {
+        if (!_running) return;
+        _suspended = false;
+        _state = AiState.Waiting;
+    }
+
+    /// <summary>Fin de partida: el bucle no vuelve a decidir y un unfreeze no lo revive.</summary>
+    public void NotifyGameOver()
+    {
+        _running = false;
+        _suspended = false;
+        _loop++;
+        _state = AiState.GameOver;
     }
 
     public string GetCurrentState()
     {
-        return _currentStateName;
+        return _state.ToString().ToUpperInvariant();
+    }
+
+    private async UniTaskVoid RunAsync(int loop)
+    {
+        await UniTask.WaitUntil(() => FirstPlayerReady() || loop != _loop);
+
+        while (loop == _loop)
+        {
+            if (_player.IsGameOver())
+            {
+                NotifyGameOver();
+                return;
+            }
+
+            await UniTask.WaitUntil(() => !_suspended || loop != _loop);
+            if (loop != _loop) return;
+
+            // Delta time, so a paused game does not burn the rival's thinking window.
+            await UniTask.Delay((int) (_cadenceSeconds * 1000f));
+            if (loop != _loop) return;
+
+            // The freeze may have started while thinking: wait it out instead of playing through.
+            await UniTask.WaitUntil(() => !_suspended || loop != _loop);
+            if (loop != _loop) return;
+
+            if (_player.IsGameOver())
+            {
+                NotifyGameOver();
+                return;
+            }
+
+            DecideAndAct();
+            await UniTask.Yield();
+        }
+    }
+
+    private bool FirstPlayerReady()
+    {
+        var first = _gameManager != null ? _gameManager.GetFirstPlayer() : null;
+        return first != null && first.IsReadyToPlay();
+    }
+
+    private void DecideAndAct()
+    {
+        var snapshot = AiSnapshotBuilder.Build(_player);
+        var decision = AiPolicy.Decide(snapshot, _difficulty, NextSeed());
+        LogDecision(snapshot, decision);
+
+        switch (decision.Action.Kind)
+        {
+            case AiActionKind.TapLeft:
+                QueueTap(PathType.Left);
+                break;
+            case AiActionKind.TapRight:
+                QueueTap(PathType.Right);
+                break;
+            case AiActionKind.UsePowerUp:
+                ClickPowerUp(decision.Action.PowerUpIndex);
+                break;
+        }
+    }
+
+    private void QueueTap(PathType side)
+    {
+        ServiceLocator.Instance.GetService<ICommandQueue>()
+            .AddCommand(new TryBallInBalanceCommand(_player.GetBallZone(), side, _player.GetBalance()),
+                _player);
+    }
+
+    private void ClickPowerUp(int index)
+    {
+        var powerUps = _player.GetBallZone().GetPowerUps();
+        if (index < 0 || index >= powerUps.Count) return;
+
+        var powerUp = powerUps[index];
+        if (powerUp != null) powerUp.Click();
+    }
+
+    private int NextSeed()
+    {
+        _decisionCount++;
+        return unchecked(_seed + _decisionCount * 7919);
+    }
+
+    private static void LogDecision(AiBoardSnapshot snapshot, AiDecision decision)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"[AiMachine] {decision.Action.Kind} score={decision.Score} " +
+                  $"cap={snapshot.MinCapacityMoves} risk={snapshot.Risk} :: {decision.Reason}");
+#endif
     }
 }
 
@@ -164,5 +209,8 @@ public interface IAiMachine
     void SetCanPlay(bool canplay);
     void StartAI();
     void StopAI();
+    void Suspend();
+    void Resume();
+    void NotifyGameOver();
     string GetCurrentState();
 }
