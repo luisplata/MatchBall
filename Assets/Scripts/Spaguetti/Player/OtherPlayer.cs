@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Commander;
+using Domain.Ai;
 using TMPro;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -29,11 +30,8 @@ public class OtherPlayer : MonoBehaviour
     [SerializeField] private TextMeshProUGUI nameText;
 
     [Header("Rival AI")]
-    [Tooltip("0 = juega óptimo, 1 = casi al azar. El default es conservador a propósito.")]
-    [SerializeField, Range(0f, 1f)] private float aiDifficulty = 0.3f;
-
-    [Tooltip("Segundos entre decisiones. El piso real es 0.25s.")]
-    [SerializeField, Min(0.25f)] private float aiCadenceSeconds = 3f;
+    [Tooltip("Easy yerra seguido; Hard es el default; Perfect juega siempre el máximo exacto.")]
+    [SerializeField] private AiDifficulty aiLevel = AiDifficulty.Hard;
 
     public TextMeshProUGUI ScoreText => scoreText;
     public TextMeshProUGUI NameText => nameText;
@@ -87,7 +85,7 @@ public class OtherPlayer : MonoBehaviour
         else
         {
             Player2 = new MachinePlayer(this, gameManager, freezePlayerMono, randomToUsePowerUp,
-                aiDifficulty, aiCadenceSeconds);
+                AiDifficultyProfile.Noise(aiLevel), AiDifficultyProfile.CadenceSeconds(aiLevel));
         }
 
         ServiceLocator.Instance.GetService<ICommandQueue>().AddPlayer(Player2);

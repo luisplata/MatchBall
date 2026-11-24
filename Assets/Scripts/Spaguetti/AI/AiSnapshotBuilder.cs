@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Domain.Ai;
 
@@ -26,21 +27,28 @@ internal static class AiSnapshotBuilder
 
     private static AiLane ToLane(Path path)
     {
+        var nextFree = path.GetNextFreeIndex();
         var counts = new Dictionary<string, int>();
-        var balls = path.GetBalls();
-        for (var i = 0; i < balls.Count; i++)
+        var byIndex = new List<string>();
+
+        var last = Math.Max(0, nextFree);
+        for (var index = 0; index <= last; index++)
         {
-            var ball = balls[i];
-            if (ball == null || ball.IsPowerUp()) continue;
+            var color = string.Empty;
+            if (path.TryGetBallInPosition(index, out var ball) && ball != null && !ball.IsPowerUp())
+            {
+                color = ball.GetColor() ?? string.Empty;
+                if (color.Length > 0)
+                {
+                    counts.TryGetValue(color, out var current);
+                    counts[color] = current + 1;
+                }
+            }
 
-            var color = ball.GetColor();
-            if (string.IsNullOrEmpty(color)) continue;
-
-            counts.TryGetValue(color, out var current);
-            counts[color] = current + 1;
+            byIndex.Add(color);
         }
 
-        return new AiLane(path.GetOnlyBalls(), path.GetNextFreeIndex(), counts);
+        return new AiLane(path.GetOnlyBalls(), nextFree, counts, byIndex);
     }
 
     private static IReadOnlyList<AiPowerUpOption> ToPowerUps(IBallZone zone)

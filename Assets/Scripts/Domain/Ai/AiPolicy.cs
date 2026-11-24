@@ -33,8 +33,8 @@ namespace Domain.Ai
         /// </summary>
         private const float SoftmaxTemperature = 300f;
 
-        /// <summary>Balls of one colour that clear.</summary>
-        private const int MatchSize = 3;
+        /// <summary>Balls removed by a clear: the board matches pairs, not triples.</summary>
+        private const int PairSize = 2;
 
         /// <summary>
         /// Clicking a power-up spends the turn, so it is only worth it when its relief buys back
@@ -87,11 +87,13 @@ namespace Domain.Ai
         private static AiDecision ScoreTap(AiBoardSnapshot snapshot, AiAction action, AiLane lane,
             AiLane other)
         {
-            // Post-tap estimate: the tapped lane advances one slot and gains one ball. The real
-            // BalanceBothPaths rebalance is not simulated, so this can only understate how good
-            // the board ends up — never overstate it.
-            var nextFreeAfter = lane.NextFree + 1;
-            var ballsAfter = lane.Balls + 1;
+            var placedAt = lane.NextFree;
+            var clears = FormsPair(snapshot.IncomingColor, lane, other, placedAt);
+
+            // A clear removes a pair: the stack drops two ball positions and the lane holds one
+            // fewer ball. Without a clear the placement simply advances one position.
+            var nextFreeAfter = clears ? Math.Max(0, placedAt - 2) : placedAt + 2;
+            var ballsAfter = Math.Max(0, lane.Balls + 1 - (clears ? PairSize : 0));
 
             var capacity = Math.Min(
                 BalanceRiskPolicy.CapacityMoves(nextFreeAfter, snapshot.Slots),
@@ -100,21 +102,27 @@ namespace Domain.Ai
             var leftAfter = action.Kind == AiActionKind.TapLeft ? ballsAfter : other.Balls;
             var rightAfter = action.Kind == AiActionKind.TapRight ? ballsAfter : other.Balls;
 
-            var payout = ProjectPayout(snapshot, lane);
+            var payout = clears ? ScorePolicy.BasePoints(PairSize) : 0;
             var imbalance = BalanceRiskPolicy.ImbalanceMoves(leftAfter, rightAfter);
             var score = capacity * CapacityWeight + payout * PayoutWeight +
                         imbalance * ImbalanceWeight;
 
             return new AiDecision(action, score,
-                $"cap={capacity} payout={payout} imbalance={imbalance}");
+                $"cap={capacity} payout={payout} imbalance={imbalance} pair={clears}");
         }
 
-        private static int ProjectPayout(AiBoardSnapshot snapshot, AiLane lane)
+        /// <summary>
+        /// The board clears a pair: the incoming ball matches the one two slots below it (vertical)
+        /// or the one sitting at the same slot in the other lane (horizontal). A wildcard id
+        /// matches anything. See <see cref="MatchPolicy"/>.
+        /// </summary>
+        private static bool FormsPair(string incoming, AiLane lane, AiLane other, int placedAt)
         {
-            if (string.IsNullOrEmpty(snapshot.IncomingColor)) return 0;
+            if (string.IsNullOrEmpty(incoming)) return false;
 
-            var sameColor = lane.CountOf(snapshot.IncomingColor) + 1;
-            return sameColor < MatchSize ? 0 : ScorePolicy.BasePoints(sameColor);
+            return MatchPolicy.Matches(incoming, lane.ColorAt(placedAt - 2)) ||
+                   MatchPolicy.Matches(incoming, other.ColorAt(placedAt)) ||
+                   MatchPolicy.Matches(incoming, lane.ColorAt(placedAt + 2));
         }
 
         /// <summary>

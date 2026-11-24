@@ -1,15 +1,16 @@
-﻿namespace Spaguetti.Balance.Rules
+﻿using Domain.Services;
+
+namespace Spaguetti.Balance.Rules
 {
+    /// <summary>
+    /// Kept as the rules' entry point; the comparison itself lives in <see cref="MatchPolicy"/>
+    /// so the rival's policy and the board rules can never disagree about what matches.
+    /// </summary>
     public static class MatchHelper
     {
         public static bool Matches(string idA, string idB)
         {
-            if (idA == null || idB == null) return false;
-            if (idA == "all" || idB == "all") return true;
-            if (idA == idB) return true;
-            if (idA.Contains(idB)) return true;
-            if (idB.Contains(idA)) return true;
-            return false;
+            return MatchPolicy.Matches(idA, idB);
         }
     }
 }

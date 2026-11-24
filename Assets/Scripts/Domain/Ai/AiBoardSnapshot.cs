@@ -27,23 +27,45 @@ namespace Domain.Ai
         private static readonly IReadOnlyDictionary<string, int> NoColors =
             new Dictionary<string, int>();
 
+        private static readonly IReadOnlyList<string> NoSlots = Array.Empty<string>();
+
         public AiLane(int balls, int nextFree, IReadOnlyDictionary<string, int> colorCounts)
+            : this(balls, nextFree, colorCounts, null)
+        {
+        }
+
+        public AiLane(int balls, int nextFree, IReadOnlyDictionary<string, int> colorCounts,
+            IReadOnlyList<string> colorsByIndex)
         {
             Balls = balls;
             NextFree = nextFree;
             ColorCounts = colorCounts ?? NoColors;
+            ColorsByIndex = colorsByIndex ?? NoSlots;
         }
 
         /// <summary>Balls only: counter-balance weights are not balls and never counted.</summary>
         public int Balls { get; }
 
+        /// <summary>The index the next ball lands on, as the board reports it.</summary>
         public int NextFree { get; }
+
         public IReadOnlyDictionary<string, int> ColorCounts { get; }
+
+        /// <summary>Colour per slot index; empty string where the slot is free.</summary>
+        public IReadOnlyList<string> ColorsByIndex { get; }
 
         public int CountOf(string color)
         {
             if (string.IsNullOrEmpty(color)) return 0;
             return ColorCounts.TryGetValue(color, out var count) ? count : 0;
+        }
+
+        /// <summary>Colour sitting at a slot index, or null when the slot is free or off-board.</summary>
+        public string ColorAt(int index)
+        {
+            if (index < 0 || index >= ColorsByIndex.Count) return null;
+            var color = ColorsByIndex[index];
+            return string.IsNullOrEmpty(color) ? null : color;
         }
     }
 
